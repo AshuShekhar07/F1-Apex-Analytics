@@ -227,18 +227,36 @@ with engine.connect() as conn:
                     conn.commit()
 
                 # --- race results (R sessions only) -------------------------
-                if sess_type == 'R':
+                if sess_type in ('R', 'S'):
+                    winner_time = None
+                    winners = session.results[session.results['Position'] == 1]
+                    if len(winners) > 0:
+                        winner_time = winners.iloc[0]['Time']
+
                     for _, row in session.results.iterrows():
+                        gap_seconds = None
+                        gap_display = None
+                        if row['Position'] == 1:
+                            gap_seconds = 0.0
+                            gap_display = 'Winner'
+                        elif pd.notna(row['Time']):
+                            gap_seconds = row['Time'].total_seconds()
+                            gap_display = f"+{gap_seconds:.3f}s"
+                        elif pd.notna(row.get('Status')):
+                            gap_display = row['Status']
+
                         entry_id = driver_id_map.get(row['Abbreviation'])
                         if entry_id is None:
                             continue
                         conn.execute(text("""
-                            INSERT INTO race_results (session_id, race_entry_id, finishing_position, points, status)
-                            VALUES (:s, :e, :p, :pts, :st)
+                            INSERT INTO race_results (session_id, race_entry_id, finishing_position, points, status,
+                                                       gap_to_winner_seconds, gap_to_winner_display)
+                            VALUES (:s, :e, :p, :pts, :st, :gs, :gd)
                         """), {
                             "s": session_id, "e": entry_id,
                             "p": int(row['Position']) if pd.notna(row['Position']) else None,
-                            "pts": float(row['Points']), "st": row['Status']
+                            "pts": float(row['Points']), "st": row['Status'],
+                            "gs": gap_seconds, "gd": gap_display
                         })
                     conn.commit()
 

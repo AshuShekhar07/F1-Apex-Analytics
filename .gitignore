@@ -7,3 +7,10 @@ backfill_run.log
 backfill_log.txt
 *.sql
 !migration_*.sql
+features.csv
+*.pkl
+prediction_*.csv
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
