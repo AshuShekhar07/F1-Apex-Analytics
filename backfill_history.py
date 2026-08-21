@@ -106,8 +106,13 @@ def get_or_create_team(conn, name):
 
 
 def get_or_create_driver(conn, name, number):
+    if not name or name.strip().lower() in ('none none', 'nan nan', ''):
+        # FastF1 failed to resolve identity for this row -- do NOT create/reuse
+        # a shared placeholder. Return None so the caller skips this driver
+        # instead of silently merging them with someone else.
+        return None
     did = conn.execute(text("SELECT id FROM drivers WHERE name = :name"), {"name": name}).scalar()
-    if did is None:
+    if not did:
         did = conn.execute(text("INSERT INTO drivers (name, permanent_number) VALUES (:n, :num) RETURNING id"),
                             {"n": name, "num": number}).scalar()
     return did
@@ -173,6 +178,9 @@ with engine.connect() as conn:
                 for _, row in session.results.iterrows():
                     team_id = get_or_create_team(conn, row['TeamName'])
                     driver_id = get_or_create_driver(conn, row['FullName'], int(row['DriverNumber']))
+                    if driver_id is None:
+                        print(f"    WARNING: unresolved driver identity for number {row['DriverNumber']}, skipping this row")
+                        continue
                     entry_id = get_or_create_entry(conn, race_id, driver_id, team_id, int(row['DriverNumber']))
                     driver_id_map[row['Abbreviation']] = entry_id
                 conn.commit()
