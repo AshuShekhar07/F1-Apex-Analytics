@@ -17,6 +17,15 @@ def get_driver_history(driver_id: int, db: Session = Depends(get_db)):
     if driver is None:
         raise HTTPException(status_code=404, detail="Driver not found")
 
+    current_number_row = db.execute(text("""
+        SELECT DISTINCT ON (re.driver_id)
+            re.car_number AS current_number, r.season_year
+        FROM race_entries re
+        JOIN races r ON r.id = re.race_id
+        WHERE re.driver_id = :id AND re.role = 'race_driver'
+        ORDER BY re.driver_id, r.season_year DESC, r.round_number DESC
+    """), {"id": driver_id}).mappings().first()
+
     history = db.execute(text("""
         SELECT r.season_year, r.round_number, t.name AS track_name,
                tm.name AS team_name, tm.color_hex,
@@ -31,7 +40,7 @@ def get_driver_history(driver_id: int, db: Session = Depends(get_db)):
                 WHERE race_id = r.id AND session_type = 'R'
                 LIMIT 1
             )
-        WHERE re.driver_id = :id
+        WHERE re.driver_id = :id AND re.role = 'race_driver'
         ORDER BY r.season_year, r.round_number
     """), {"id": driver_id}).mappings().all()
 
@@ -41,6 +50,7 @@ def get_driver_history(driver_id: int, db: Session = Depends(get_db)):
 
     return {
         **dict(driver),
+        "current_car_number": current_number_row["current_number"] if current_number_row else None,
         "career_summary": {
             "races": len(history),
             "wins": wins,
