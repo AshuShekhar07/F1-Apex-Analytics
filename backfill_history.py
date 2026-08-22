@@ -99,6 +99,11 @@ def get_or_create_race(conn, track_id, year, round_num, race_date):
 
 
 def get_or_create_team(conn, name):
+    if not name or name.strip().lower() in ('none', 'nan', ''):
+        # FastF1 failed to resolve team identity for this row -- do NOT
+        # create/reuse a shared placeholder. Return None so the caller
+        # skips this row instead of silently merging unrelated entries.
+        return None
     tid = conn.execute(text("SELECT id FROM teams WHERE name = :name"), {"name": name}).scalar()
     if tid is None:
         tid = conn.execute(text("INSERT INTO teams (name) VALUES (:name) RETURNING id"), {"name": name}).scalar()
@@ -180,6 +185,9 @@ with engine.connect() as conn:
                     driver_id = get_or_create_driver(conn, row['FullName'], int(row['DriverNumber']))
                     if driver_id is None:
                         print(f"    WARNING: unresolved driver identity for number {row['DriverNumber']}, skipping this row")
+                        continue
+                    if team_id is None:
+                        print(f"    WARNING: unresolved team identity for driver_id {driver_id}, skipping this row")
                         continue
                     entry_id = get_or_create_entry(conn, race_id, driver_id, team_id, int(row['DriverNumber']))
                     driver_id_map[row['Abbreviation']] = entry_id
