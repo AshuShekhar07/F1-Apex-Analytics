@@ -14,3 +14,12 @@ __pycache__/
 *.pyc
 __pycache__/
 *.pyc
+
+# circuit-viz-app subproject
+circuit-viz-app/node_modules/
+circuit-viz-app/dist/
+circuit-viz-app/pipeline/data/circuits/*.geojson
+circuit-viz-app/pipeline/data/circuits/*.xy.json
+circuit-viz-app/pipeline/data/circuits/*_preview.png
+circuit-viz-app/pipeline/data/circuits/*.boundaries.json
+circuit-viz-app/pipeline/data/circuits/*.sectors.json
