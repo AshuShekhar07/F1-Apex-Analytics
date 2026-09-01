@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.routers import races, drivers, tracks
+from app.routers import races, drivers, tracks, practice, predictions
 
 app = FastAPI(
     title="Apex21 API",
@@ -17,9 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 app.include_router(races.router)
 app.include_router(drivers.router)
 app.include_router(tracks.router)
+app.include_router(practice.router)
+app.include_router(predictions.router)
 
 
 @app.get("/")

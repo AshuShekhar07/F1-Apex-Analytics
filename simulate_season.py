@@ -198,6 +198,53 @@ def format_results(counts, id_col, name_lookup_df, name_col):
     return result_df
 
 
+def save_predictions_to_db(counts, id_col, name_lookup_df, name_col, prediction_type, season_year, as_of_round):
+    """
+    Writes one prediction_type's results (wdc / constructors / next_race)
+    into season_predictions. Idempotent: re-running for the same
+    (season_year, prediction_type, entity_id, as_of_round) updates the
+    existing row instead of duplicating it, so re-simulating after the
+    same round just refreshes the numbers.
+    """
+    import os
+    from sqlalchemy import create_engine, text
+    from dotenv import load_dotenv
+    load_dotenv()
+    engine = create_engine(os.getenv('DATABASE_URL'))
+
+    total = sum(counts.values())
+    if total == 0:
+        print(f"  Skipping DB save for {prediction_type} -- no simulation results to save.")
+        return
+
+    with engine.begin() as conn:
+        for entity_id, count in counts.items():
+            name_row = name_lookup_df[name_lookup_df[id_col] == entity_id]
+            name = name_row[name_col].iloc[0] if len(name_row) > 0 else f"Unknown ({entity_id})"
+            probability_pct = round(100 * count / total, 2)
+
+            conn.execute(text("""
+                INSERT INTO season_predictions
+                    (season_year, prediction_type, entity_id, entity_name, probability_pct, as_of_round)
+                VALUES
+                    (:season_year, :prediction_type, :entity_id, :entity_name, :probability_pct, :as_of_round)
+                ON CONFLICT (season_year, prediction_type, entity_id, as_of_round)
+                DO UPDATE SET
+                    entity_name = EXCLUDED.entity_name,
+                    probability_pct = EXCLUDED.probability_pct,
+                    computed_at = now()
+            """), {
+                'season_year': season_year,
+                'prediction_type': prediction_type,
+                'entity_id': int(entity_id),
+                'entity_name': name,
+                'probability_pct': probability_pct,
+                'as_of_round': int(as_of_round),
+            })
+
+    print(f"  Saved {len(counts)} {prediction_type} rows to season_predictions (as_of_round={as_of_round})")
+
+
 def main():
     print("Loading model and data...")
     model, features, residual_std, df = load_everything()
@@ -209,7 +256,7 @@ def main():
     if driver_champ_counts is None:
         return
 
-    driver_points, team_points, _ = get_current_standings(df)
+    driver_points, team_points, latest_round = get_current_standings(df)
     driver_team = get_driver_team_map(df)
 
     print("\n" + "=" * 60)
@@ -235,6 +282,14 @@ def main():
     ccc_results.to_csv('prediction_constructors.csv', index=False)
     next_race_results.to_csv('prediction_next_race.csv', index=False)
     print("\nSaved: prediction_wdc.csv, prediction_constructors.csv, prediction_next_race.csv")
+
+    print("\nSaving predictions to season_predictions table...")
+    save_predictions_to_db(driver_champ_counts, 'driver_id', driver_team, 'driver_name',
+                            'wdc', CURRENT_SEASON, latest_round)
+    save_predictions_to_db(team_champ_counts, 'team_id', team_lookup, 'team_name',
+                            'constructors', CURRENT_SEASON, latest_round)
+    save_predictions_to_db(next_race_counts, 'driver_id', driver_team, 'driver_name',
+                            'next_race', CURRENT_SEASON, latest_round)
 
 
 if __name__ == "__main__":
