@@ -12,7 +12,7 @@ VALID_SESSIONS = {"FP1", "FP2", "FP3"}
 def get_practice_results(race_id: int, session_type: str, db: Session = Depends(get_db)):
     session_type = session_type.upper()
     if session_type not in VALID_SESSIONS:
-        raise HTTPException(status_code=400, detail="session_type must be one of FP1, FP2, FP3")
+        raise HTTPException(status_code=422, detail="session_type must be one of FP1, FP2, FP3")
 
     race = db.execute(text("""
         SELECT r.id, r.season_year, r.round_number, t.name AS track_name

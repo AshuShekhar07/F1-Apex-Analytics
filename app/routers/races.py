@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from pydantic import BaseModel
+from typing import Optional
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -7,6 +10,86 @@ from app.database import get_db
 router = APIRouter(prefix="/races", tags=["races"])
 
 FINISHED_STATUSES = ('Finished', 'Lapped', '+1 Lap', '+2 Laps', '+3 Laps', '+5 Laps', '+6 Laps')
+
+class PositionPoint(BaseModel):
+    lap: int
+    position: Optional[int] = None
+
+
+class PositionBattleDriver(BaseModel):
+    driver_id: int
+    driver_name: str
+    car_number: Optional[int] = None
+    team_id: int
+    team_name: str
+    color_hex: Optional[str] = None
+    starting_grid_position: Optional[int] = None
+    finishing_position: Optional[int] = None
+    status: Optional[str] = None
+    position_data_available: bool
+    positions: list[PositionPoint]
+    positions_gained: Optional[int] = None
+    missing_position_laps: int
+    best_position: Optional[int] = None
+    worst_position: Optional[int] = None
+
+
+class PositionBattleResponse(BaseModel):
+    race_id: int
+    season_year: int
+    round_number: int
+    race_date: date
+    track_id: int
+    track_name: str
+    results: list[PositionBattleDriver]
+
+
+class RaceListItem(BaseModel):
+    id: int
+    season_year: int
+    round_number: int
+    race_date: date
+    weekend_format: Optional[str] = None
+    track_name: str
+    country: Optional[str] = None
+
+
+class RaceSession(BaseModel):
+    id: int
+    session_type: str
+    start_time: datetime
+
+
+class RaceResult(BaseModel):
+    driver_id: int
+    driver_name: str
+    car_number: Optional[int] = None
+    team_name: str
+    color_hex: Optional[str] = None
+    finishing_position: Optional[int] = None
+    starting_grid_position: Optional[int] = None
+    points: Optional[float] = None
+    status: Optional[str] = None
+    gap_to_winner_seconds: Optional[float] = None
+    gap_to_winner_display: Optional[str] = None
+    laps_completed: Optional[int] = None
+    display: Optional[str] = None
+
+
+class RaceDetail(BaseModel):
+    id: int
+    season_year: int
+    round_number: int
+    race_date: date
+    weekend_format: Optional[str] = None
+    winner_time_seconds: Optional[float] = None
+    track_id: int
+    track_name: str
+    country: Optional[str] = None
+    length_km: Optional[float] = None
+    lap_record: Optional[str] = None
+    sessions: list[RaceSession]
+    results: list[RaceResult]
 
 
 def format_absolute_time(total_seconds):
@@ -46,8 +129,11 @@ def build_display_value(row, winner_time_seconds, leader_laps_completed):
     return status
 
 
-@router.get("")
-def list_races(season: int | None = None, db: Session = Depends(get_db)):
+@router.get("", response_model=list[RaceListItem])
+def list_races(
+    season: int | None = Query(None, ge=2018, le=2026),
+    db: Session = Depends(get_db)
+):
     query = """
         SELECT r.id, r.season_year, r.round_number, r.race_date,
                r.weekend_format, t.name AS track_name, t.country
@@ -64,8 +150,11 @@ def list_races(season: int | None = None, db: Session = Depends(get_db)):
     return list(rows)
 
 
-@router.get("/{race_id}")
-def get_race(race_id: int, db: Session = Depends(get_db)):
+@router.get("/{race_id}", response_model=RaceDetail)
+def get_race(
+    race_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db)
+):
     race = db.execute(text("""
         SELECT r.id, r.season_year, r.round_number, r.race_date,
                r.weekend_format, r.winner_time_seconds,
@@ -118,6 +207,245 @@ def get_race(race_id: int, db: Session = Depends(get_db)):
     return {
         **dict(race),
         "sessions": list(sessions),
+        "results": results,
+    }
+
+
+@router.get("/{race_id}/strategy")
+def get_race_strategy(race_id: int, db: Session = Depends(get_db)):
+    race = db.execute(text("""
+        SELECT
+            r.id,
+            r.season_year,
+            r.round_number,
+            r.race_date,
+            r.weekend_format,
+            t.id AS track_id,
+            t.name AS track_name
+        FROM races r
+        JOIN tracks t ON t.id = r.track_id
+        WHERE r.id = :id
+    """), {"id": race_id}).mappings().first()
+
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+
+    rows = db.execute(text("""
+        SELECT
+            d.id AS driver_id,
+            d.name AS driver_name,
+            re.car_number,
+            tm.id AS team_id,
+            tm.name AS team_name,
+            tm.color_hex,
+            rr.finishing_position,
+            rr.status,
+            rs.stint_number,
+            rs.compound,
+            rs.start_lap,
+            rs.end_lap,
+            rs.stint_length
+        FROM race_stints rs
+        JOIN race_entries re
+          ON re.id = rs.race_entry_id
+        JOIN drivers d
+          ON d.id = re.driver_id
+        JOIN teams tm
+          ON tm.id = re.team_id
+        JOIN sessions s
+          ON s.race_id = rs.race_id
+         AND s.session_type = 'R'
+        JOIN race_results rr
+          ON rr.race_entry_id = rs.race_entry_id
+         AND rr.session_id = s.id
+        WHERE rs.race_id = :race_id
+        ORDER BY
+            rr.finishing_position NULLS LAST,
+            re.id,
+            rs.stint_number
+    """), {"race_id": race_id}).mappings().all()
+
+    drivers = {}
+
+    for row in rows:
+        driver_id = row["driver_id"]
+
+        if driver_id not in drivers:
+            drivers[driver_id] = {
+                "driver_id": driver_id,
+                "driver_name": row["driver_name"],
+                "car_number": row["car_number"],
+                "team_id": row["team_id"],
+                "team_name": row["team_name"],
+                "color_hex": row["color_hex"],
+                "finishing_position": row["finishing_position"],
+                "status": row["status"],
+                "stints": [],
+            }
+
+        drivers[driver_id]["stints"].append({
+            "stint_number": row["stint_number"],
+            "compound": (
+                str(row["compound"]).upper()
+                if row["compound"] is not None
+                else None
+            ),
+            "start_lap": row["start_lap"],
+            "end_lap": row["end_lap"],
+            "stint_length": row["stint_length"],
+        })
+
+    results = []
+
+    for driver in drivers.values():
+        stints = driver["stints"]
+
+        driver["pit_stops"] = max(len(stints) - 1, 0)
+        driver["first_compound"] = stints[0]["compound"] if stints else None
+        driver["final_compound"] = stints[-1]["compound"] if stints else None
+
+        results.append(driver)
+
+    return {
+        "race_id": race_id,
+        "season_year": race["season_year"],
+        "round_number": race["round_number"],
+        "race_date": race["race_date"],
+        "weekend_format": race["weekend_format"],
+        "track_id": race["track_id"],
+        "track_name": race["track_name"],
+        "results": results,
+    }
+
+
+@router.get("/{race_id}/position-battle", response_model=PositionBattleResponse)
+def get_position_battle(
+    race_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db)
+):
+    race = db.execute(text("""
+        SELECT
+            r.id,
+            r.season_year,
+            r.round_number,
+            r.race_date,
+            t.id AS track_id,
+            t.name AS track_name
+        FROM races r
+        JOIN tracks t ON t.id = r.track_id
+        WHERE r.id = :id
+    """), {"id": race_id}).mappings().first()
+
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+
+    rows = db.execute(text("""
+        SELECT
+            d.id AS driver_id,
+            d.name AS driver_name,
+            re.car_number,
+            tm.id AS team_id,
+            tm.name AS team_name,
+            tm.color_hex,
+            rr.starting_grid_position,
+            rr.finishing_position,
+            rr.status,
+            l.lap_number,
+            l.position
+        FROM laps l
+        JOIN sessions s
+          ON s.id = l.session_id
+         AND s.session_type = 'R'
+        JOIN race_entries re
+          ON re.id = l.race_entry_id
+        JOIN drivers d
+          ON d.id = re.driver_id
+        JOIN teams tm
+          ON tm.id = re.team_id
+        LEFT JOIN race_results rr
+          ON rr.race_entry_id = re.id
+         AND rr.session_id = s.id
+        WHERE s.race_id = :race_id
+        ORDER BY
+            rr.finishing_position NULLS LAST,
+            d.id,
+            l.lap_number
+    """), {"race_id": race_id}).mappings().all()
+
+    drivers = {}
+
+    for row in rows:
+        driver_id = row["driver_id"]
+
+        if driver_id not in drivers:
+            drivers[driver_id] = {
+                "driver_id": driver_id,
+                "driver_name": row["driver_name"],
+                "car_number": row["car_number"],
+                "team_id": row["team_id"],
+                "team_name": row["team_name"],
+                "color_hex": row["color_hex"],
+                "starting_grid_position": row["starting_grid_position"],
+                "finishing_position": row["finishing_position"],
+                "status": row["status"],
+                "position_data_available": False,
+                "positions": [],
+            }
+
+        if row["position"] is not None:
+            drivers[driver_id]["position_data_available"] = True
+
+        drivers[driver_id]["positions"].append({
+            "lap": row["lap_number"],
+            "position": row["position"],
+        })
+
+    results = []
+
+    for driver in drivers.values():
+        grid = driver["starting_grid_position"]
+        finish = driver["finishing_position"]
+
+        driver["positions_gained"] = (
+            grid - finish
+            if (
+                driver["status"] == "Finished"
+                and grid is not None
+                and finish is not None
+            )
+            else None
+        )
+
+        driver["missing_position_laps"] = sum(
+            1 for x in driver["positions"]
+            if x["position"] is None
+        )
+
+        valid_positions = [
+            x["position"]
+            for x in driver["positions"]
+            if x["position"] is not None
+        ]
+
+        driver["best_position"] = (
+            min(valid_positions)
+            if valid_positions else None
+        )
+
+        driver["worst_position"] = (
+            max(valid_positions)
+            if valid_positions else None
+        )
+
+        results.append(driver)
+
+    return {
+        "race_id": race_id,
+        "season_year": race["season_year"],
+        "round_number": race["round_number"],
+        "race_date": race["race_date"],
+        "track_id": race["track_id"],
+        "track_name": race["track_name"],
         "results": results,
     }
 

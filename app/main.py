@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import races, drivers, tracks, practice, predictions
+from app.routers import races, drivers, tracks, practice, predictions, compare, wet_weather, predict_and_compete, records, strategy, teams
 
 app = FastAPI(
     title="Apex21 API",
@@ -25,6 +25,12 @@ app.include_router(drivers.router)
 app.include_router(tracks.router)
 app.include_router(practice.router)
 app.include_router(predictions.router)
+app.include_router(compare.router)
+app.include_router(wet_weather.router)
+app.include_router(predict_and_compete.router)
+app.include_router(records.router)
+app.include_router(strategy.router)
+app.include_router(teams.router)
 
 
 @app.get("/")

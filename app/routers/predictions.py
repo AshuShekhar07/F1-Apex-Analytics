@@ -43,7 +43,7 @@ def get_driver_predictions(season_year: int, prediction_type: str, db: Session =
     """Handles 'wdc' and 'next_race' -- both are driver-keyed predictions,
     enriched with each driver's current team for team-colored UI later."""
     if prediction_type not in ("wdc", "next_race"):
-        raise HTTPException(status_code=400, detail="prediction_type must be one of: wdc, next_race, constructors")
+        raise HTTPException(status_code=422, detail="prediction_type must be one of: wdc, next_race, constructors")
 
     latest = _latest_round(db, season_year, prediction_type)
     if latest is None:
@@ -82,7 +82,7 @@ def get_prediction_history(season_year: int, prediction_type: str, db: Session =
     probability-over-time trend chart later, using data already captured
     by season_predictions storing every simulation run, not just the latest."""
     if prediction_type not in VALID_TYPES:
-        raise HTTPException(status_code=400, detail="prediction_type must be one of: wdc, constructors, next_race")
+        raise HTTPException(status_code=422, detail="prediction_type must be one of: wdc, constructors, next_race")
 
     rows = db.execute(text("""
         SELECT entity_id, entity_name, probability_pct, as_of_round, computed_at
