@@ -6,10 +6,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
+from race_status import is_classified, classify_status
 
 router = APIRouter(prefix="/races", tags=["races"])
-
-FINISHED_STATUSES = ('Finished', 'Lapped', '+1 Lap', '+2 Laps', '+3 Laps', '+5 Laps', '+6 Laps')
 
 class PositionPoint(BaseModel):
     lap: int
@@ -106,7 +105,7 @@ def format_absolute_time(total_seconds):
 
 def build_display_value(row, winner_time_seconds, leader_laps_completed):
     status = row["status"]
-    if status in FINISHED_STATUSES:
+    if is_classified(status):
         if row["finishing_position"] == 1:
             return format_absolute_time(winner_time_seconds)
 

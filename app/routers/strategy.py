@@ -23,6 +23,7 @@ class StrategyOption(BaseModel):
     score: float
     historical_races: int
     stints: Optional[list[StrategyStint]] = None
+    strategy_source: Optional[str] = None
 
 
 class StopProbabilities(BaseModel):
@@ -67,6 +68,15 @@ class PrimaryStrategyEvidence(BaseModel):
     supporting_races: list[SupportingRace]
 
 
+class WetRecommendation(BaseModel):
+    model: str
+    mode: str
+    sequence: list[str]
+    strategy_source: str
+    confidence: str
+    reason: str
+
+
 class StrategyPrediction(BaseModel):
     status: str
     strategy: list[StrategyStint]
@@ -75,6 +85,8 @@ class StrategyPrediction(BaseModel):
     stop_probabilities: dict[str, float]
     confidence_pct: int
     confidence_level: str
+    strategy_source: str
+    wet_recommendation: Optional[WetRecommendation] = None
     weather_context: str
     wet_race_warning: bool
     wet_model_reliability: str
@@ -112,8 +124,15 @@ def predict_strategy(
     )
 
     if result.get("status") != "ok":
+        if result.get("weather_status") == "unavailable":
+            status_code = 503
+        elif result.get("status") == "not_found":
+            status_code = 404
+        else:
+            status_code = 500
+
         raise HTTPException(
-            status_code=404,
+            status_code=status_code,
             detail=result.get(
                 "message",
                 "Strategy prediction unavailable",

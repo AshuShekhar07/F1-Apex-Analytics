@@ -4,23 +4,16 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error
 import joblib
 
-FEATURE_COLUMNS = [
-    'quali_position',
-    'form_avg_finish', 'form_std_finish',
-    'team_pace_recent', 'team_reliability_recent',
-    'track_history_avg_finish', 'track_history_avg_quali',
-    'teammate_relative_skill',
-    'weather_sensitivity',
-    'tire_degradation_rate',
-    'safety_car_periods', 'vsc_periods',
-    'difficulty_rating',
-    'post_2022_era',
-]
+from finishing_position_contract import (
+    CANDIDATE_ARTIFACT,
+    CONTRACT_VERSION,
+    SAFE_POST_QUALIFYING_FEATURES,
+    UNSAFE_FEATURES,
+)
 
-LEAKAGE_COLUMNS = [
-    'finishing_position', 'points', 'status', 'gap_to_winner_seconds',
-    'starting_grid_position', 'grid_penalty', 'racecraft_delta',
-]
+FEATURE_COLUMNS = SAFE_POST_QUALIFYING_FEATURES
+
+LEAKAGE_COLUMNS = sorted(UNSAFE_FEATURES)
 
 
 def load_and_prepare():
@@ -31,7 +24,10 @@ def load_and_prepare():
     df['circuit_type_code'] = df['circuit_type'].astype('category').cat.codes
     df['circuit_type_code'] = df['circuit_type_code'].replace(-1, np.nan)
 
-    features = FEATURE_COLUMNS + ['circuit_type_code']
+    features = FEATURE_COLUMNS
+    leaked = sorted(set(features) & UNSAFE_FEATURES)
+    if leaked:
+        raise ValueError(f"Refusing to train with unsafe features: {leaked}")
     return df, features
 
 
@@ -99,9 +95,20 @@ def main():
         'model': model,
         'features': features,
         'residual_std': residual_std,
-    }, 'finishing_position_model.pkl')
+        'metadata': {
+            'contract_version': CONTRACT_VERSION,
+            'prediction_timing': 'post_qualifying',
+            'status': 'candidate',
+            'training_code': 'train_model.py',
+            'note': (
+                'Candidate only. It is not compatible with the pre-qualifying '
+                'season simulator and must not be published.'
+            ),
+        },
+    }, CANDIDATE_ARTIFACT)
 
-    print("\nSaved model to finishing_position_model.pkl")
+    print(f"\nSaved candidate model to {CANDIDATE_ARTIFACT}")
+    print("The legacy production filename is intentionally never overwritten.")
 
 
 if __name__ == "__main__":

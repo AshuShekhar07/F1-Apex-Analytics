@@ -6,20 +6,12 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine, text
+from race_status import CLASSIFIED_STATUSES
 
 engine = create_engine(os.environ["DATABASE_URL"])
 
-FINISHED = (
-    "Finished",
-    "+1 Lap",
-    "+2 Laps",
-    "+3 Laps",
-    "+4 Laps",
-    "+5 Laps",
-    "+6 Laps",
-)
 
-ERA = "era2_18inch_groundeffect"
+DEFAULT_ERA = "era2_18inch_groundeffect"
 MIN_HISTORY = 8
 
 VALID_COMPOUNDS = {
@@ -38,7 +30,7 @@ VALID_COMPOUNDS = {
 # BULK DATA LOAD
 # ============================================================
 
-def load_races():
+def load_races(era=DEFAULT_ERA):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
@@ -75,7 +67,7 @@ def load_races():
               AND r.season_year BETWEEN 2022 AND 2026
 
             ORDER BY r.race_date
-        """), {"era": ERA}).mappings().all()
+        """), {"era": era}).mappings().all()
 
     return {
         int(r["id"]): dict(r)
@@ -102,7 +94,7 @@ def load_nominations():
     return dict(result)
 
 
-def load_winner_strategies():
+def load_winner_strategies(era=DEFAULT_ERA):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
@@ -132,8 +124,8 @@ def load_winner_strategies():
                 rs.race_id,
                 rs.stint_number
         """), {
-            "era": ERA,
-            "finished": list(FINISHED),
+            "era": era,
+            "finished": list(CLASSIFIED_STATUSES),
         }).mappings().all()
 
     grouped = defaultdict(list)
@@ -153,7 +145,7 @@ def load_winner_strategies():
     return dict(grouped)
 
 
-def load_fp2():
+def load_fp2(era=DEFAULT_ERA):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
@@ -182,7 +174,7 @@ def load_fp2():
                 l.race_entry_id,
                 l.tire_compound,
                 l.lap_number
-        """), {"era": ERA}).mappings().all()
+        """), {"era": era}).mappings().all()
 
     return [dict(r) for r in rows]
 
@@ -612,6 +604,7 @@ def candidate_strategies(
     nominations,
     strategies,
     fp2_scales,
+    era=DEFAULT_ERA,
 ):
     """
     Unified historical strategy ranking.
@@ -627,7 +620,7 @@ def candidate_strategies(
 
     Strict leakage:
         candidate date must be before target date.
-        candidate regulation era must match global ERA.
+        candidate regulation era must match the request-local era.
     """
     target_id = int(target_race["id"])
     target_date = target_race["race_date"]
@@ -655,7 +648,7 @@ def candidate_strategies(
         if candidate_race["race_date"] >= target_date:
             continue
 
-        if candidate_race["regulation_era"] != ERA:
+        if candidate_race["regulation_era"] != era:
             continue
 
         if rid not in strategies:
@@ -808,11 +801,11 @@ def candidate_strategies(
 # WALK-FORWARD MODEL
 # ============================================================
 
-def build_model_data():
-    races = load_races()
+def build_model_data(era=DEFAULT_ERA):
+    races = load_races(era)
     nominations = load_nominations()
-    strategies = load_winner_strategies()
-    fp2_rows = load_fp2()
+    strategies = load_winner_strategies(era)
+    fp2_rows = load_fp2(era)
     fp2 = build_fp2_features(fp2_rows)
 
     features = {
@@ -852,6 +845,7 @@ def validate_race(
     strategies,
     features,
     scales,
+    era=DEFAULT_ERA,
 ):
     target = races[race_id]
 
@@ -860,7 +854,7 @@ def validate_race(
         for rid, r in races.items()
         if (
             r["race_date"] < target["race_date"]
-            and r["regulation_era"] == ERA
+            and r["regulation_era"] == era
             and rid in strategies
         )
     ]
@@ -875,6 +869,7 @@ def validate_race(
         nominations,
         strategies,
         scales,
+        era,
     )
 
     if not ranked:

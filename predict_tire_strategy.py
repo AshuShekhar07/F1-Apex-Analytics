@@ -3,21 +3,13 @@ import argparse
 from collections import Counter, defaultdict
 from datetime import date
 from sqlalchemy import create_engine, text
+from race_status import CLASSIFIED_STATUSES
 
 engine = create_engine(os.environ["DATABASE_URL"])
 
 TEMP_TOLERANCE_C = 5.0
 RAIN_ONSET_TOLERANCE_LAPS = 8
 RECENCY_HALF_LIFE_YEARS = 3
-
-FINISHED_STATUSES = (
-    'Finished',
-    '+1 Lap',
-    '+2 Laps',
-    '+3 Laps',
-    '+5 Laps',
-    '+6 Laps'
-)
 
 # Race-result evidence weights.
 # A winner is substantially stronger evidence than P2/P3.
@@ -109,7 +101,7 @@ def get_strategy_recommendation(
             "track_id": track_id,
             "top_n": top_n,
             "rainfall": target_rainfall,
-            "finished_statuses": list(FINISHED_STATUSES),
+            "finished_statuses": list(CLASSIFIED_STATUSES),
             "exclude_race_id": exclude_race_id,
         }
 
@@ -711,7 +703,7 @@ def validate_historical_race(race_id):
             ORDER BY rs.stint_number
         """), {
             "race_id": race_id,
-            "finished_statuses": list(FINISHED_STATUSES),
+            "finished_statuses": list(CLASSIFIED_STATUSES),
         }).mappings().all()
 
     if not winner_rows:

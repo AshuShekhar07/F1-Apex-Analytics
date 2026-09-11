@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import text
 
 from app.database import engine
+from race_status import DNF_STATUSES
 
 
 class TeamSeasonDriver(BaseModel):
@@ -145,11 +146,12 @@ def team_season_summary(
                   AND re.role = 'race_driver'
                   AND s.session_type = 'R'
                   AND r.season_year = :season
-                  AND rr.status NOT IN ('Finished', 'Lapped')
+                  AND rr.status = ANY(:dnf_statuses)
             """),
             {
                 "team_id": team_id,
                 "season": season,
+                "dnf_statuses": list(DNF_STATUSES),
             },
         ).scalar() or 0
 

@@ -1,9 +1,11 @@
 import os
 from datetime import date
+from race_status import CLASSIFIED_STATUSES
 
 from sqlalchemy import create_engine, text
 
 import strategy_model_v5 as model
+import wet_regime_v1
 
 from fetch_race_forecast import predict_race_conditions
 
@@ -161,15 +163,7 @@ def get_stint_plan(
         """), {
             "era": era,
             "target_date": target_date,
-            "finished": [
-                "Finished",
-                "+1 Lap",
-                "+2 Laps",
-                "+3 Laps",
-                "+4 Laps",
-                "+5 Laps",
-                "+6 Laps",
-            ],
+            "finished": list(CLASSIFIED_STATUSES),
         }).mappings().all()
 
     by_race = {}
@@ -384,15 +378,7 @@ def get_supporting_races(
         """), {
             "era": era,
             "target_date": target_date,
-            "finished": [
-                "Finished",
-                "+1 Lap",
-                "+2 Laps",
-                "+3 Laps",
-                "+4 Laps",
-                "+5 Laps",
-                "+6 Laps",
-            ],
+            "finished": list(CLASSIFIED_STATUSES),
         }).mappings().all()
 
     grouped = {}
@@ -514,10 +500,6 @@ def predict(track_id, race_date):
 
     era = target["regulation_era"]
 
-    # IMPORTANT:
-    # Dynamically scope the model to the target regulation era.
-    model.ERA = era
-
     forecast = predict_race_conditions(
         track_id,
         race_date,
@@ -526,11 +508,11 @@ def predict(track_id, race_date):
     if forecast.get("status") != "ok":
         return forecast
 
-    races = model.load_races()
+    races = model.load_races(era)
     nominations = model.load_nominations()
-    strategies = model.load_winner_strategies()
+    strategies = model.load_winner_strategies(era)
 
-    fp2_rows = model.load_fp2()
+    fp2_rows = model.load_fp2(era)
     fp2 = model.build_fp2_features(
         fp2_rows
     )
@@ -605,6 +587,7 @@ def predict(track_id, race_date):
             nominations,
             strategies,
             scales,
+            era,
         )
     )
 
@@ -624,6 +607,54 @@ def predict(track_id, race_date):
         target_features.get("rain", 0)
     )
 
+    # ------------------------------------------------------------
+    # WET REGIME LAYER
+    # ------------------------------------------------------------
+    #
+    # Conservative validated baseline:
+    # - INTERMEDIATE is the default first wet compound.
+    # - No unsupported WET-first heuristic.
+    # - No unsupported exact wet-duration prediction.
+    #
+    # This layer annotates the forecast/strategy response only.
+    # It does NOT alter candidate ranking.
+    #
+    wet_regime = wet_regime_v1.classify(
+        rain_expected=forecast.get("rain_expected"),
+        rain_onset_lap=forecast.get("rain_onset_lap"),
+        forecast_tier=forecast.get("tier"),
+    )
+
+
+    # ------------------------------------------------------------
+    # WET STRATEGY RECOMMENDATION
+    # ------------------------------------------------------------
+    # The wet trigger is diagnostic only. Historical validation of
+    # the routing rule was not strong enough to justify replacing
+    # the richer V5 historical strategy engine automatically.
+    #
+    # When the trigger fires, expose the conservative wet baseline
+    # as a separate recommendation without changing the primary
+    # historical strategy.
+    wet_recommendation = None
+
+    if forecast.get("wet_strategy_trigger"):
+        wet_recommendation = {
+            "model": "wet_strategy_baseline_v1",
+            "mode": "wet_baseline",
+            "sequence": [
+                "INTERMEDIATE",
+                "MEDIUM",
+            ],
+            "strategy_source": "deterministic_baseline",
+            "confidence": "baseline",
+            "reason": (
+                "Forecast rain trigger fired, but the trigger is "
+                "diagnostic only because historical validation did "
+                "not establish reliable wet-strategy routing."
+            ),
+        }
+
     evidence_scope = (
         "cross-track, same-era, pre-target-date"
     )
@@ -638,43 +669,37 @@ def predict(track_id, race_date):
         }.get(era)
 
         if previous_era:
-            original_era = model.ERA
-
-            try:
-                model.ERA = previous_era
-
-                fallback_ids = [
-                    rid
-                    for rid, r in races.items()
-                    if (
-                        r["race_date"] < race_date
-                        and r["regulation_era"] == previous_era
-                        and rid in strategies
-                    )
-                ]
-
-                ranked, analogs, stop_evidence = (
-                    model.candidate_strategies(
-                        target,
-                        {
-                            rid: races[rid]
-                            for rid in fallback_ids
-                        },
-                        features,
-                        nominations,
-                        strategies,
-                        scales,
-                    )
+            fallback_ids = [
+                rid
+                for rid, r in races.items()
+                if (
+                    r["race_date"] < race_date
+                    and r["regulation_era"] == previous_era
+                    and rid in strategies
                 )
+            ]
 
-                if ranked:
-                    era_fallback_used = True
-                    evidence_scope = (
-                        "cross-track, prior-era, "
-                        "pre-target-date"
-                    )
-            finally:
-                model.ERA = original_era
+            ranked, analogs, stop_evidence = (
+                model.candidate_strategies(
+                    target,
+                    {
+                        rid: races[rid]
+                        for rid in fallback_ids
+                    },
+                    features,
+                    nominations,
+                    strategies,
+                    scales,
+                    previous_era,
+                )
+            )
+
+            if ranked:
+                era_fallback_used = True
+                evidence_scope = (
+                    "cross-track, prior-era, "
+                    "pre-target-date"
+                )
 
     if not ranked:
         return {
@@ -687,6 +712,7 @@ def predict(track_id, race_date):
             ),
         }
 
+    # Existing V5 historical strategy remains authoritative.
     primary = ranked[0]["sequence"]
 
     plan = get_stint_plan(
@@ -804,6 +830,9 @@ def predict(track_id, race_date):
                 4,
             ),
             "historical_races": ranked[0]["races"],
+            "model": "strategy_model_v5",
+            "mode": "historical",
+            "strategy_source": "historical_analog_ranked",
         },
 
         "alternatives": alternatives,
@@ -812,19 +841,39 @@ def predict(track_id, race_date):
 
                 "confidence_pct": c,
         "confidence_level": confidence_level,
-        "weather_context": weather_context,
-        "wet_race_warning": bool(target_is_wet),
-        "wet_model_reliability": (
-            "limited"
-            if target_is_wet
-            and (
-                era_fallback_used
-                or wet_evidence_count < 6
-            )
-            else "supported"
-            if target_is_wet
-            else "standard"
-        ),
+        "strategy_source": "historical_analog_ranked",
+
+        "wet_recommendation": wet_recommendation,
+        "weather_context": wet_regime["weather_context"],
+        "wet_race_warning": wet_regime["wet_race_warning"],
+        "wet_model_reliability": wet_regime[
+            "wet_model_reliability"
+        ],
+
+        "wet_regime": {
+            "model": (
+                wet_recommendation["model"]
+                if wet_recommendation is not None
+                else wet_regime["wet_model"]
+            ),
+            "first_wet_compound": (
+                wet_recommendation["sequence"][0]
+                if wet_recommendation is not None
+                and wet_recommendation.get("sequence")
+                else wet_regime["first_wet_compound"]
+            ),
+            "duration_regime": (
+                None
+                if wet_recommendation is not None
+                else wet_regime["wet_duration_regime"]
+            ),
+            "estimated_wet_laps": None,
+            "reason": (
+                wet_recommendation["reason"]
+                if wet_recommendation is not None
+                else wet_regime["reason"]
+            ),
+        },
         "tier": forecast.get("tier"),
         "days_out": forecast.get(
             "days_out"

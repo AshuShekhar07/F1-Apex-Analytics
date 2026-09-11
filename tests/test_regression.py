@@ -130,3 +130,76 @@ def test_global_invalid_cases():
         assert r.status_code == expected_status, (
             f"{path}: expected {expected_status}, got {r.status_code}"
         )
+
+
+def test_strategy_production_normal_forecast():
+    from datetime import date
+
+    import strategy_production_v6 as v6
+
+    result = v6.predict(36, date(2026, 9, 13))
+
+    assert result["status"] == "ok"
+    assert result["strategy_source"] == "historical_analog_ranked"
+    assert result["primary_strategy"]["strategy_source"] == "historical_analog_ranked"
+    assert "strategy" in result
+
+
+def test_strategy_production_wet_routing_is_diagnostic(monkeypatch):
+    from datetime import date
+
+    import strategy_production_v6 as v6
+
+    monkeypatch.setattr(
+        v6,
+        "predict_race_conditions",
+        lambda track_id, race_date: {
+            "status": "ok",
+            "tier": "forecast",
+            "days_out": 3,
+            "target_track_temp": 26.3,
+            "rain_expected": True,
+            "rain_onset_lap": 1,
+            "rain_hours_above_threshold": 3,
+            "wet_strategy_trigger": True,
+        },
+    )
+
+    result = v6.predict(13, date(2025, 7, 27))
+
+    assert result["status"] == "ok"
+    assert result["strategy_source"] == "historical_analog_ranked"
+    assert result["primary_strategy"]["strategy_source"] == "historical_analog_ranked"
+
+    assert result["wet_recommendation"] is not None
+    assert result["wet_recommendation"]["strategy_source"] == "deterministic_baseline"
+    assert result["wet_recommendation"]["sequence"] == [
+        "INTERMEDIATE",
+        "MEDIUM",
+    ]
+
+
+def test_strategy_production_weather_failure(monkeypatch):
+    from datetime import date
+
+    import fetch_race_forecast as weather
+    import strategy_production_v6 as v6
+
+    def fail_forecast(*args, **kwargs):
+        raise RuntimeError("TEST: simulated Open-Meteo outage")
+
+    monkeypatch.setattr(weather, "fetch_forecast", fail_forecast)
+    monkeypatch.setattr(
+        v6,
+        "predict_race_conditions",
+        weather.predict_race_conditions,
+    )
+
+    result = v6.predict(36, date(2026, 9, 13))
+
+    assert result["status"] == "error"
+    assert result["weather_status"] == "unavailable"
+    assert result["tier"] == "forecast"
+    assert result["wet_strategy_trigger"] is False
+    assert result["rain_expected"] is None
+    assert "Weather unavailable:" in result["message"]

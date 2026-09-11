@@ -43,14 +43,30 @@ def get_track_temp_offset(track_id):
     return float(row["offset"]) if row and row["offset"] is not None else 12.0  # generic fallback
 
 def fetch_forecast(lat, lon, race_date):
-    r = requests.get("https://api.open-meteo.com/v1/forecast", params={
-        "latitude": lat, "longitude": lon,
-        "start_date": race_date.isoformat(), "end_date": race_date.isoformat(),
-        "hourly": "temperature_2m,precipitation_probability",
-        "timezone": "UTC",
-    })
-    r.raise_for_status()
-    return r.json()["hourly"]
+    try:
+        r = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+            "latitude": lat, "longitude": lon,
+            "start_date": race_date.isoformat(), "end_date": race_date.isoformat(),
+            "hourly": "temperature_2m,precipitation_probability",
+            "timezone": "UTC",
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        hourly = data.get("hourly")
+
+        if not hourly:
+            raise ValueError("Open-Meteo forecast returned no hourly data.")
+
+        return hourly
+
+    except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+        raise RuntimeError(
+            f"Forecast weather unavailable: {type(exc).__name__}: {exc}"
+        ) from exc
 
 def fetch_climatology(lat, lon, race_date, years_back=5):
     """For races too far out for a real forecast: average the same calendar date
@@ -61,25 +77,64 @@ def fetch_climatology(lat, lon, race_date, years_back=5):
             hist_date = race_date.replace(year=y)
         except ValueError:
             continue  # Feb 29 edge case, skip
-        r = requests.get("https://archive-api.open-meteo.com/v1/archive", params={
-            "latitude": lat, "longitude": lon,
-            "start_date": hist_date.isoformat(), "end_date": hist_date.isoformat(),
-            "hourly": "temperature_2m,precipitation",
-            "timezone": "UTC",
-        })
-        if r.status_code != 200:
-            continue
-        data = r.json().get("hourly", {})
-        if not data.get("temperature_2m"):
-            continue
-        temps.extend([t for t in data["temperature_2m"] if t is not None])
-        for h, precip in zip(data["time"], data["precipitation"]):
-            hour = int(h.split("T")[1].split(":")[0])
-            rain_probs_by_hour.setdefault(hour, []).append(1 if precip and precip > 0 else 0)
+        try:
+            r = requests.get(
+                "https://archive-api.open-meteo.com/v1/archive",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "start_date": hist_date.isoformat(),
+                    "end_date": hist_date.isoformat(),
+                    "hourly": "temperature_2m,precipitation",
+                    "timezone": "UTC",
+                },
+                timeout=15,
+            )
 
-    avg_temp = sum(temps) / len(temps) if temps else None
+            if r.status_code != 200:
+                continue
+
+            data = r.json().get("hourly", {})
+
+            if not data.get("temperature_2m"):
+                continue
+
+            temps.extend(
+                [t for t in data["temperature_2m"] if t is not None]
+            )
+
+            for h, precip in zip(
+                data["time"],
+                data["precipitation"],
+            ):
+                hour = int(h.split("T")[1].split(":")[0])
+                rain_probs_by_hour.setdefault(hour, []).append(
+                    1 if precip and precip > 0 else 0
+                )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+        ):
+            # One historical year being unavailable should not
+            # invalidate the entire climatology calculation.
+            continue
+
+    if not temps:
+        raise RuntimeError(
+            "Historical weather unavailable: no usable climatology data returned."
+        )
+
+    avg_temp = sum(temps) / len(temps)
+
     # convert historical rain occurrence rate into a pseudo "probability" per hour
-    precip_prob_by_hour = {h: round(100 * sum(v) / len(v)) for h, v in rain_probs_by_hour.items()}
+    precip_prob_by_hour = {
+        h: round(100 * sum(v) / len(v))
+        for h, v in rain_probs_by_hour.items()
+    }
+
     return avg_temp, precip_prob_by_hour
 
 def predict_race_conditions(track_id, race_date):
@@ -96,14 +151,44 @@ def predict_race_conditions(track_id, race_date):
     days_out = (race_date - date.today()).days
     tier = "forecast" if 0 <= days_out <= 16 else "climatology"
 
-    if tier == "forecast":
-        hourly = fetch_forecast(lat, lon, race_date)
-        hours = [h.split("T")[1].split(":")[0] for h in hourly["time"]]
-        temp_by_hour = {int(h): t for h, t in zip(hours, hourly["temperature_2m"])}
-        precip_by_hour = {int(h): p for h, p in zip(hours, hourly["precipitation_probability"])}
-    else:
-        avg_temp, precip_by_hour = fetch_climatology(lat, lon, race_date)
-        temp_by_hour = {int(start_hour): avg_temp} if avg_temp is not None else {}
+    try:
+        if tier == "forecast":
+            hourly = fetch_forecast(lat, lon, race_date)
+            hours = [h.split("T")[1].split(":")[0] for h in hourly["time"]]
+            temp_by_hour = {
+                int(h): t
+                for h, t in zip(hours, hourly["temperature_2m"])
+            }
+            precip_by_hour = {
+                int(h): p
+                for h, p in zip(hours, hourly["precipitation_probability"])
+            }
+        else:
+            avg_temp, precip_by_hour = fetch_climatology(
+                lat, lon, race_date
+            )
+            temp_by_hour = {int(start_hour): avg_temp}
+
+    except RuntimeError as exc:
+        message = str(exc)
+
+        if not (
+            message.startswith("Forecast weather unavailable:")
+            or message.startswith("Historical weather unavailable:")
+        ):
+            message = f"Weather unavailable: {message}"
+
+        return {
+            "status": "error",
+            "weather_status": "unavailable",
+            "tier": tier,
+            "days_out": days_out,
+            "wet_strategy_trigger": False,
+            "rain_expected": None,
+            "rain_onset_lap": None,
+            "rain_hours_above_threshold": 0,
+            "message": message,
+        }
 
     race_end_hour = start_hour + duration_min / 60
     hours_in_race = [h for h in range(int(start_hour), int(race_end_hour) + 1)]
@@ -114,14 +199,51 @@ def predict_race_conditions(track_id, race_date):
 
     rain_expected = False
     rain_onset_lap = None
+    rain_hours_above_threshold = 0
+
+    qualifying_hours = []
+
     for h in hours_in_race:
         prob = precip_by_hour.get(h)
+
         if prob is not None and prob >= RAIN_PROB_THRESHOLD:
             rain_expected = True
-            hours_elapsed = h - start_hour
-            frac_through_race = max(0, min(1, hours_elapsed / (duration_min / 60)))
-            rain_onset_lap = max(1, round(frac_through_race * total_laps)) if total_laps else None
-            break
+            rain_hours_above_threshold += 1
+            qualifying_hours.append(h)
+
+    if qualifying_hours:
+        h = qualifying_hours[0]
+        hours_elapsed = h - start_hour
+        frac_through_race = max(
+            0,
+            min(
+                1,
+                hours_elapsed / (duration_min / 60),
+            ),
+        )
+        rain_onset_lap = (
+            max(
+                1,
+                round(frac_through_race * total_laps),
+            )
+            if total_laps
+            else None
+        )
+
+    # Broad rain risk is intentionally different from the
+    # operational wet-strategy trigger.
+    #
+    # We only switch the strategy engine when:
+    #   1. a real near-term forecast is available, and
+    #   2. the rain-risk signal persists for at least two
+    #      race-hour observations.
+    #
+    # Distant climatology may still report rain_expected=True,
+    # but it cannot force the wet strategy engine.
+    wet_strategy_trigger = (
+        tier == "forecast"
+        and rain_hours_above_threshold >= 2
+    )
 
     return {
         "status": "ok",
@@ -130,6 +252,8 @@ def predict_race_conditions(track_id, race_date):
         "target_track_temp": target_track_temp,
         "rain_expected": rain_expected,
         "rain_onset_lap": rain_onset_lap,
+        "rain_hours_above_threshold": rain_hours_above_threshold,
+        "wet_strategy_trigger": wet_strategy_trigger,
     }
 
 if __name__ == "__main__":

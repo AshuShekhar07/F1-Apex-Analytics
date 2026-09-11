@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
+from race_status import DNF_STATUSES
 
 
 class DriverSeasonInfo(BaseModel):
@@ -206,19 +207,11 @@ def get_driver_season(
         WHERE re.driver_id = :driver_id
           AND re.role = 'race_driver'
           AND r.season_year = :season
-          AND rr.status NOT IN (
-              'Finished',
-              'Lapped',
-              '+1 Lap',
-              '+2 Laps',
-              '+3 Laps',
-              '+4 Laps',
-              '+5 Laps',
-              '+6 Laps'
-          )
+          AND rr.status = ANY(:dnf_statuses)
     """), {
         "driver_id": driver_id,
         "season": season,
+        "dnf_statuses": list(DNF_STATUSES),
     }).scalar()
 
     sprint_points = db.execute(text("""

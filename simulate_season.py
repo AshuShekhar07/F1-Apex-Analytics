@@ -2,13 +2,20 @@ import pandas as pd
 import numpy as np
 import joblib
 
+from finishing_position_contract import (
+    LEGACY_ARTIFACT,
+    assert_season_publication_allowed,
+    validate_bundle,
+)
+
 N_SIMULATIONS = 10000
 POINTS_TABLE = {1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1}
 CURRENT_SEASON = 2026
 
 
 def load_everything():
-    bundle = joblib.load('finishing_position_model.pkl')
+    bundle = joblib.load(LEGACY_ARTIFACT)
+    validate_bundle(bundle, serving_mode='pre_qualifying')
     model = bundle['model']
     features = bundle['features']
     residual_std = bundle['residual_std']
@@ -206,6 +213,8 @@ def save_predictions_to_db(counts, id_col, name_lookup_df, name_col, prediction_
     existing row instead of duplicating it, so re-simulating after the
     same round just refreshes the numbers.
     """
+    assert_season_publication_allowed()
+
     import os
     from sqlalchemy import create_engine, text
     from dotenv import load_dotenv
@@ -246,6 +255,10 @@ def save_predictions_to_db(counts, id_col, name_lookup_df, name_col, prediction_
 
 
 def main():
+    # Do this before loading artifacts or generating files. The legacy model is
+    # retained for research only and cannot be used to republish predictions.
+    assert_season_publication_allowed()
+
     print("Loading model and data...")
     model, features, residual_std, df = load_everything()
 

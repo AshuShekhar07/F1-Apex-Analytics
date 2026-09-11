@@ -3,18 +3,20 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
+from race_status import DNF_STATUSES
 
 router = APIRouter(prefix="/records", tags=["records"])
-
-FINISHED_STATUSES = ('Finished', 'Lapped', '+1 Lap', '+2 Laps', '+3 Laps', '+5 Laps', '+6 Laps')
 
 
 @router.get("/all-time")
 def get_all_time_records(db: Session = Depends(get_db)):
     records = []
 
-    def top_driver(sql, label, unit=""):
-        row = db.execute(text(sql)).mappings().first()
+    def top_driver(sql, label, unit="", params=None):
+        row = db.execute(
+            text(sql),
+            params or {},
+        ).mappings().first()
         if row:
             records.append({
                 "category": label,
@@ -77,9 +79,11 @@ def get_all_time_records(db: Session = Depends(get_db)):
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
         JOIN race_entries re ON re.id = rr.race_entry_id
         JOIN drivers d ON d.id = re.driver_id
-        WHERE rr.status NOT IN {FINISHED_STATUSES} AND rr.status != 'Did not start'
+        WHERE rr.status = ANY(:dnf_statuses)
         GROUP BY d.id, d.name ORDER BY value DESC LIMIT 1
-    """, "Most DNFs", "DNFs")
+    """, "Most DNFs", "DNFs", {
+        "dnf_statuses": list(DNF_STATUSES),
+    })
 
     # youngest/oldest winner -- age in years at time of race, using real DOB + race_date
     top_driver("""

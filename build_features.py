@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from race_status import is_dnf
 
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
@@ -130,7 +131,7 @@ def add_team_pace_and_reliability(df):
     team_race = (
         df.groupby(['team_id', 'season_year', 'round_number'])
         .agg(team_avg_finish=('finishing_position', 'mean'),
-             team_dnf_rate=('status', lambda s: (s != 'Finished').mean()))
+             team_dnf_rate=('status', lambda s: s.map(is_dnf).mean()))
         .reset_index()
         .sort_values(['team_id', 'season_year', 'round_number'])
     )
