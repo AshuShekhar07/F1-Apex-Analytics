@@ -14,8 +14,8 @@ from __future__ import annotations
 import argparse
 import os
 
-from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
 from race_strategy_pit_ingestion_v1 import (
     PitIngestionConfig,
@@ -71,7 +71,13 @@ def main() -> None:
                 continue
 
             inserted = 0
+            unresolved = 0
             for stop in stops:
+                if stop.driver_number is None:
+                    unresolved += 1
+                    print(f"  unresolved car number for driver {stop.driver} lap {stop.pit_lap}, skipped")
+                    continue
+
                 entry_id = conn.execute(
                     text("""
                         SELECT id
@@ -80,17 +86,12 @@ def main() -> None:
                         ORDER BY id
                         LIMIT 1
                     """),
-                    {
-                        "race_id": race_id,
-                        "car_number": int(stop.driver) if stop.driver.isdigit() else -1,
-                    },
+                    {"race_id": race_id, "car_number": stop.driver_number},
                 ).scalar()
 
                 if entry_id is None:
-                    # FastF1 Driver is normally an abbreviation. Fall back to
-                    # matching by driver abbreviation/name is schema-specific,
-                    # so unresolved stops are skipped rather than misassigned.
-                    print(f"  unresolved entry for driver {stop.driver} lap {stop.pit_lap}, skipped")
+                    unresolved += 1
+                    print(f"  no race entry for car {stop.driver_number} ({stop.driver}) lap {stop.pit_lap}, skipped")
                     continue
 
                 result = conn.execute(
@@ -125,7 +126,10 @@ def main() -> None:
                 )
                 inserted += int(result.rowcount or 0)
 
-            print(f"  reconstructed={len(raw)} kept={len(stops)} removed={removed} inserted={inserted}")
+            print(
+                f"  reconstructed={len(raw)} kept={len(stops)} "
+                f"removed={removed} unresolved={unresolved} inserted={inserted}"
+            )
 
 
 if __name__ == "__main__":
