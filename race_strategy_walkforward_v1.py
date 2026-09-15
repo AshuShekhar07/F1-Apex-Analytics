@@ -18,8 +18,8 @@ from race_strategy_simulator_v1 import (
     RaceContext,
     SimulationParameters,
     Strategy,
-    StrategyEvaluation,
     TyreAllocation,
+    evaluate_strategy,
     optimize_strategies,
 )
 
@@ -64,6 +64,8 @@ class RaceBacktestResult:
     model_p1_probability: float
     actual_finish_position: int
     baseline_name: str
+    baseline_expected_finish: float
+    baseline_p1_probability: float
     baseline_distance_from_actual: float
     selected_distance_from_actual: float
     leakage_safe: bool
@@ -101,7 +103,7 @@ def run_case(
     simulations_per_strategy: int = 1500,
     seed: int = 17,
 ) -> RaceBacktestResult:
-    """Freeze the declared pre-race snapshot, optimize, then score against outcome."""
+    """Optimize from the frozen pre-race snapshot and score against the outcome."""
     _validate_case(case)
     if not candidates:
         raise ValueError("At least one candidate strategy is required")
@@ -116,13 +118,18 @@ def run_case(
         seed=seed,
     )
     selected = evaluations[0]
-    actual = case.outcome.actual_finish_position
-    baseline_distance = abs(actual - case.baseline_strategy.stints[0].start_lap * 0 + actual - actual)
-    # Baseline distance is intentionally reported as zero here because the
-    # baseline strategy has no predicted finishing-position distribution of its
-    # own. The actual comparison uses the selected model's expected finish below.
-    selected_distance = abs(selected.expected_finish - actual)
 
+    baseline_evaluation = evaluate_strategy(
+        case.baseline_strategy,
+        case.snapshot.context,
+        case.snapshot.competitors,
+        case.snapshot.allocation,
+        case.snapshot.parameters,
+        simulations=simulations_per_strategy,
+        seed=seed + len(candidates) + 1,
+    )
+
+    actual = case.outcome.actual_finish_position
     return RaceBacktestResult(
         race_id=case.race_id,
         year=case.year,
@@ -131,8 +138,10 @@ def run_case(
         model_p1_probability=selected.win_probability,
         actual_finish_position=actual,
         baseline_name=case.baseline_strategy.name,
-        baseline_distance_from_actual=baseline_distance,
-        selected_distance_from_actual=selected_distance,
+        baseline_expected_finish=baseline_evaluation.expected_finish,
+        baseline_p1_probability=baseline_evaluation.win_probability,
+        baseline_distance_from_actual=abs(baseline_evaluation.expected_finish - actual),
+        selected_distance_from_actual=abs(selected.expected_finish - actual),
         leakage_safe=True,
     )
 
@@ -151,7 +160,6 @@ def walk_forward_evaluate(
     rejected = 0
 
     for index, case in enumerate(ordered):
-        # Later cases cannot retroactively alter an earlier prediction snapshot.
         if case.snapshot.available_year > case.prediction_cutoff_year:
             rejected += 1
             if reject_leakage:
@@ -174,7 +182,11 @@ def walk_forward_evaluate(
         baseline_errors = [r.baseline_distance_from_actual for r in results if isfinite(r.baseline_distance_from_actual)]
         model_mae = mean(model_errors) if model_errors else float("nan")
         baseline_mae = mean(baseline_errors) if baseline_errors else float("nan")
-        better = sum(m < b for m, b in zip(model_errors, baseline_errors)) / len(model_errors) if model_errors and len(model_errors) == len(baseline_errors) else 0.0
+        better = (
+            sum(m < b for m, b in zip(model_errors, baseline_errors)) / len(model_errors)
+            if model_errors and len(model_errors) == len(baseline_errors)
+            else 0.0
+        )
     else:
         model_mae = baseline_mae = float("nan")
         better = 0.0
