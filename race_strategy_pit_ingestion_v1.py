@@ -13,6 +13,7 @@ class PitIngestionConfig:
     physical_min_seconds: float = 15.0
     physical_max_seconds: float = 300.0
     iqr_multiplier: float = 1.5
+    mad_z_threshold: float = 3.5
 
 
 @dataclass(frozen=True)
@@ -82,9 +83,9 @@ def reconstruct_pit_stops(rows: Iterable[Any]) -> list[ReconstructedPitStop]:
                 ReconstructedPitStop(
                     driver=driver,
                     pit_lap=pit_lap,
-                    pit_in_time_seconds=pit_in_time,
-                    pit_out_time_seconds=pit_out,
-                    total_pit_lane_seconds=round(duration, 6),
+                    pit_in_time_seconds=round(pit_in_time, 3),
+                    pit_out_time_seconds=round(pit_out, 3),
+                    total_pit_lane_seconds=round(duration, 3),
                     driver_number=driver_number,
                 )
             )
@@ -98,7 +99,12 @@ def filter_pit_stop_outliers(
     *,
     config: PitIngestionConfig | None = None,
 ) -> tuple[list[ReconstructedPitStop], int]:
-    """Remove physically impossible and race-level IQR outlier pit visits."""
+    """Remove physically impossible values and robust extreme outliers.
+
+    MAD is the primary detector because one extreme pit failure can otherwise
+    inflate an IQR fence enough to escape removal in a small sample.
+    IQR is retained as a fallback for degenerate MAD samples.
+    """
     config = config or PitIngestionConfig()
     source = list(stops)
     rows = [
@@ -107,13 +113,26 @@ def filter_pit_stop_outliers(
         if config.physical_min_seconds <= stop.total_pit_lane_seconds <= config.physical_max_seconds
     ]
     removed = len(source) - len(rows)
-    if len(rows) < 4:
+    if len(rows) < 3:
         return rows, removed
 
-    values = sorted(stop.total_pit_lane_seconds for stop in rows)
+    values = [stop.total_pit_lane_seconds for stop in rows]
+    centre = median(values)
+    mad = median(abs(value - centre) for value in values)
+
+    if mad > 0:
+        robust_sigma = 1.4826 * mad
+        lower = centre - config.mad_z_threshold * robust_sigma
+        upper = centre + config.mad_z_threshold * robust_sigma
+        filtered = [stop for stop in rows if lower <= stop.total_pit_lane_seconds <= upper]
+        return filtered, removed + (len(rows) - len(filtered))
+
+    values = sorted(values)
     midpoint = len(values) // 2
     lower_half = values[:midpoint]
     upper_half = values[midpoint + (len(values) % 2):]
+    if not lower_half or not upper_half:
+        return rows, removed
     q1 = median(lower_half)
     q3 = median(upper_half)
     iqr = q3 - q1
