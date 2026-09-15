@@ -2,6 +2,7 @@ from math import isclose
 
 from race_strategy_data_adapter_v1 import (
     load_event_observations,
+    load_regulation_eras,
     load_tyre_observations,
     load_unavailable_inputs,
 )
@@ -73,7 +74,7 @@ def test_event_adapter_does_not_invent_wet_exposure_when_onset_is_missing():
     assert any("no rain_onset_lap" in warning for warning in warnings)
 
 
-def test_tyre_adapter_derives_age_and_delta_from_a_stint():
+def test_tyre_adapter_derives_age_delta_and_stint_identity():
     db = FakeDB([
         [
             {"race_id": 1, "race_entry_id": 10, "stint_number": 1, "compound": "MEDIUM", "start_lap": 1, "end_lap": 5, "lap_number": 1, "lap_time": 90.0},
@@ -87,9 +88,19 @@ def test_tyre_adapter_derives_age_and_delta_from_a_stint():
     observations, warnings = load_tyre_observations(db, era="era2_18inch_groundeffect", min_stint_laps=5)
 
     assert [o.tyre_age_laps for o in observations] == [1, 2, 3, 4]
+    assert all(o.stint_key == "1:10:1" for o in observations)
     assert isclose(observations[0].lap_time_delta_seconds, 0.05, abs_tol=1e-9)
     assert isclose(observations[-1].lap_time_delta_seconds, 0.55, abs_tol=1e-9)
     assert any("Only 4 tyre observations" in warning for warning in warnings)
+
+
+def test_load_regulation_eras_returns_distinct_stored_labels():
+    db = FakeDB([[{"regulation_era": "era2_18inch_groundeffect"}, {"regulation_era": "era2_18inch_groundeffect"}, {"regulation_era": "era1_hybrid"}]])
+
+    eras = load_regulation_eras(db, start_year=2017, end_year=2026)
+
+    assert eras == ("era1_hybrid", "era2_18inch_groundeffect")
+    assert "DISTINCT r.regulation_era" in db.sql[0][0]
 
 
 def test_unavailable_inputs_are_explicit():
