@@ -1,3 +1,5 @@
+from math import isclose
+
 from race_strategy_data_adapter_v1 import (
     load_event_observations,
     load_tyre_observations,
@@ -85,8 +87,8 @@ def test_tyre_adapter_derives_age_and_delta_from_a_stint():
     observations, warnings = load_tyre_observations(db, era="era2_18inch_groundeffect", min_stint_laps=5)
 
     assert [o.tyre_age_laps for o in observations] == [1, 2, 3, 4]
-    assert observations[0].lap_time_delta_seconds == 0.05
-    assert observations[-1].lap_time_delta_seconds == 0.55
+    assert isclose(observations[0].lap_time_delta_seconds, 0.05, abs_tol=1e-9)
+    assert isclose(observations[-1].lap_time_delta_seconds, 0.55, abs_tol=1e-9)
     assert any("Only 4 tyre observations" in warning for warning in warnings)
 
 
