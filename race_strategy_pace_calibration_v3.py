@@ -130,22 +130,22 @@ def predict_target_pace(
 def walk_forward_validate(observations: Iterable[PaceResidualObservation], *, min_train_races: int = 3) -> dict[str, float | int]:
     """Evaluate one-step-ahead absolute pace without future leakage.
 
-    ``predictions_attempted`` counts every target race in a year that has a
-    sufficiently large chronological training window. The first target year
-    therefore contributes attempted=0 when no prior years exist.
+    ``predictions_attempted`` counts every target observation in the evaluation
+    set. A target can remain unscored when it has no eligible chronological
+    training history or no same-track/era reference. ``coverage_rate`` and MAE
+    are computed only from scored targets.
     """
     rows = list(observations)
     years = sorted({r.season_year for r in rows})
     errors: list[float] = []
-    attempted = 0
+    attempted = len(rows)
     scored = 0
+
     for year in years:
         history = [r for r in rows if r.season_year < year]
-        target_rows = [r for r in rows if r.season_year == year]
         if len({r.season_year for r in history}) < min_train_races:
             continue
-        attempted += len(target_rows)
-        for target in target_rows:
+        for target in (r for r in rows if r.season_year == year):
             track_rows = [r for r in history if r.track_id == target.track_id and r.regulation_era == target.regulation_era]
             if not track_rows:
                 continue
@@ -159,6 +159,7 @@ def walk_forward_validate(observations: Iterable[PaceResidualObservation], *, mi
             actual = target.track_reference_seconds + target.relative_gap_seconds
             errors.append(abs(actual - prediction))
             scored += 1
+
     return {
         "years_evaluated": len(years),
         "predictions_attempted": attempted,
