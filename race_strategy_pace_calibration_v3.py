@@ -130,9 +130,9 @@ def predict_target_pace(
 def walk_forward_validate(observations: Iterable[PaceResidualObservation], *, min_train_races: int = 3) -> dict[str, float | int]:
     """Evaluate one-step-ahead absolute pace without future leakage.
 
-    ``predictions_attempted`` counts every target race whose chronological
-    training window is large enough. ``predictions_scored`` counts only targets
-    for which a usable same-track/era historical reference exists.
+    ``predictions_attempted`` counts every target race in a year that has a
+    sufficiently large chronological training window. The first target year
+    therefore contributes attempted=0 when no prior years exist.
     """
     rows = list(observations)
     years = sorted({r.season_year for r in rows})
@@ -142,12 +142,10 @@ def walk_forward_validate(observations: Iterable[PaceResidualObservation], *, mi
     for year in years:
         history = [r for r in rows if r.season_year < year]
         target_rows = [r for r in rows if r.season_year == year]
-        # A target year with no earlier history is not a leakage-safe training
-        # case, so it is deliberately excluded from both attempted and scored.
         if len({r.season_year for r in history}) < min_train_races:
             continue
+        attempted += len(target_rows)
         for target in target_rows:
-            attempted += 1
             track_rows = [r for r in history if r.track_id == target.track_id and r.regulation_era == target.regulation_era]
             if not track_rows:
                 continue
