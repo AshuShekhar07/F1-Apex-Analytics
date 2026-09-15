@@ -19,7 +19,6 @@ import argparse
 import math
 from typing import Any
 
-from app.database import SessionLocal
 from race_strategy_calibration_v1 import calibrate_event_hazards, calibrate_tyre_degradation
 from race_strategy_data_adapter_v1 import load_calibration_dataset
 
@@ -104,6 +103,8 @@ def main() -> None:
         raise SystemExit("--start-year cannot be greater than --end-year")
     if args.min_stint_laps < 2:
         raise SystemExit("--min-stint-laps must be at least 2")
+
+    from app.database import SessionLocal
 
     db = SessionLocal()
     try:
