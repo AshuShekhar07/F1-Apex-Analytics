@@ -19,7 +19,7 @@ Those gaps are returned as warnings rather than replaced with synthetic data.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from sqlalchemy import text
 
@@ -49,14 +49,32 @@ def _rows(db: Any, sql: str, params: dict[str, Any] | None = None) -> list[dict[
     return [dict(row) for row in result]
 
 
-def load_event_observations(db: Any, *, era: str | None = None,
-                            start_year: int = 2017, end_year: int = 2026) -> tuple[tuple[EventCalibrationObservation, ...], tuple[str, ...]]:
-    """Load race-level event counts and conservative wet-lap exposure.
+def load_regulation_eras(db: Any, *, start_year: int = 2017, end_year: int = 2026) -> tuple[str, ...]:
+    """Return distinct stored regulation-era labels for a year range."""
+    if start_year > end_year:
+        raise ValueError("start_year cannot be greater than end_year")
+    rows = _rows(
+        db,
+        """
+        SELECT DISTINCT r.regulation_era
+        FROM races r
+        WHERE r.season_year BETWEEN :start_year AND :end_year
+          AND r.regulation_era IS NOT NULL
+        ORDER BY r.regulation_era
+        """,
+        {"start_year": start_year, "end_year": end_year},
+    )
+    return tuple(str(row["regulation_era"]) for row in rows if row.get("regulation_era") is not None)
 
-    Wet-lap exposure is only estimated when ``rain_onset_lap`` is known. We do
-    not pretend aggregate race event counts are temporally attributed to wet
-    laps; exact event timing needs the FastF1 track-status log.
-    """
+
+def load_event_observations(
+    db: Any,
+    *,
+    era: str | None = None,
+    start_year: int = 2017,
+    end_year: int = 2026,
+) -> tuple[tuple[EventCalibrationObservation, ...], tuple[str, ...]]:
+    """Load race-level event counts and conservative wet-lap exposure."""
     where = [
         "r.race_date IS NOT NULL",
         "r.season_year BETWEEN :start_year AND :end_year",
@@ -67,7 +85,9 @@ def load_event_observations(db: Any, *, era: str | None = None,
         where.append("r.regulation_era = :era")
         params["era"] = era
 
-    rows = _rows(db, f"""
+    rows = _rows(
+        db,
+        f"""
         SELECT
             r.id AS race_id,
             r.season_year,
@@ -84,11 +104,12 @@ def load_event_observations(db: Any, *, era: str | None = None,
         LEFT JOIN session_weather sw ON sw.session_id = s.id
         WHERE {' AND '.join(where)}
         ORDER BY r.race_date
-    """, params)
+        """,
+        params,
+    )
 
     observations: list[EventCalibrationObservation] = []
     warnings: list[str] = []
-
     for row in rows:
         total_laps = int(row["total_race_laps"])
         wet_laps = 0
@@ -117,16 +138,15 @@ def load_event_observations(db: Any, *, era: str | None = None,
     return tuple(observations), tuple(sorted(set(warnings)))
 
 
-def load_tyre_observations(db: Any, *, era: str | None = None,
-                           start_year: int = 2017, end_year: int = 2026,
-                           min_stint_laps: int = 5) -> tuple[tuple[TyreCalibrationObservation, ...], tuple[str, ...]]:
-    """Derive within-stint tyre-age deltas from dry race laps.
-
-    For each dry race stint we use the median of the first two valid laps as
-    the stint baseline and emit later lap deltas by tyre age. This is still
-    confounded by fuel burn, traffic and track evolution, so the caller must
-    treat this as an initial observation layer, not a final tyre model.
-    """
+def load_tyre_observations(
+    db: Any,
+    *,
+    era: str | None = None,
+    start_year: int = 2017,
+    end_year: int = 2026,
+    min_stint_laps: int = 5,
+) -> tuple[tuple[TyreCalibrationObservation, ...], tuple[str, ...]]:
+    """Derive within-stint tyre-age deltas from dry race laps."""
     where = [
         "r.race_date IS NOT NULL",
         "r.season_year BETWEEN :start_year AND :end_year",
@@ -143,7 +163,9 @@ def load_tyre_observations(db: Any, *, era: str | None = None,
         where.append("r.regulation_era = :era")
         params["era"] = era
 
-    rows = _rows(db, f"""
+    rows = _rows(
+        db,
+        f"""
         SELECT
             r.id AS race_id,
             rs.race_entry_id,
@@ -162,7 +184,9 @@ def load_tyre_observations(db: Any, *, era: str | None = None,
          AND l.race_entry_id = rs.race_entry_id
         WHERE {' AND '.join(where)}
         ORDER BY r.id, rs.race_entry_id, rs.stint_number, l.lap_number
-    """, params)
+        """,
+        params,
+    )
 
     grouped: dict[tuple[int, int, int], list[dict[str, Any]]] = {}
     for row in rows:
@@ -173,18 +197,20 @@ def load_tyre_observations(db: Any, *, era: str | None = None,
     warnings: list[str] = []
     usable_stints = 0
 
-    for rows_for_stint in grouped.values():
+    for stint_key_tuple, rows_for_stint in grouped.items():
         if len(rows_for_stint) < min_stint_laps:
             continue
-        usable_stints += 1
         compound = str(rows_for_stint[0]["compound"]).upper()
         if compound not in VALID_DRY_COMPOUNDS:
             continue
+        usable_stints += 1
 
         ordered = sorted(rows_for_stint, key=lambda r: int(r["lap_number"]))
         baseline_values = [float(r["lap_time"]) for r in ordered[:2]]
         baseline = sum(baseline_values) / len(baseline_values)
         start_lap = int(ordered[0]["lap_number"])
+        race_id, race_entry_id, stint_number = stint_key_tuple
+        stint_key = f"{race_id}:{race_entry_id}:{stint_number}"
 
         for row in ordered:
             lap_number = int(row["lap_number"])
@@ -198,6 +224,7 @@ def load_tyre_observations(db: Any, *, era: str | None = None,
                     tyre_age_laps=age,
                     lap_time_delta_seconds=delta,
                     wet_state="dry",
+                    stint_key=stint_key,
                 )
             )
 
@@ -221,9 +248,14 @@ def load_unavailable_inputs() -> tuple[tuple[PitCalibrationObservation, ...], tu
     )
 
 
-def load_calibration_dataset(db: Any, *, era: str | None = None,
-                             start_year: int = 2017, end_year: int = 2026,
-                             min_stint_laps: int = 5) -> DatabaseCalibrationDataset:
+def load_calibration_dataset(
+    db: Any,
+    *,
+    era: str | None = None,
+    start_year: int = 2017,
+    end_year: int = 2026,
+    min_stint_laps: int = 5,
+) -> DatabaseCalibrationDataset:
     """Load every currently supportable calibration observation from the DB."""
     tyre, tyre_warnings = load_tyre_observations(
         db, era=era, start_year=start_year, end_year=end_year, min_stint_laps=min_stint_laps
