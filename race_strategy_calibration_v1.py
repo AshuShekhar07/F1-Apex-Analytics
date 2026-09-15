@@ -10,10 +10,10 @@ is supplied and walk-forward validation is run.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from math import sqrt
+from dataclasses import dataclass
+from math import isfinite, sqrt
 from statistics import median
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Sequence
 
 from race_strategy_simulator_v1 import Distribution, SimulationParameters
 
@@ -25,6 +25,8 @@ class CalibrationConfig:
     min_distribution_std: float = 0.05
     robust_clip_z: float = 3.5
     tyre_min_observations: int = 20
+    tyre_min_stint_observations: int = 3
+    tyre_min_stint_age_span: int = 2
     event_min_laps: int = 100
 
 
@@ -34,6 +36,7 @@ class TyreCalibrationObservation:
     tyre_age_laps: int
     lap_time_delta_seconds: float
     wet_state: str = "dry"
+    stint_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -77,9 +80,15 @@ class CalibratedInputs:
     red_flag_probability_per_lap_wet: float
     report: CalibrationReport
 
-    def to_simulation_parameters(self, *, weather_onset_lap=None, weather_duration_laps=None,
-                                  rain_intensity_mm_h=None, track_temp_c=None) -> SimulationParameters:
-        """Convert calibrated pieces into simulator parameters without inventing weather inputs."""
+    def to_simulation_parameters(
+        self,
+        *,
+        weather_onset_lap=None,
+        weather_duration_laps=None,
+        rain_intensity_mm_h=None,
+        track_temp_c=None,
+    ) -> SimulationParameters:
+        """Convert calibrated pieces without inventing weather inputs."""
         kwargs = {}
         if weather_onset_lap is not None:
             kwargs["weather_onset_lap"] = weather_onset_lap
@@ -93,7 +102,7 @@ class CalibratedInputs:
 
 
 def _clean(values: Iterable[float]) -> list[float]:
-    return [float(v) for v in values if v is not None]
+    return [float(v) for v in values if v is not None and isfinite(float(v))]
 
 
 def robust_distribution(
@@ -130,12 +139,7 @@ def robust_distribution(
     else:
         std = min_std
 
-    return Distribution(
-        mean=mean_value,
-        std=std,
-        lower=lower,
-        upper=upper,
-    )
+    return Distribution(mean=mean_value, std=std, lower=lower, upper=upper)
 
 
 def _fit_nonnegative_slope(x: Sequence[float], y: Sequence[float]) -> float:
@@ -151,21 +155,34 @@ def _fit_nonnegative_slope(x: Sequence[float], y: Sequence[float]) -> float:
     return max(0.0, numer / denom)
 
 
+def _stint_slope(rows: Sequence[TyreCalibrationObservation], config: CalibrationConfig) -> float | None:
+    """Estimate degradation only from observations belonging to one originating stint."""
+    if len(rows) < config.tyre_min_stint_observations:
+        return None
+    ordered = sorted(rows, key=lambda r: r.tyre_age_laps)
+    if ordered[-1].tyre_age_laps - ordered[0].tyre_age_laps < config.tyre_min_stint_age_span:
+        return None
+    return _fit_nonnegative_slope(
+        [float(r.tyre_age_laps) for r in ordered],
+        [float(r.lap_time_delta_seconds) for r in ordered],
+    )
+
+
 def calibrate_tyre_degradation(
     observations: Iterable[TyreCalibrationObservation],
     *,
     config: CalibrationConfig | None = None,
 ) -> tuple[dict[str, Distribution], tuple[str, ...]]:
-    """Estimate per-lap degradation from age-vs-time-delta observations.
+    """Estimate per-lap degradation while preserving originating stint boundaries.
 
-    The observation is expected to already be normalized for fuel, traffic,
-    compound baseline, weather, and other confounders by the upstream adapter.
+    A stint-aware observation stream is required for the data-backed estimate:
+    rows from different stints are never treated as adjacent tyre-age points.
     """
     config = config or CalibrationConfig()
     grouped: dict[str, list[TyreCalibrationObservation]] = {}
     for obs in observations:
         compound = obs.compound.upper()
-        if obs.tyre_age_laps < 0:
+        if obs.tyre_age_laps < 0 or not isfinite(float(obs.lap_time_delta_seconds)):
             continue
         grouped.setdefault(compound, []).append(obs)
 
@@ -175,31 +192,35 @@ def calibrate_tyre_degradation(
         if len(rows) < config.tyre_min_observations:
             warnings.append(f"Low tyre-degradation sample for {compound}: n={len(rows)}")
 
-        slopes: list[float] = []
-        # Robustly estimate slopes on sequential age pairs rather than letting
-        # one extreme long-run determine the whole compound coefficient.
-        ordered = sorted(rows, key=lambda r: (r.tyre_age_laps, r.lap_time_delta_seconds))
-        for left, right in zip(ordered, ordered[1:]):
-            age_delta = right.tyre_age_laps - left.tyre_age_laps
-            if age_delta <= 0:
-                continue
-            slopes.append(max(0.0, (right.lap_time_delta_seconds - left.lap_time_delta_seconds) / age_delta))
+        by_stint: dict[str, list[TyreCalibrationObservation]] = {}
+        for index, row in enumerate(rows):
+            key = row.stint_key or f"__implicit_stint_{index}"
+            by_stint.setdefault(key, []).append(row)
 
+        slopes = [slope for stint_rows in by_stint.values() if (slope := _stint_slope(stint_rows, config)) is not None]
         if slopes:
-            dist = robust_distribution(slopes, lower=0.0, upper=0.5, min_std=0.005, clip_z=config.robust_clip_z)
-        else:
-            slope = _fit_nonnegative_slope(
-                [float(r.tyre_age_laps) for r in rows],
-                [float(r.lap_time_delta_seconds) for r in rows],
+            dist = robust_distribution(
+                slopes,
+                lower=0.0,
+                upper=0.5,
+                min_std=0.005,
+                clip_z=config.robust_clip_z,
             )
-            dist = Distribution(mean=min(0.5, slope), std=0.02, lower=0.0, upper=0.5)
-            warnings.append(f"Sparse age variation for {compound}; used fallback slope")
+        else:
+            warnings.append(f"No usable within-stint age variation for {compound}; degradation estimate unavailable")
+            continue
         results[compound] = dist
 
     return results, tuple(warnings)
 
 
-def smoothed_event_probability(event_count: int, exposure_laps: int, *, alpha: float = 1.0, beta: float = 99.0) -> float:
+def smoothed_event_probability(
+    event_count: int,
+    exposure_laps: int,
+    *,
+    alpha: float = 1.0,
+    beta: float = 99.0,
+) -> float:
     """Posterior mean of a Bernoulli hazard with a transparent Beta prior."""
     if event_count < 0 or exposure_laps < 0 or event_count > exposure_laps:
         raise ValueError("Invalid event count/exposure")
@@ -230,30 +251,16 @@ def calibrate_event_hazards(
         "red_wet": sum(r.red_flag_count for r in rows if r.wet_laps > 0),
     }
 
-    if dry_laps < config.event_min_laps:
-        dry_warning = f"Low dry-lap event exposure: n_laps={dry_laps}"
-    else:
-        dry_warning = None
-    if wet_laps < config.event_min_laps:
-        wet_warning = f"Low wet-lap event exposure: n_laps={wet_laps}"
-    else:
-        wet_warning = None
+    dry_warning = f"Low dry-lap event exposure: n_laps={dry_laps}" if dry_laps < config.event_min_laps else None
+    wet_warning = f"Low wet-lap event exposure: n_laps={wet_laps}" if wet_laps < config.event_min_laps else None
 
-    exposure = {
-        "sc_probability_per_lap_dry": dry_laps,
-        "vsc_probability_per_lap_dry": dry_laps,
-        "red_flag_probability_per_lap_dry": dry_laps,
-        "sc_probability_per_lap_wet": wet_laps,
-        "vsc_probability_per_lap_wet": wet_laps,
-        "red_flag_probability_per_lap_wet": wet_laps,
-    }
     result = {
-        "sc_probability_per_lap_dry": smoothed_event_probability(counts["sc_dry"], exposure["sc_probability_per_lap_dry"], alpha=config.prior_event_alpha, beta=config.prior_event_beta),
-        "vsc_probability_per_lap_dry": smoothed_event_probability(counts["vsc_dry"], exposure["vsc_probability_per_lap_dry"], alpha=config.prior_event_alpha, beta=config.prior_event_beta),
-        "red_flag_probability_per_lap_dry": smoothed_event_probability(counts["red_dry"], exposure["red_probability_per_lap_dry"], alpha=config.prior_event_alpha, beta=config.prior_event_beta) if "red_probability_per_lap_dry" in exposure else smoothed_event_probability(counts["red_dry"], dry_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
-        "sc_probability_per_lap_wet": smoothed_event_probability(counts["sc_wet"], exposure["sc_probability_per_lap_wet"], alpha=config.prior_event_alpha, beta=config.prior_event_beta),
-        "vsc_probability_per_lap_wet": smoothed_event_probability(counts["vsc_wet"], exposure["vsc_probability_per_lap_wet"], alpha=config.prior_event_alpha, beta=config.prior_event_beta),
-        "red_flag_probability_per_lap_wet": smoothed_event_probability(counts["red_wet"], exposure["red_flag_probability_per_lap_wet"], alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "sc_probability_per_lap_dry": smoothed_event_probability(counts["sc_dry"], dry_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "vsc_probability_per_lap_dry": smoothed_event_probability(counts["vsc_dry"], dry_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "red_flag_probability_per_lap_dry": smoothed_event_probability(counts["red_dry"], dry_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "sc_probability_per_lap_wet": smoothed_event_probability(counts["sc_wet"], wet_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "vsc_probability_per_lap_wet": smoothed_event_probability(counts["vsc_wet"], wet_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
+        "red_flag_probability_per_lap_wet": smoothed_event_probability(counts["red_wet"], wet_laps, alpha=config.prior_event_alpha, beta=config.prior_event_beta),
     }
 
     warnings = tuple(w for w in (dry_warning, wet_warning) if w)
@@ -270,20 +277,8 @@ def calibrate_pit_stops(
     if not rows:
         raise ValueError("At least one pit-stop observation is required")
 
-    service = robust_distribution(
-        (r.service_seconds for r in rows),
-        lower=1.5,
-        upper=5.5,
-        min_std=0.05,
-        clip_z=config.robust_clip_z,
-    )
-    lane = robust_distribution(
-        (r.pit_lane_loss_seconds for r in rows),
-        lower=10.0,
-        upper=40.0,
-        min_std=0.20,
-        clip_z=config.robust_clip_z,
-    )
+    service = robust_distribution((r.service_seconds for r in rows), lower=1.5, upper=5.5, min_std=0.05, clip_z=config.robust_clip_z)
+    lane = robust_distribution((r.pit_lane_loss_seconds for r in rows), lower=10.0, upper=40.0, min_std=0.20, clip_z=config.robust_clip_z)
     warnings = (f"Low pit-stop sample: n={len(rows)}",) if len(rows) < 20 else ()
     return service, lane, warnings
 
@@ -333,12 +328,7 @@ def calibrate_inputs(
         pace, pace_warnings = calibrate_pace(pace_rows, config=config)
 
     report = CalibrationReport(
-        observations={
-            "tyre": len(tyre_rows),
-            "events": len(event_rows),
-            "pit_stops": len(pit_rows),
-            "pace": len(pace_rows),
-        },
+        observations={"tyre": len(tyre_rows), "events": len(event_rows), "pit_stops": len(pit_rows), "pace": len(pace_rows)},
         warnings=tuple(tyre_warnings + event_warnings + pit_warnings + pace_warnings),
     )
     return CalibratedInputs(
