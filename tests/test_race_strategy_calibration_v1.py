@@ -24,6 +24,14 @@ def test_robust_distribution_reduces_single_outlier_impact():
     assert dist.upper is None
 
 
+def test_robust_distribution_rejects_non_finite_values():
+    dist = robust_distribution([90.0, float("nan"), float("inf"), 90.2], min_std=0.01)
+    assert math.isfinite(dist.mean)
+    assert math.isfinite(dist.std)
+    with pytest.raises(ValueError):
+        robust_distribution([float("nan"), float("inf")])
+
+
 def test_smoothed_event_probability_shrinks_small_samples():
     raw = 1 / 10
     smoothed = smoothed_event_probability(1, 10, alpha=1, beta=99)
@@ -44,13 +52,41 @@ def test_event_hazards_are_exposure_adjusted():
 
 def test_tyre_degradation_estimate_is_non_negative():
     rows = [
-        TyreCalibrationObservation("MEDIUM", age, 0.05 * age + jitter)
+        TyreCalibrationObservation("MEDIUM", age, 0.05 * age + jitter, stint_key="stint-1")
         for age, jitter in [(1, 0.00), (2, 0.01), (3, -0.01), (4, 0.00), (5, 0.01)]
     ] * 5
     calibrated, warnings = calibrate_tyre_degradation(rows)
     assert calibrated["MEDIUM"].mean >= 0
     assert calibrated["MEDIUM"].upper == 0.5
     assert warnings == () or any("Low tyre" in w for w in warnings)
+
+
+def test_tyre_slopes_are_estimated_within_stints_only():
+    rows = []
+    for age in range(1, 6):
+        rows.append(TyreCalibrationObservation("MEDIUM", age, 0.10 * age, stint_key="stint-a"))
+        rows.append(TyreCalibrationObservation("MEDIUM", age, 10.0 + 0.10 * age, stint_key="stint-b"))
+
+    calibrated, warnings = calibrate_tyre_degradation(rows, config=CalibrationConfig(tyre_min_observations=1))
+
+    assert calibrated["MEDIUM"].mean == pytest.approx(0.10, abs=1e-9)
+    assert calibrated["MEDIUM"].std >= 0.005
+    assert not any("unavailable" in warning.lower() for warning in warnings)
+
+
+def test_tyre_rows_without_stint_identity_do_not_create_cross_stint_slopes():
+    rows = [
+        TyreCalibrationObservation("MEDIUM", age, 0.10 * age)
+        for age in range(1, 6)
+    ] + [
+        TyreCalibrationObservation("MEDIUM", age, 20.0 + 0.10 * age)
+        for age in range(1, 6)
+    ]
+
+    calibrated, warnings = calibrate_tyre_degradation(rows, config=CalibrationConfig(tyre_min_observations=1))
+
+    assert "MEDIUM" not in calibrated
+    assert any("within-stint" in warning.lower() for warning in warnings)
 
 
 def test_pit_and_pace_calibration():
@@ -66,7 +102,7 @@ def test_pit_and_pace_calibration():
 
 
 def test_calibrate_inputs_produces_complete_calibrated_object():
-    tyre_rows = [TyreCalibrationObservation("HARD", age, 0.04 * age) for age in range(1, 31)]
+    tyre_rows = [TyreCalibrationObservation("HARD", age, 0.04 * age, stint_key="hard-stint") for age in range(1, 31)]
     event_rows = [EventCalibrationObservation(total_laps=100, safety_car_count=2, vsc_count=2, wet_laps=25)]
     pit_rows = [PitCalibrationObservation(2.4, 22.0) for _ in range(25)]
     pace_rows = [PaceCalibrationObservation(90.0 + (i % 3) * 0.05) for i in range(35)]
