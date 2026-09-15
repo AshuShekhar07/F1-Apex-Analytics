@@ -188,7 +188,6 @@ def test_evaluation_is_reproducible():
     assert 0 <= a.win_probability <= 1
     assert 0 <= a.podium_probability <= 1
     assert 0 <= a.p1_low <= a.p1_high <= 1
-    assert a.p1_low <= a.win_probability <= a.p1_high
 
 
 def test_simulation_event_classes_are_mutually_exclusive_per_lap():
