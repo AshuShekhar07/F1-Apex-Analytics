@@ -13,7 +13,7 @@ Explicitly unavailable from the current schema/query surface:
 - a directly comparable absolute car-pace distribution
 - exact lap-by-lap SC/VSC timing
 
-Those gaps are returned as warnings rather than replaced with synthetic data.
+Those gaps are returned as warnings rather than replacements with synthetic data.
 """
 
 from __future__ import annotations
@@ -50,7 +50,11 @@ def _rows(db: Any, sql: str, params: dict[str, Any] | None = None) -> list[dict[
 
 
 def load_regulation_eras(db: Any, *, start_year: int = 2017, end_year: int = 2026) -> tuple[str, ...]:
-    """Return distinct stored regulation-era labels for a year range."""
+    """Return distinct stored regulation-era labels for a year range.
+
+    Sorting is performed in Python as a deterministic final step so tests and
+    non-standard DB adapters do not depend on faithfully reproducing SQL ORDER BY.
+    """
     if start_year > end_year:
         raise ValueError("start_year cannot be greater than end_year")
     rows = _rows(
@@ -64,7 +68,12 @@ def load_regulation_eras(db: Any, *, start_year: int = 2017, end_year: int = 202
         """,
         {"start_year": start_year, "end_year": end_year},
     )
-    return tuple(str(row["regulation_era"]) for row in rows if row.get("regulation_era") is not None)
+    labels = {
+        str(row["regulation_era"])
+        for row in rows
+        if row.get("regulation_era") is not None
+    }
+    return tuple(sorted(labels))
 
 
 def load_event_observations(
