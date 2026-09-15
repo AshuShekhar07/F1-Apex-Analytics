@@ -27,6 +27,7 @@ class PitIngestionConfig:
 @dataclass(frozen=True)
 class ReconstructedPitStop:
     driver: str
+    driver_number: int | None
     pit_lap: int
     pit_in_time_seconds: float
     pit_out_time_seconds: float
@@ -45,6 +46,14 @@ def _seconds(value: Any) -> float | None:
     return value if isfinite(value) else None
 
 
+def _driver_number(value: Any) -> int | None:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 def reconstruct_pit_stops(rows: Iterable[Any]) -> list[ReconstructedPitStop]:
     """Pair pit-entry and subsequent pit-exit timestamps for each driver."""
     ordered = []
@@ -60,25 +69,26 @@ def reconstruct_pit_stops(rows: Iterable[Any]) -> list[ReconstructedPitStop]:
         ordered.append((driver, lap_number, row))
 
     ordered.sort(key=lambda item: (item[0], item[1]))
-    pit_ins: dict[str, tuple[int, float]] = {}
+    pit_ins: dict[str, tuple[int, float, int | None]] = {}
     stops: list[ReconstructedPitStop] = []
 
     for driver, lap_number, row in ordered:
         pit_in = _seconds(row.get("PitInTime"))
         if pit_in is not None:
-            pit_ins[driver] = (lap_number, pit_in)
+            pit_ins[driver] = (lap_number, pit_in, _driver_number(row.get("DriverNumber")))
 
         pit_out = _seconds(row.get("PitOutTime"))
         pending = pit_ins.get(driver)
         if pit_out is None or pending is None:
             continue
 
-        pit_lap, pit_in_time = pending
+        pit_lap, pit_in_time, driver_number = pending
         duration = pit_out - pit_in_time
         if duration > 0:
             stops.append(
                 ReconstructedPitStop(
                     driver=driver,
+                    driver_number=driver_number,
                     pit_lap=pit_lap,
                     pit_in_time_seconds=pit_in_time,
                     pit_out_time_seconds=pit_out,
