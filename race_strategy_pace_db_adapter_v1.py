@@ -60,6 +60,7 @@ def load_race_pace_observations(
             re.driver_id,
             l.lap_number,
             l.lap_time,
+            l.tire_compound,
             COALESCE(sw.rainfall, FALSE) AS rainfall
         FROM laps l
         JOIN sessions s ON s.id = l.session_id
