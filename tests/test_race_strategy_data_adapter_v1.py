@@ -87,7 +87,7 @@ def test_tyre_adapter_derives_age_and_delta_from_a_stint():
     assert [o.tyre_age_laps for o in observations] == [1, 2, 3, 4]
     assert observations[0].lap_time_delta_seconds == 0.05
     assert observations[-1].lap_time_delta_seconds == 0.55
-    assert warnings == ()
+    assert any("Only 4 tyre observations" in warning for warning in warnings)
 
 
 def test_unavailable_inputs_are_explicit():
