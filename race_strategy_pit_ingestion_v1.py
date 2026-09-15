@@ -46,12 +46,7 @@ def _seconds(value: Any) -> float | None:
 
 
 def reconstruct_pit_stops(rows: Iterable[Any]) -> list[ReconstructedPitStop]:
-    """Pair pit-entry and subsequent pit-exit timestamps for each driver.
-
-    ``rows`` may be pandas ``Series``/dict-like objects. Rows are expected to
-    expose ``Driver``, ``LapNumber``, ``PitInTime`` and ``PitOutTime``. A stop
-    requires a pit-in timestamp and a later pit-out timestamp for that driver.
-    """
+    """Pair pit-entry and subsequent pit-exit timestamps for each driver."""
     ordered = []
     for row in rows:
         driver = str(row.get("Driver", "")).strip()
@@ -100,19 +95,15 @@ def filter_pit_stop_outliers(
     *,
     config: PitIngestionConfig | None = None,
 ) -> tuple[list[ReconstructedPitStop], int]:
-    """Remove physically impossible and race-level IQR outlier pit visits.
-
-    The physical bounds prevent tiny/huge values from corrupting IQR when a
-    race has only a few stops. IQR filtering is applied around the race sample
-    only when it can actually identify a tighter interval.
-    """
+    """Remove physically impossible and race-level IQR outlier pit visits."""
     config = config or PitIngestionConfig()
+    source = list(stops)
     rows = [
         stop
-        for stop in stops
+        for stop in source
         if config.physical_min_seconds <= stop.total_pit_lane_seconds <= config.physical_max_seconds
     ]
-    removed = len(list(stops)) - len(rows) if not isinstance(stops, list) else len(stops) - len(rows)
+    removed = len(source) - len(rows)
     if len(rows) < 4:
         return rows, removed
 
