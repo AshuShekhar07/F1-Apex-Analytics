@@ -35,7 +35,9 @@ def test_rejects_illegal_start_tyre():
         "M-H",
         (StrategyStint("MEDIUM", 1, 25), StrategyStint("HARD", 26, 50)),
     )
-    allocation = TyreAllocation({"MEDIUM": 1, "HARD": 1}, "SOFT")
+    # Include the mandatory-start set so this test reaches the intended
+    # strategy-level validation rather than failing allocation validation first.
+    allocation = TyreAllocation({"SOFT": 1, "MEDIUM": 1, "HARD": 1}, "SOFT")
     with pytest.raises(ValueError, match="must start"):
         validate_strategy(strategy, allocation, 50)
 
