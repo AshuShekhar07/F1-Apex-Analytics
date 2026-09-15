@@ -1,13 +1,4 @@
-"""FastF1 pit-stop reconstruction helpers for race-strategy calibration v1.
-
-FastF1 records pit entry and pit exit timestamps on lap rows. A complete pit
-visit is reconstructed by pairing an in-lap ``PitInTime`` with the next
-``PitOutTime`` for the same driver. The resulting measurement is *total pit
-lane time*; it is intentionally not mislabeled as crew service time.
-
-This module is pure Python apart from the pandas-shaped input protocol, so the
-same reconstruction can be tested without downloading FastF1 sessions.
-"""
+"""FastF1 pit-stop reconstruction helpers for race-strategy calibration v1."""
 
 from __future__ import annotations
 
@@ -26,12 +17,14 @@ class PitIngestionConfig:
 
 @dataclass(frozen=True)
 class ReconstructedPitStop:
+    """A raw FastF1 pit visit represented as total pit-lane elapsed time."""
+
     driver: str
-    driver_number: int | None
     pit_lap: int
     pit_in_time_seconds: float
     pit_out_time_seconds: float
     total_pit_lane_seconds: float
+    driver_number: int | None = None
 
 
 def _seconds(value: Any) -> float | None:
@@ -88,11 +81,11 @@ def reconstruct_pit_stops(rows: Iterable[Any]) -> list[ReconstructedPitStop]:
             stops.append(
                 ReconstructedPitStop(
                     driver=driver,
-                    driver_number=driver_number,
                     pit_lap=pit_lap,
                     pit_in_time_seconds=pit_in_time,
                     pit_out_time_seconds=pit_out,
-                    total_pit_lane_seconds=duration,
+                    total_pit_lane_seconds=round(duration, 6),
+                    driver_number=driver_number,
                 )
             )
         pit_ins.pop(driver, None)
@@ -142,7 +135,7 @@ def extract_pit_stops_from_fastf1_session(session: Any) -> list[ReconstructedPit
 
 
 def fastf1_session_loader(year: int, round_number: int, cache_dir: str | None = None) -> Any:
-    """Load a FastF1 race session with only the timing data needed here."""
+    """Load a FastF1 race session with only timing data needed here."""
     import fastf1
 
     if cache_dir:
