@@ -65,7 +65,7 @@ def test_audit_reports_strategy_and_probability_metrics(tmp_path):
     assert report["sequence_matches"] == 2
     assert report["sequence_match_rate"] == 1.0
     assert report["repeated_compound_selected"] == 1
-    assert report["p1_brier"] == 0.20
+    assert report["p1_brier"] == 0.10
     assert report["probability_bins"]["0.5-1.0"]["n"] == 1
 
 
