@@ -8,12 +8,15 @@ def _row(race, driver, stint, compound, start, end, lap, time, era="era2"):
 def test_field_relative_rows_remove_shared_race_lap_pace():
     rows = []
     # Shared race-lap pace rises by 0.5s/lap; driver 1 has a 0.1s/lap tyre-age effect.
+    # Four other cars anchor the field median so the tested car cannot determine it.
     for lap in range(1, 9):
         shared = 90.0 + 0.5 * lap
         rows.extend([
-            _row(1, 1, 1, "MEDIUM", 1, 8, lap, shared + (0.1 * max(0, lap - 1))),
-            _row(1, 2, 1, "MEDIUM", 1, 8, lap, shared),
-            _row(1, 3, 2, "SOFT", 5, 8, lap, shared + 1.0 if lap >= 5 else shared),
+            _row(1, 1, 1, "MEDIUM", 1, 8, lap, shared + 0.1 * max(0, lap - 1)),
+            _row(1, 2, 1, "MEDIUM", 1, 8, lap, shared - 0.30),
+            _row(1, 3, 1, "MEDIUM", 1, 8, lap, shared - 0.10),
+            _row(1, 4, 1, "SOFT", 1, 8, lap, shared + 0.10),
+            _row(1, 5, 2, "SOFT", 5, 8, lap, shared + 0.30 if lap >= 5 else shared),
         ])
     diversity = {1: 4}
     pooled, coverage = build_field_relative_rows(rows, diversity, min_unique_pit_laps=4, min_stint_age_span=2)
