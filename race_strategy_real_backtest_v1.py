@@ -127,9 +127,9 @@ def load_actual_target_strategy(db: Any, target: RaceTarget) -> Strategy | None:
 
 
 def candidate_sequences() -> tuple[tuple[str, ...], ...]:
-    """Bound the experiment to realistic dry 1-stop/2-stop compound sequences."""
+    """Bound the experiment to dry 1-stop/2-stop sequences using at least two compounds."""
     compounds = ("SOFT", "MEDIUM", "HARD")
-    one_stop = tuple(product(compounds, repeat=2))
+    one_stop = tuple(seq for seq in product(compounds, repeat=2) if len(set(seq)) >= 2)
     two_stop = tuple(seq for seq in product(compounds, repeat=3) if len(set(seq)) >= 2)
     return tuple(seq for seq in one_stop + two_stop if seq[0] in compounds)
 
