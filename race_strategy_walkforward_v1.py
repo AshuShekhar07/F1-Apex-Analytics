@@ -26,8 +26,6 @@ from race_strategy_simulator_v1 import (
 
 @dataclass(frozen=True)
 class InputSnapshot:
-    """Pre-race model inputs and the timestamp/year at which they were known."""
-
     available_year: int
     context: RaceContext
     competitors: tuple[CompetitorProfile, ...]
@@ -38,8 +36,6 @@ class InputSnapshot:
 
 @dataclass(frozen=True)
 class RealizedOutcome:
-    """Post-race labels used only for scoring the already-frozen prediction."""
-
     year: int
     actual_finish_position: int
     actual_strategy: Strategy | None = None
@@ -68,6 +64,10 @@ class RaceBacktestResult:
     baseline_p1_probability: float
     baseline_distance_from_actual: float
     selected_distance_from_actual: float
+    actual_strategy: str | None
+    selected_sequence_match: bool | None
+    selected_stop_l1_error: float | None
+    selected_lap_window_error: float | None
     leakage_safe: bool
     warnings: tuple[str, ...] = ()
 
@@ -80,7 +80,36 @@ class WalkForwardReport:
     model_mean_abs_finish_error: float
     baseline_mean_abs_finish_error: float
     model_better_than_baseline_rate: float
+    strategy_sequence_match_rate: float
+    mean_selected_stop_l1_error: float
+    mean_selected_lap_window_error: float
     results: tuple[RaceBacktestResult, ...]
+
+
+def _strategy_metrics(selected: Strategy, actual: Strategy | None) -> tuple[bool | None, float | None, float | None]:
+    if actual is None:
+        return None, None, None
+    sequence_match = selected.sequence == actual.sequence
+    selected_stops = list(selected.stop_laps)
+    actual_stops = list(actual.stop_laps)
+    if not selected_stops or not actual_stops:
+        stop_l1 = float(abs(len(selected_stops) - len(actual_stops)))
+    else:
+        pairs = min(len(selected_stops), len(actual_stops))
+        stop_l1 = float(sum(abs(selected_stops[i] - actual_stops[i]) for i in range(pairs)))
+        stop_l1 += float(abs(len(selected_stops) - len(actual_stops)) * 100)
+    # Lap-window error is mean absolute boundary error, normalized by the
+    # number of matched boundaries; unmatched boundaries receive 100 laps.
+    if not selected_stops and not actual_stops:
+        window_error = 0.0
+    else:
+        n = max(len(selected_stops), len(actual_stops))
+        errors = [
+            abs(selected_stops[i] - actual_stops[i]) if i < len(selected_stops) and i < len(actual_stops) else 100
+            for i in range(n)
+        ]
+        window_error = float(sum(errors) / n)
+    return sequence_match, stop_l1, window_error
 
 
 def _validate_case(case: RaceBacktestCase) -> None:
@@ -130,6 +159,7 @@ def run_case(
     )
 
     actual = case.outcome.actual_finish_position
+    sequence_match, stop_l1, window_error = _strategy_metrics(selected.strategy, case.outcome.actual_strategy)
     return RaceBacktestResult(
         race_id=case.race_id,
         year=case.year,
@@ -142,6 +172,10 @@ def run_case(
         baseline_p1_probability=baseline_evaluation.win_probability,
         baseline_distance_from_actual=abs(baseline_evaluation.expected_finish - actual),
         selected_distance_from_actual=abs(selected.expected_finish - actual),
+        actual_strategy=(" → ".join(case.outcome.actual_strategy.sequence) if case.outcome.actual_strategy else None),
+        selected_sequence_match=sequence_match,
+        selected_stop_l1_error=stop_l1,
+        selected_lap_window_error=window_error,
         leakage_safe=True,
     )
 
@@ -187,9 +221,17 @@ def walk_forward_evaluate(
             if model_errors and len(model_errors) == len(baseline_errors)
             else 0.0
         )
+        sequence_matches = [r.selected_sequence_match for r in results if r.selected_sequence_match is not None]
+        stop_errors = [r.selected_stop_l1_error for r in results if r.selected_stop_l1_error is not None]
+        window_errors = [r.selected_lap_window_error for r in results if r.selected_lap_window_error is not None]
+        sequence_match_rate = sum(sequence_matches) / len(sequence_matches) if sequence_matches else 0.0
+        mean_stop_error = mean(stop_errors) if stop_errors else float("nan")
+        mean_window_error = mean(window_errors) if window_errors else float("nan")
     else:
         model_mae = baseline_mae = float("nan")
         better = 0.0
+        sequence_match_rate = 0.0
+        mean_stop_error = mean_window_error = float("nan")
 
     return WalkForwardReport(
         cases_attempted=len(ordered),
@@ -198,5 +240,8 @@ def walk_forward_evaluate(
         model_mean_abs_finish_error=model_mae,
         baseline_mean_abs_finish_error=baseline_mae,
         model_better_than_baseline_rate=better,
+        strategy_sequence_match_rate=sequence_match_rate,
+        mean_selected_stop_l1_error=mean_stop_error,
+        mean_selected_lap_window_error=mean_window_error,
         results=tuple(results),
     )
