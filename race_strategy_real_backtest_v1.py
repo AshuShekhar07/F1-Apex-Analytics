@@ -4,8 +4,8 @@ Research-only runner. It builds a pre-race snapshot from information that was
 known before the target race, calibrates simulator inputs from strictly earlier
 races, and scores the frozen recommendation against the realized finish.
 
-This intentionally uses a narrow nominal dry-tyre allocation and a bounded
-strategy family. It is a validation harness, not a production strategy policy.
+The realized target-driver strategy is loaded only after the pre-race snapshot
+is constructed and is used strictly for post-hoc evaluation.
 """
 from __future__ import annotations
 
@@ -23,12 +23,11 @@ from race_strategy_calibration_v1 import calibrate_event_hazards, calibrate_tyre
 from race_strategy_data_adapter_v1 import load_event_observations, load_tyre_observations
 from race_strategy_pace_calibration_v3 import build_residual_observations, predict_target_pace
 from race_strategy_pace_v3_db_adapter import load_pace_observations
-from race_strategy_pit_calibration_v1 import context_with_total_pit_lane_calibration, calibrate_total_pit_lane_from_db
+from race_strategy_pit_calibration_v1 import calibrate_total_pit_lane_from_db, context_with_total_pit_lane_calibration
 from race_strategy_simulator_v1 import (
     CompetitorProfile,
     Distribution,
     RaceContext,
-    SimulationParameters,
     Strategy,
     StrategyStint,
     TyreAllocation,
@@ -102,14 +101,36 @@ def list_targets(db: Any, *, start_year: int, end_year: int) -> tuple[RaceTarget
     )
 
 
+def load_actual_target_strategy(db: Any, target: RaceTarget) -> Strategy | None:
+    """Load the target driver's realized race strategy strictly for post-hoc scoring."""
+    rows = _rows(db, """
+        SELECT rs.stint_number, rs.compound, rs.start_lap, rs.end_lap
+        FROM race_stints rs
+        JOIN races r ON r.id = rs.race_id
+        JOIN race_entries re ON re.id = rs.race_entry_id
+        WHERE rs.race_id = :race_id
+          AND re.driver_id = :driver_id
+        ORDER BY rs.stint_number
+    """, {"race_id": target.race_id, "driver_id": target.driver_id})
+    stints: list[StrategyStint] = []
+    for row in rows:
+        if row["compound"] is None or row["start_lap"] is None or row["end_lap"] is None:
+            continue
+        stints.append(StrategyStint(str(row["compound"]).upper(), int(row["start_lap"]), int(row["end_lap"])))
+    if not stints:
+        return None
+    return Strategy(
+        name=" → ".join(st.compound for st in stints),
+        stints=tuple(stints),
+        source="realized_post_race",
+    )
+
+
 def candidate_sequences() -> tuple[tuple[str, ...], ...]:
     """Bound the experiment to realistic dry 1-stop/2-stop compound sequences."""
     compounds = ("SOFT", "MEDIUM", "HARD")
     one_stop = tuple(product(compounds, repeat=2))
-    two_stop = tuple(
-        seq for seq in product(compounds, repeat=3)
-        if len(set(seq)) >= 2
-    )
+    two_stop = tuple(seq for seq in product(compounds, repeat=3) if len(set(seq)) >= 2)
     return tuple(seq for seq in one_stop + two_stop if seq[0] in compounds)
 
 
@@ -121,30 +142,18 @@ def build_case(db: Any, target: RaceTarget, *, pace_rows: tuple, pit_start_year:
     """Build a target case using only information from years before target.year."""
     cutoff = target.year
 
-    # Historical tyre degradation: strictly earlier years, same regulation era.
-    tyre_obs, tyre_warnings = load_tyre_observations(
-        db, era=target.era, start_year=2018, end_year=cutoff - 1
-    )
+    tyre_obs, _ = load_tyre_observations(db, era=target.era, start_year=2018, end_year=cutoff - 1)
     tyre_deg, _ = calibrate_tyre_degradation(tyre_obs)
     if set(("SOFT", "MEDIUM", "HARD")) - set(tyre_deg):
         raise ValueError(f"Race {target.race_id}: incomplete historical tyre degradation calibration")
 
-    # Historical event hazards: strictly earlier dry/wet races, same era. This
-    # first dry experiment uses the calibrated dry hazards only.
-    event_obs, _ = load_event_observations(
-        db, era=target.era, start_year=2018, end_year=cutoff - 1
-    )
+    event_obs, _ = load_event_observations(db, era=target.era, start_year=2018, end_year=cutoff - 1)
     hazards, _ = calibrate_event_hazards(event_obs)
 
-    # Real observed total pit-lane time: strictly earlier races. We currently
-    # have the dedicated FastF1 store populated from 2023 onward.
     pit_start = min(pit_start_year, cutoff - 1)
-    pit = calibrate_total_pit_lane_from_db(
-        db, start_year=pit_start, end_year=cutoff - 1, era=target.era
-    )
+    pit = calibrate_total_pit_lane_from_db(db, start_year=pit_start, end_year=cutoff - 1, era=target.era)
 
     residuals = build_residual_observations(pace_rows)
-
     target_pace = predict_target_pace(
         residuals,
         target_track_id=target.track_id,
@@ -160,9 +169,7 @@ def build_case(db: Any, target: RaceTarget, *, pace_rows: tuple, pit_start_year:
     race_context = RaceContext(
         total_laps=target.total_laps,
         starting_grid=target.starting_grid,
-        our_base_pace_seconds=_distribution(
-            target_pace.mean_seconds, target_pace.std_seconds, 40.0, 150.0
-        ),
+        our_base_pace_seconds=_distribution(target_pace.mean_seconds, target_pace.std_seconds, 40.0, 150.0),
         tyre_degradation_per_lap=tyre_deg,
         pit_stop_seconds=Distribution(0.0, 0.0, 0.0, 0.0),
         pit_lane_loss_seconds=pit.total_pit_lane_seconds,
@@ -171,8 +178,6 @@ def build_case(db: Any, target: RaceTarget, *, pace_rows: tuple, pit_start_year:
         red_flag_probability_per_lap=hazards["red_flag_probability_per_lap_dry"],
     )
 
-    # Predict every other driver/team that has sufficient historical pace
-    # history. Their starting grid positions are pre-race qualifying positions.
     grid_rows = _rows(db, """
         SELECT re.driver_id, re.team_id,
                COALESCE(rr.starting_grid_position, q.final_position) AS grid_position
@@ -238,7 +243,8 @@ def build_case(db: Any, target: RaceTarget, *, pace_rows: tuple, pit_start_year:
          StrategyStint("HARD", max(3, round(target.total_laps * 0.5) + 1), target.total_laps)),
         source="fixed_baseline",
     )
-    outcome = RealizedOutcome(target.year, target.actual_finish)
+    actual_strategy = load_actual_target_strategy(db, target)
+    outcome = RealizedOutcome(target.year, target.actual_finish, actual_strategy=actual_strategy)
     return RaceBacktestCase(
         race_id=target.race_id,
         year=target.year,
@@ -273,7 +279,6 @@ def run_backtest(
     if not targets:
         raise ValueError("No eligible dry-race targets found")
 
-    # Load once so each target only changes the chronological eligibility cutoff.
     all_pace_rows, _ = load_pace_observations(db, start_year=2018, end_year=end_year - 1)
 
     results: list[RaceBacktestResult] = []
@@ -282,17 +287,15 @@ def run_backtest(
         try:
             eligible_pace = tuple(r for r in all_pace_rows if r.season_year < target.year)
             case = build_case(db, target, pace_rows=eligible_pace)
-            result = run_case(
-                case,
-                build_candidates(case),
-                simulations_per_strategy=simulations_per_strategy,
-                seed=seed + index,
-            )
+            result = run_case(case, build_candidates(case), simulations_per_strategy=simulations_per_strategy, seed=seed + index)
             results.append(result)
+            actual_strategy = case.outcome.actual_strategy
+            actual_seq = " → ".join(actual_strategy.sequence) if actual_strategy else "N/A"
             print(
                 f"{target.year} race={target.race_id}: selected={result.selected_strategy} "
                 f"P1={result.model_p1_probability:.3f} expected={result.model_expected_finish:.2f} "
-                f"actual={result.actual_finish_position} baseline_error={result.baseline_distance_from_actual:.2f}"
+                f"actual={result.actual_finish_position} realized_strategy={actual_seq} "
+                f"baseline_error={result.baseline_distance_from_actual:.2f}"
             )
         except (ValueError, KeyError) as exc:
             skipped.append((target.race_id, str(exc)))
@@ -323,10 +326,17 @@ def run_backtest(
                 "race_id", "year", "selected_strategy", "model_expected_finish",
                 "model_p1_probability", "actual_finish_position", "baseline_name",
                 "baseline_expected_finish", "baseline_distance_from_actual",
-                "selected_distance_from_actual", "leakage_safe",
+                "selected_distance_from_actual", "leakage_safe", "actual_strategy",
             ])
             writer.writeheader()
             for row in results:
+                actual_strategy = ""
+                if row.race_id:
+                    target = next((t for t in targets if t.race_id == row.race_id), None)
+                    if target is not None:
+                        strategy = load_actual_target_strategy(db, target)
+                        if strategy is not None:
+                            actual_strategy = " → ".join(strategy.sequence)
                 writer.writerow({
                     "race_id": row.race_id,
                     "year": row.year,
@@ -339,6 +349,7 @@ def run_backtest(
                     "baseline_distance_from_actual": row.baseline_distance_from_actual,
                     "selected_distance_from_actual": row.selected_distance_from_actual,
                     "leakage_safe": row.leakage_safe,
+                    "actual_strategy": actual_strategy,
                 })
     return tuple(results)
 
