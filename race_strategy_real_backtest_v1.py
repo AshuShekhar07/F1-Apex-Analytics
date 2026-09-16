@@ -233,7 +233,7 @@ def build_case(db: Any, target: RaceTarget, *, pace_rows: tuple, pit_start_year:
         context=context,
         competitors=tuple(competitors),
         allocation=DEFAULT_ALLOCATION,
-        parameters=SimulationParameters(),
+        parameters=__import__("race_strategy_simulator_v1", fromlist=["SimulationParameters"]).SimulationParameters(),
         source="historical_db_pre_race_dry_v1",
     )
 
@@ -295,7 +295,8 @@ def run_backtest(
                 f"{target.year} race={target.race_id}: selected={result.selected_strategy} "
                 f"P1={result.model_p1_probability:.3f} expected={result.model_expected_finish:.2f} "
                 f"actual={result.actual_finish_position} realized_strategy={actual_seq} "
-                f"baseline_error={result.baseline_distance_from_actual:.2f}"
+                f"sequence_match={result.selected_sequence_match} stop_l1={result.selected_stop_l1_error} "
+                f"window_error={result.selected_lap_window_error}"
             )
         except (ValueError, KeyError) as exc:
             skipped.append((target.race_id, str(exc)))
@@ -307,6 +308,9 @@ def run_backtest(
     model_errors = [r.selected_distance_from_actual for r in results]
     baseline_errors = [r.baseline_distance_from_actual for r in results]
     better = [m < b for m, b in zip(model_errors, baseline_errors)]
+    sequence_matches = [r.selected_sequence_match for r in results if r.selected_sequence_match is not None]
+    stop_errors = [r.selected_stop_l1_error for r in results if r.selected_stop_l1_error is not None]
+    window_errors = [r.selected_lap_window_error for r in results if r.selected_lap_window_error is not None]
 
     print("\n=== WALK-FORWARD SUMMARY ===")
     print(f"targets={len(targets)} scored={len(results)} skipped={len(skipped)}")
@@ -314,6 +318,10 @@ def run_backtest(
     print(f"baseline_MAE={sum(baseline_errors) / len(baseline_errors):.3f}")
     print(f"model_better_rate={sum(better) / len(better):.3f}")
     print(f"model_P1_mean={sum(r.model_p1_probability for r in results) / len(results):.3f}")
+    print(f"sequence_match_rate={(sum(sequence_matches) / len(sequence_matches)) if sequence_matches else float('nan'):.3f}")
+    print(f"mean_stop_l1_error={(sum(stop_errors) / len(stop_errors)) if stop_errors else float('nan'):.3f}")
+    print(f"mean_lap_window_error={(sum(window_errors) / len(window_errors)) if window_errors else float('nan'):.3f}")
+    print(f"repeated_compound_selected={sum(len(set(r.selected_strategy.split(' [', 1)[0].split(' → '))) < len(r.selected_strategy.split(' [', 1)[0].split(' → ')) for r in results)}")
     if skipped:
         print("\nSkipped races:")
         for race_id, reason in skipped:
@@ -327,16 +335,12 @@ def run_backtest(
                 "model_p1_probability", "actual_finish_position", "baseline_name",
                 "baseline_expected_finish", "baseline_distance_from_actual",
                 "selected_distance_from_actual", "leakage_safe", "actual_strategy",
+                "selected_sequence_match", "selected_stop_l1_error", "selected_lap_window_error",
             ])
             writer.writeheader()
             for row in results:
-                actual_strategy = ""
-                if row.race_id:
-                    target = next((t for t in targets if t.race_id == row.race_id), None)
-                    if target is not None:
-                        strategy = load_actual_target_strategy(db, target)
-                        if strategy is not None:
-                            actual_strategy = " → ".join(strategy.sequence)
+                target = next((t for t in targets if t.race_id == row.race_id), None)
+                actual_strategy = load_actual_target_strategy(db, target) if target is not None else None
                 writer.writerow({
                     "race_id": row.race_id,
                     "year": row.year,
@@ -349,7 +353,10 @@ def run_backtest(
                     "baseline_distance_from_actual": row.baseline_distance_from_actual,
                     "selected_distance_from_actual": row.selected_distance_from_actual,
                     "leakage_safe": row.leakage_safe,
-                    "actual_strategy": actual_strategy,
+                    "actual_strategy": " → ".join(actual_strategy.sequence) if actual_strategy else "",
+                    "selected_sequence_match": row.selected_sequence_match,
+                    "selected_stop_l1_error": row.selected_stop_l1_error,
+                    "selected_lap_window_error": row.selected_lap_window_error,
                 })
     return tuple(results)
 
