@@ -1,13 +1,17 @@
-"""Sensitivity sweep for the leakage-safe tyre-model walk-forward audit.
+"""Fast sensitivity sweep for the leakage-safe tyre-model walk-forward audit.
 
-This is audit-only. It loads the source rows once, then reruns the existing
-walk-forward fit/score logic across a small grid of modelling thresholds.
+Audit-only. The sweep reuses the same leakage-safe field-relative transform and
+walk-forward ordering as the main audit, but avoids repeated bootstrap CIs and
+recomputations that are not needed to answer the sensitivity question.
 
 The purpose is to test whether the observed v2 improvement over the flat
 baseline is robust to reasonable choices of:
   - minimum race strategy diversity
   - minimum stint age span
   - minimum prior same-era training races
+
+Scoring remains hierarchical:
+  lap points -> equal-weight stints -> equal-weight races.
 
 No production simulator or calibration code is modified.
 """
@@ -17,18 +21,20 @@ import argparse
 import csv
 import os
 from collections import defaultdict
+from math import sqrt
+from statistics import median
 
 from sqlalchemy import create_engine
 
 from audit_race_strategy_tyre_model_v2 import COMPOUNDS, LapRow
 from audit_race_strategy_tyre_model_walkforward_v2 import (
+    _field_relative_rows,
     _low_confidence,
-    _overall_race_scores,
-    _race_diversity,
-    fit_models,
+    _ols,
+    _pearson,
+    _raw_stint_slopes,
     load_meta,
     load_rows,
-    score_target,
 )
 
 DEFAULT_MIN_UNIQUE_PIT_LAPS_GRID = (3, 4, 5)
@@ -36,19 +42,100 @@ DEFAULT_MIN_STINT_AGE_SPAN_GRID = (3, 4, 5, 6)
 DEFAULT_MIN_TRAINING_RACES_GRID = (10, 15, 20)
 
 
+def _score_relative_stint_rows(
+    relative_rows,
+    compound: str,
+    slope: float,
+) -> tuple[float | None, float | None, int, int]:
+    """Return mean stint correlation/RMSE for one compound in one race."""
+    grouped: dict[str, list[tuple]] = defaultdict(list)
+    for row in relative_rows:
+        if row[3] == compound:
+            grouped[row[5]].append(row)
+
+    corrs: list[float] = []
+    rmses: list[float] = []
+    points = 0
+
+    for rows in grouped.values():
+        rows.sort(key=lambda r: r[1])
+        if len(rows) < 3:
+            continue
+
+        first_age = rows[0][1]
+        first_residual = rows[0][2]
+        actual = [row[2] - first_residual for row in rows]
+        predicted = [slope * (row[1] - first_age) for row in rows]
+        rmse = sqrt(
+            sum((a - p) ** 2 for a, p in zip(actual, predicted)) / len(actual)
+        )
+        corr = _pearson(predicted, actual)
+
+        if corr is not None:
+            corrs.append(corr)
+        rmses.append(rmse)
+        points += len(actual)
+
+    if not rmses:
+        return None, None, 0, 0
+
+    return (
+        sum(corrs) / len(corrs) if corrs else None,
+        sum(rmses) / len(rmses),
+        len(rmses),
+        points,
+    )
+
+
+def _fit_training_models(
+    train_rows: list[LapRow],
+    train_ids: set[int],
+    min_stint_age_span: int,
+):
+    """Fit all three compounds without bootstrap overhead for sensitivity."""
+    relative = _field_relative_rows(
+        train_rows,
+        train_ids,
+        min_stint_age_span,
+    )
+
+    fits = {}
+    for compound in COMPOUNDS:
+        compound_relative = [r for r in relative if r[3] == compound]
+        fit = _ols(
+            [r[1] for r in compound_relative],
+            [r[2] for r in compound_relative],
+        )
+        raw_slopes = _raw_stint_slopes(
+            train_rows,
+            train_ids,
+            compound,
+            min_stint_age_span,
+        )
+        fits[compound] = {
+            "v2_slope": fit[0] if fit else None,
+            "v2_races": len({r[0] for r in compound_relative}),
+            "v2_stints": len({r[5] for r in compound_relative}),
+            "v2_laps": len(compound_relative),
+            "raw_slope": median(raw_slopes) if raw_slopes else None,
+        }
+
+    return relative, fits
+
+
 def _score_config(
     rows: list[LapRow],
     metas,
+    rows_by_race: dict[int, list[LapRow]],
+    diversity: dict[int, int],
     min_unique_pit_laps: int,
     min_stint_age_span: int,
     min_training_races: int,
+    training_cache: dict,
+    target_cache: dict,
 ):
-    diversity = _race_diversity(rows)
-    by_race: dict[int, list[LapRow]] = defaultdict(list)
-    for row in rows:
-        by_race[row.race_id].append(row)
-
-    summary: list[dict] = []
+    """Run one sensitivity configuration with cached transforms."""
+    race_scores: dict[str, list[dict]] = defaultdict(list)
     stability: list[dict] = []
 
     for target in metas:
@@ -61,31 +148,51 @@ def _score_config(
         if prior_same_era_races < min_training_races:
             continue
 
-        train_ids = {
+        train_ids = frozenset(
             m.race_id
             for m in training
             if diversity.get(m.race_id, 0) >= min_unique_pit_laps
-        }
+        )
         if not train_ids:
             continue
 
-        train_rows = [
-            r for r in rows if r.race_id in train_ids and r.era == target.era
-        ]
-        target_rows = by_race.get(target.race_id, [])
-
-        for compound in COMPOUNDS:
-            v2, raw = fit_models(
+        training_key = (train_ids, min_stint_age_span)
+        cached_training = training_cache.get(training_key)
+        if cached_training is None:
+            train_rows = [
+                row
+                for race_id in train_ids
+                for row in rows_by_race.get(race_id, [])
+                if row.era == target.era
+            ]
+            cached_training = _fit_training_models(
                 train_rows,
-                train_ids,
-                compound,
+                set(train_ids),
                 min_stint_age_span,
             )
-            if v2.slope is None:
+            training_cache[training_key] = cached_training
+
+        training_relative, fits = cached_training
+        target_key = (target.race_id, min_stint_age_span)
+        if target_key not in target_cache:
+            target_cache[target_key] = _field_relative_rows(
+                rows_by_race.get(target.race_id, []),
+                {target.race_id},
+                min_stint_age_span,
+            )
+        target_relative = target_cache[target_key]
+
+        per_model_stints: dict[str, list[tuple[float | None, float]]] = defaultdict(list)
+
+        for compound in COMPOUNDS:
+            fit = fits[compound]
+            v2_slope = fit["v2_slope"]
+            raw_slope = fit["raw_slope"]
+            if v2_slope is None:
                 continue
 
-            compound_usable_training_races = v2.n_races
-            low_confidence = _low_confidence(compound_usable_training_races)
+            usable_races = fit["v2_races"]
+            low_confidence = _low_confidence(usable_races)
             stability.append(
                 {
                     "target_race_id": target.race_id,
@@ -93,70 +200,83 @@ def _score_config(
                     "era": target.era,
                     "compound": compound,
                     "prior_same_era_races": prior_same_era_races,
-                    "compound_usable_training_races": compound_usable_training_races,
+                    "compound_usable_training_races": usable_races,
                     "low_confidence_training": low_confidence,
-                    "slope": v2.slope,
-                    "ci_low": v2.ci_low,
-                    "ci_high": v2.ci_high,
-                    "n_training_stints": v2.n_stints,
-                    "n_training_laps": v2.n_laps,
+                    "slope": v2_slope,
+                    "ci_low": None,
+                    "ci_high": None,
+                    "n_training_stints": fit["v2_stints"],
+                    "n_training_laps": fit["v2_laps"],
                 }
             )
 
-            scores = {
-                "raw": score_target(
-                    target_rows,
-                    compound,
-                    raw.slope if raw.slope is not None else 0.0,
-                    min_stint_age_span,
-                ),
-                "v2": score_target(
-                    target_rows,
-                    compound,
-                    v2.slope,
-                    min_stint_age_span,
-                ),
-                "flat": score_target(
-                    target_rows,
-                    compound,
-                    0.0,
-                    min_stint_age_span,
-                ),
+            model_slopes = {
+                "raw": raw_slope if raw_slope is not None else 0.0,
+                "v2": v2_slope,
+                "flat": 0.0,
             }
-            for model, score in scores.items():
-                summary.append(
-                    {
-                        "target_race_id": target.race_id,
-                        "target_year": target.season_year,
-                        "era": target.era,
-                        "compound": compound,
-                        "model": model,
-                        "race_score_correlation": score.correlation,
-                        "race_score_rmse": score.rmse,
-                        "stint_count": score.n_stints,
-                        "scored_points": score.n_points,
-                        "compound_usable_training_races": compound_usable_training_races,
-                        "low_confidence_training": low_confidence,
-                    }
+            for model, slope in model_slopes.items():
+                corr, rmse, count, _ = _score_relative_stint_rows(
+                    target_relative,
+                    compound,
+                    slope,
                 )
+                if rmse is None:
+                    continue
+                per_model_stints[model].append((corr, rmse, count))
 
-    return summary, stability
+        for model, entries in per_model_stints.items():
+            valid_corrs = [corr for corr, _, _ in entries if corr is not None]
+            rmse_values = [rmse for _, rmse, _ in entries]
+            if not rmse_values:
+                continue
+            race_scores[model].append(
+                {
+                    "target_race_id": target.race_id,
+                    "race_score_correlation": (
+                        sum(valid_corrs) / len(valid_corrs)
+                        if valid_corrs
+                        else None
+                    ),
+                    "race_score_rmse": sum(rmse_values) / len(rmse_values),
+                }
+            )
+
+    return race_scores, stability
+
+
+def _overall_model_scores(race_scores: dict[str, list[dict]], model: str):
+    rows = race_scores.get(model, [])
+    correlations = [
+        row["race_score_correlation"]
+        for row in rows
+        if row["race_score_correlation"] is not None
+    ]
+    rmses = [row["race_score_rmse"] for row in rows if row["race_score_rmse"] is not None]
+    return {
+        "overall_correlation": (
+            sum(correlations) / len(correlations) if correlations else None
+        ),
+        "overall_rmse": sum(rmses) / len(rmses) if rmses else None,
+        "target_races": len(rmses),
+    }
 
 
 def _summary_for_config(
-    summary: list[dict],
-    stability: list[dict],
+    race_scores,
+    stability,
     min_unique_pit_laps: int,
     min_stint_age_span: int,
     min_training_races: int,
 ):
     overall = {
-        model: _overall_race_scores(summary, model)
+        model: _overall_model_scores(race_scores, model)
         for model in ("raw", "v2", "flat")
     }
     v2_rmse = overall["v2"]["overall_rmse"]
     flat_rmse = overall["flat"]["overall_rmse"]
     raw_rmse = overall["raw"]["overall_rmse"]
+
     improvement_vs_flat = (
         ((flat_rmse - v2_rmse) / flat_rmse) * 100.0
         if v2_rmse is not None and flat_rmse not in (None, 0)
@@ -167,6 +287,7 @@ def _summary_for_config(
         if v2_rmse is not None and raw_rmse not in (None, 0)
         else None
     )
+
     low_confidence_rows = [
         row for row in stability if row["low_confidence_training"]
     ]
@@ -199,27 +320,53 @@ def run_sensitivity(
 ):
     rows = load_rows(db, start_year, end_year)
     metas = load_meta(db, start_year, end_year)
+    rows_by_race: dict[int, list[LapRow]] = defaultdict(list)
+    for row in rows:
+        rows_by_race[row.race_id].append(row)
+    diversity = _race_diversity(rows)
+
+    training_cache: dict = {}
+    target_cache: dict = {}
     results: list[dict] = []
+
+    total = (
+        len(min_unique_pit_laps_grid)
+        * len(min_stint_age_span_grid)
+        * len(min_training_races_grid)
+    )
+    completed = 0
 
     for min_unique_pit_laps in min_unique_pit_laps_grid:
         for min_stint_age_span in min_stint_age_span_grid:
             for min_training_races in min_training_races_grid:
-                summary, stability = _score_config(
+                completed += 1
+                race_scores, stability = _score_config(
                     rows,
                     metas,
+                    rows_by_race,
+                    diversity,
                     min_unique_pit_laps,
                     min_stint_age_span,
                     min_training_races,
+                    training_cache,
+                    target_cache,
                 )
                 results.append(
                     _summary_for_config(
-                        summary,
+                        race_scores,
                         stability,
                         min_unique_pit_laps,
                         min_stint_age_span,
                         min_training_races,
                     )
                 )
+                print(
+                    f"Progress: {completed}/{total} configs | "
+                    f"diversity={min_unique_pit_laps} age_span={min_stint_age_span} "
+                    f"min_train={min_training_races}",
+                    flush=True,
+                )
+
     return results
 
 
