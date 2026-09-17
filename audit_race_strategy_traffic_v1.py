@@ -4,8 +4,8 @@ Primary estimand: an observational within-driver pace association. Close-followi
 laps are compared with nearby clean-air laps from the same race, driver, stint,
 compound and nearly the same tyre age.
 
-This module deliberately does not infer defending intent, a causal traffic
-penalty, or any production simulator parameter.
+The audit deliberately does not infer defending intent or a causal traffic
+penalty, and it does not modify the production race-strategy simulator.
 """
 
 from __future__ import annotations
@@ -304,18 +304,22 @@ def _prepare_laps(
         previous_lap: int | None = None
         for lap, row in sorted(rows_for_driver, key=lambda item: item[0]):
             current = _as_float(row.get("Position"))
-            position_map[(driver, lap)] = (current, previous if previous_lap is not None and lap > previous_lap else None)
+            previous_value = previous if previous_lap is not None and lap > previous_lap else None
+            position_map[(driver, lap)] = (current, previous_value)
             if current is not None:
                 previous = current
             previous_lap = lap
 
-    clean_candidates: list[tuple[int, Any, float, str, str | None, int | None, int | None]] = []
     field_values_by_lap: dict[int, list[float]] = defaultdict(list)
+    candidates: list[tuple[int, Any, float, str, str | None, int | None, int | None]] = []
 
     for index, row in enumerate(raw_rows):
         counters.lap_rows_seen += 1
         lap_number = _as_int(row.get("LapNumber"))
-        if lap_number is None or lap_number <= first_laps_to_exclude:
+        if lap_number is None:
+            counters.invalid_lap_excluded += 1
+            continue
+        if lap_number <= first_laps_to_exclude:
             counters.first_lap_excluded += 1
             continue
         if "IsAccurate" in row.index and not _is_missing(row.get("IsAccurate")) and not bool(row.get("IsAccurate")):
@@ -345,13 +349,14 @@ def _prepare_laps(
         if stint is None or compound is None or tyre_age is None:
             counters.missing_stint_or_compound += 1
         field_values_by_lap[lap_number].append(lap_time)
-        clean_candidates.append((index, row, lap_time, driver, compound, stint, tyre_age))
+        candidates.append((index, row, lap_time, driver, compound, stint, tyre_age))
 
     field_medians = {
         lap: median(values) for lap, values in field_values_by_lap.items() if len(values) >= min_field_laps
     }
+
     records: list[LapRecord] = []
-    for index, row, lap_time, driver, compound, stint, tyre_age in clean_candidates:
+    for index, row, lap_time, driver, compound, stint, tyre_age in candidates:
         lap_number = _as_int(row.get("LapNumber"))
         assert lap_number is not None
         field_median = field_medians.get(lap_number)
@@ -392,7 +397,11 @@ def _sample_rows(telemetry: Any) -> list[dict[str, Any]]:
     if time_column is None:
         return []
     return [
-        {"time": _as_float(row[time_column]), "distance": _as_float(row["DistanceToDriverAhead"]), "ahead": row["DriverAhead"]}
+        {
+            "time": _as_float(row[time_column]),
+            "distance": _as_float(row["DistanceToDriverAhead"]),
+            "ahead": row["DriverAhead"],
+        }
         for _, row in telemetry.iterrows()
     ]
 
@@ -419,46 +428,64 @@ def _compute_exposure(
     known_seconds = 0.0
     close_seconds = {threshold: 0.0 for threshold in thresholds}
     sustained = {threshold: 0.0 for threshold in thresholds}
-    streak = {threshold: 0.0 for threshold in thresholds}
-    ahead_seconds: dict[str, float] = defaultdict(float)
+    current_streak = {threshold: 0.0 for threshold in thresholds}
+    ahead_seconds: Counter[str] = Counter()
 
     for i, gap in enumerate(gaps):
         start = float(rows[i]["time"])
-        end = start + gap
+        end = float(rows[i + 1]["time"])
         if any(_interval_overlap_seconds(start, end, event) > 0 for event in events):
             for threshold in thresholds:
-                streak[threshold] = 0.0
+                current_streak[threshold] = 0.0
             continue
+
         valid_seconds += gap
         distance = rows[i]["distance"]
         ahead = rows[i]["ahead"]
         ahead_key = None if _is_missing(ahead) else str(ahead)
         if distance is None or distance < 0.0 or ahead_key is None:
             for threshold in thresholds:
-                streak[threshold] = 0.0
+                current_streak[threshold] = 0.0
             continue
+
         known_seconds += gap
         ahead_seconds[ahead_key] += gap
         for threshold in thresholds:
             if distance <= threshold:
                 close_seconds[threshold] += gap
-                streak[threshold] += gap
-                sustained[threshold] = max(sustained[threshold], streak[threshold])
+                current_streak[threshold] += gap
+                sustained[threshold] = max(sustained[threshold], current_streak[threshold])
             else:
-                streak[threshold] = 0.0
+                current_streak[threshold] = 0.0
+
     return valid_seconds, known_seconds, close_seconds, sustained, dict(ahead_seconds), False, False
 
 
-def _lap_telemetry(session: Any, driver_key: str, lap_number: int) -> Any:
+def _lap_telemetry(
+    session: Any,
+    driver_key: str,
+    lap_number: int,
+    driver_telemetry_cache: dict[str, Any],
+) -> Any:
     driver_laps = session.laps[session.laps["DriverNumber"].astype(str) == str(driver_key)]
     selected = driver_laps[driver_laps["LapNumber"] == lap_number]
     if len(selected) == 0:
         raise ValueError(f"No FastF1 lap for driver={driver_key} lap={lap_number}")
-    # FastF1 recommends add_driver_ahead() on a single lap (or a few laps) to limit integration error.
-    return selected.iloc[[0]].get_telemetry().add_driver_ahead()
+    full_driver_telemetry = driver_telemetry_cache.get(str(driver_key))
+    if full_driver_telemetry is None:
+        raise ValueError(f"No cached telemetry for driver={driver_key}")
+    single_lap = full_driver_telemetry.slice_by_lap(selected.iloc[[0]])
+    # Preserve the agreed audit design: add_driver_ahead is still calculated on
+    # one lap at a time. The expensive raw telemetry merge is cached per driver.
+    return single_lap.add_driver_ahead()
 
 
-def _classify(exposure: TrafficExposure, threshold: float, min_close_fraction: float, min_ahead_coverage: float) -> str:
+def _classify(
+    exposure: TrafficExposure,
+    threshold: float,
+    min_close_fraction: float,
+    min_ahead_coverage: float,
+) -> str:
     if exposure.valid_seconds <= 0 or exposure.known_ahead_fraction < min_ahead_coverage:
         return "unknown"
     return "close" if exposure.close_fraction(threshold) >= min_close_fraction else "clear"
@@ -496,11 +523,13 @@ def _match_exposures(
                 if abs(clear.lap.tyre_age - close.lap.tyre_age) <= max_tyre_age_diff
                 and abs(clear.lap.lap_number - close.lap.lap_number) <= max_lap_distance
             ]
-            candidates.sort(key=lambda e: (
-                abs(e.lap.tyre_age - close.lap.tyre_age),
-                abs(e.lap.lap_number - close.lap.lap_number),
-                e.lap.lap_number,
-            ))
+            candidates.sort(
+                key=lambda e: (
+                    abs(e.lap.tyre_age - close.lap.tyre_age),
+                    abs(e.lap.lap_number - close.lap.lap_number),
+                    e.lap.lap_number,
+                )
+            )
             chosen = next((e for e in candidates if reuse[e.lap.lap_number] < max_clean_air_reuse), None)
             if chosen is None:
                 unmatched_close += 1
@@ -557,7 +586,15 @@ def _race_balanced_summary(
         by_race[race_id].append(value)
     race_means = {race_id: mean(values) for race_id, values in by_race.items() if values}
 
-    def row(scope: str, era: str, selected: list[TrafficMatch], selected_race_means: list[float], gate_races: int, gate_pairs: int, unmatched: int | None) -> dict[str, Any]:
+    def row(
+        scope: str,
+        era: str,
+        selected: list[TrafficMatch],
+        selected_race_means: list[float],
+        gate_races: int,
+        gate_pairs: int,
+        unmatched: int | None,
+    ) -> dict[str, Any]:
         race_ids = sorted({m.race_id for m in selected})
         stints = {(m.race_id, m.driver_key, m.stint_number) for m in selected}
         deltas = [m.traffic_delta_seconds for m in selected]
@@ -567,7 +604,8 @@ def _race_balanced_summary(
         race_median = median(selected_race_means) if selected_race_means else None
         race_std = (
             (sum((value - race_mean) ** 2 for value in selected_race_means) / (len(selected_race_means) - 1)) ** 0.5
-            if race_mean is not None and len(selected_race_means) > 1 else 0.0 if selected_race_means else None
+            if race_mean is not None and len(selected_race_means) > 1
+            else 0.0 if selected_race_means else None
         )
         return {
             "scope": scope,
@@ -606,13 +644,40 @@ def _race_balanced_summary(
     return rows
 
 
-def _write_csv(path: str, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
-    if os.path.exists(path):
-        raise FileExistsError(f"Refusing to overwrite existing audit output: {path}")
-    with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
+def _audit_gate(summary_rows: list[dict[str, Any]], primary_threshold: float) -> str:
+    overall = [r for r in summary_rows if r["scope"] == "overall"]
+    primary = next((r for r in overall if abs(float(r["threshold_m"]) - primary_threshold) < 1e-9), None)
+    if primary is None or not primary["minimum_sample_gate_pass"]:
+        return "INSUFFICIENT_EVIDENCE"
+    era_rows = [r for r in summary_rows if r["scope"] == "era"]
+    if not era_rows or any(not r["minimum_sample_gate_pass"] for r in era_rows):
+        return "INSUFFICIENT_EVIDENCE"
+    primary_value = primary["mean_traffic_delta_seconds_race_balanced"]
+    if primary_value is None or float(primary_value) == 0.0:
+        return "INSUFFICIENT_EVIDENCE"
+    primary_sign = 1 if float(primary_value) > 0 else -1
+    for row in overall + era_rows:
+        value = row["mean_traffic_delta_seconds_race_balanced"]
+        if value is None or float(value) == 0.0:
+            return "INSUFFICIENT_EVIDENCE"
+        if (1 if float(value) > 0 else -1) != primary_sign:
+            return "INSUFFICIENT_EVIDENCE"
+    return "PROCEED TO PREDICTIVE VALIDATION"
+
+
+def parse_thresholds(value: str) -> tuple[float, ...]:
+    parsed: list[float] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        threshold = float(token)
+        if threshold <= 0:
+            raise ValueError("Thresholds must be positive")
+        parsed.append(threshold)
+    if not parsed:
+        raise ValueError("At least one threshold is required")
+    return tuple(sorted(set(parsed)))
 
 
 def _query_races(db: Any, start_year: int, end_year: int) -> list[RaceMeta]:
@@ -633,8 +698,14 @@ def _query_races(db: Any, start_year: int, end_year: int) -> list[RaceMeta]:
         {"start_year": start_year, "end_year": end_year},
     )
     return [
-        RaceMeta(int(r["race_id"]), int(r["season_year"]), int(r["round_number"]), str(r["regulation_era"]), bool(r["rainfall"]))
-        for r in result.mappings().all()
+        RaceMeta(
+            race_id=int(row["race_id"]),
+            season_year=int(row["season_year"]),
+            round_number=int(row["round_number"]),
+            regulation_era=str(row["regulation_era"]),
+            rainfall=bool(row["rainfall"]),
+        )
+        for row in result.mappings().all()
     ]
 
 
@@ -655,22 +726,54 @@ def _process_race(
     session = fastf1.get_session(meta.season_year, meta.round_number, "Race")
     session.load(laps=True, telemetry=True, weather=False, messages=False)
     events = extract_session_events(session)
-    records = _prepare_laps(session, meta, events, counters, min_field_laps, first_laps_to_exclude)
+    records = _prepare_laps(
+        session,
+        meta,
+        events,
+        counters,
+        min_field_laps,
+        first_laps_to_exclude,
+    )
     labels = _driver_label_map(session)
-    exposures: list[TrafficExposure] = []
 
-    for record in records:
+    driver_keys = sorted({record.driver_key for record in records})
+    driver_telemetry_cache: dict[str, Any] = {}
+    for driver_key in driver_keys:
+        driver_laps = session.laps[session.laps["DriverNumber"].astype(str) == str(driver_key)]
+        try:
+            driver_telemetry_cache[driver_key] = driver_laps.get_telemetry()
+        except Exception as exc:
+            counters.telemetry_errors += 1
+            print(
+                f"  TELEMETRY_CACHE_SKIP {meta.season_year} R{meta.round_number} {driver_key}: {exc}",
+                flush=True,
+            )
+
+    exposures: list[TrafficExposure] = []
+    total_records = len(records)
+    for index, record in enumerate(records, start=1):
         label = labels.get(record.driver_key, record.driver_key)
         lap = LapRecord(**{**record.__dict__, "driver_label": label})
         counters.telemetry_attempts += 1
         try:
-            telemetry = _lap_telemetry(session, record.driver_key, record.lap_number)
+            telemetry = _lap_telemetry(
+                session,
+                record.driver_key,
+                record.lap_number,
+                driver_telemetry_cache,
+            )
             valid, known, close, sustained, ahead_seconds, gap_error, empty_error = _compute_exposure(
-                telemetry, events, thresholds, max_gap_seconds
+                telemetry,
+                events,
+                thresholds,
+                max_gap_seconds,
             )
         except Exception as exc:
             counters.telemetry_errors += 1
-            print(f"  TELEMETRY_SKIP {meta.season_year} R{meta.round_number} {record.driver_key} L{record.lap_number}: {exc}", flush=True)
+            print(
+                f"  TELEMETRY_SKIP {meta.season_year} R{meta.round_number} {record.driver_key} L{record.lap_number}: {exc}",
+                flush=True,
+            )
             continue
         if gap_error:
             counters.telemetry_gap_excluded += 1
@@ -698,6 +801,11 @@ def _process_race(
             counters.close_laps += 1
         elif state == "clear":
             counters.clear_laps += 1
+        if index == 1 or index % 50 == 0 or index == total_records:
+            print(
+                f"  traffic progress {meta.season_year} R{meta.round_number}: {index}/{total_records} laps",
+                flush=True,
+            )
     return exposures
 
 
@@ -711,81 +819,39 @@ def _exposure_rows(
     rows: list[dict[str, Any]] = []
     for exposure in exposures:
         lap = exposure.lap
-        rows.append({
-            "season_year": lap.season_year,
-            "round_number": lap.round_number,
-            "race_id": lap.race_id,
-            "regulation_era": lap.regulation_era,
-            "driver": lap.driver_label,
-            "driver_key": lap.driver_key,
-            "driver_ahead": exposure.dominant_driver_ahead,
-            "lap_number": lap.lap_number,
-            "stint_number": lap.stint_number,
-            "compound": lap.compound,
-            "tyre_age": lap.tyre_age,
-            "lap_time_seconds": lap.lap_time_seconds,
-            "field_median_seconds": lap.field_median_seconds,
-            "field_relative_residual_seconds": lap.field_relative_residual,
-            "traffic_state": _classify(exposure, primary_threshold, min_close_fraction, min_ahead_coverage),
-            "close_distance_threshold_m": primary_threshold,
-            "close_seconds": exposure.close_seconds(primary_threshold),
-            "valid_seconds": exposure.valid_seconds,
-            "close_fraction": exposure.close_fraction(primary_threshold),
-            "known_ahead_fraction": exposure.known_ahead_fraction,
-            "sustained_close_seconds": exposure.sustained_close_seconds(primary_threshold),
-            "current_position": lap.current_position,
-            "previous_position": lap.previous_position,
-            "position_delta": (
-                lap.current_position - lap.previous_position
-                if lap.current_position is not None and lap.previous_position is not None else None
-            ),
-        })
+        rows.append(
+            {
+                "season_year": lap.season_year,
+                "round_number": lap.round_number,
+                "race_id": lap.race_id,
+                "regulation_era": lap.regulation_era,
+                "driver": lap.driver_label,
+                "driver_key": lap.driver_key,
+                "driver_ahead": exposure.dominant_driver_ahead,
+                "lap_number": lap.lap_number,
+                "stint_number": lap.stint_number,
+                "compound": lap.compound,
+                "tyre_age": lap.tyre_age,
+                "lap_time_seconds": lap.lap_time_seconds,
+                "field_median_seconds": lap.field_median_seconds,
+                "field_relative_residual_seconds": lap.field_relative_residual,
+                "traffic_state": _classify(exposure, primary_threshold, min_close_fraction, min_ahead_coverage),
+                "close_distance_threshold_m": primary_threshold,
+                "close_seconds": exposure.close_seconds(primary_threshold),
+                "valid_seconds": exposure.valid_seconds,
+                "close_fraction": exposure.close_fraction(primary_threshold),
+                "known_ahead_fraction": exposure.known_ahead_fraction,
+                "sustained_close_seconds": exposure.sustained_close_seconds(primary_threshold),
+                "current_position": lap.current_position,
+                "previous_position": lap.previous_position,
+                "position_delta": (
+                    lap.current_position - lap.previous_position
+                    if lap.current_position is not None and lap.previous_position is not None
+                    else None
+                ),
+            }
+        )
     return rows
-
-
-def _audit_gate(summary_rows: list[dict[str, Any]], primary_threshold: float) -> str:
-    overall = [r for r in summary_rows if r["scope"] == "overall"]
-    primary = next((r for r in overall if abs(float(r["threshold_m"]) - primary_threshold) < 1e-9), None)
-    if primary is None or not primary["minimum_sample_gate_pass"]:
-        return "INSUFFICIENT_EVIDENCE"
-
-    era_rows = [r for r in summary_rows if r["scope"] == "era"]
-    if not era_rows or any(not r["minimum_sample_gate_pass"] for r in era_rows):
-        return "INSUFFICIENT_EVIDENCE"
-
-    primary_value = primary["mean_traffic_delta_seconds_race_balanced"]
-    if primary_value is None or float(primary_value) == 0.0:
-        return "INSUFFICIENT_EVIDENCE"
-    primary_sign = 1 if float(primary_value) > 0 else -1
-
-    for row in overall:
-        value = row["mean_traffic_delta_seconds_race_balanced"]
-        if value is None or float(value) == 0.0:
-            return "INSUFFICIENT_EVIDENCE"
-        if (1 if float(value) > 0 else -1) != primary_sign:
-            return "INSUFFICIENT_EVIDENCE"
-    for row in era_rows:
-        value = row["mean_traffic_delta_seconds_race_balanced"]
-        if value is None or float(value) == 0.0:
-            return "INSUFFICIENT_EVIDENCE"
-        if (1 if float(value) > 0 else -1) != primary_sign:
-            return "INSUFFICIENT_EVIDENCE"
-    return "PROCEED TO PREDICTIVE VALIDATION"
-
-
-def parse_thresholds(value: str) -> tuple[float, ...]:
-    parsed = []
-    for token in value.split(","):
-        token = token.strip()
-        if not token:
-            continue
-        threshold = float(token)
-        if threshold <= 0:
-            raise ValueError("Thresholds must be positive")
-        parsed.append(threshold)
-    if not parsed:
-        raise ValueError("At least one threshold is required")
-    return tuple(sorted(set(parsed)))
 
 
 def run_audit(
@@ -870,15 +936,17 @@ def run_audit(
             max_tyre_age_diff=max_tyre_age_diff,
             max_clean_air_reuse=max_clean_air_reuse,
         )
-        summary_rows.extend(_race_balanced_summary(
-            matches,
-            threshold=threshold,
-            unmatched_close=unmatched,
-            min_races_for_gate=DEFAULT_MIN_RACES_FOR_GATE,
-            min_pairs_for_gate=DEFAULT_MIN_PAIRS_FOR_GATE,
-            min_era_races_for_gate=DEFAULT_MIN_ERA_RACES_FOR_GATE,
-            min_era_pairs_for_gate=DEFAULT_MIN_ERA_PAIRS_FOR_GATE,
-        ))
+        summary_rows.extend(
+            _race_balanced_summary(
+                matches,
+                threshold=threshold,
+                unmatched_close=unmatched,
+                min_races_for_gate=DEFAULT_MIN_RACES_FOR_GATE,
+                min_pairs_for_gate=DEFAULT_MIN_PAIRS_FOR_GATE,
+                min_era_races_for_gate=DEFAULT_MIN_ERA_RACES_FOR_GATE,
+                min_era_pairs_for_gate=DEFAULT_MIN_ERA_PAIRS_FOR_GATE,
+            )
+        )
         if abs(threshold - close_distance_m) < 1e-9:
             counters.unmatched_close_laps = unmatched
 
@@ -979,6 +1047,15 @@ def main() -> int:
     print(f"\nWrote {args.csv} and {args.summary_csv}")
     print("Audit only; database and production simulator were not modified.")
     return 0
+
+
+def _write_csv(path: str, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+    if os.path.exists(path):
+        raise FileExistsError(f"Refusing to overwrite existing audit output: {path}")
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 if __name__ == "__main__":
