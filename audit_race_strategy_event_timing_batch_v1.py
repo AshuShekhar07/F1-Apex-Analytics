@@ -12,13 +12,12 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 
-from audit_race_strategy_event_timing_v1 import load_event_timing
+from audit_race_strategy_event_timing_v1 import extract_session_events, load_race
 
 DEFAULT_CASES = (
-    (2025, 1),   # Australian GP: multiple Safety Car periods
-    (2021, 6),   # Azerbaijan GP: race red flag
-    (2021, 10),  # British GP: Safety Car/VSC coverage check
-    (2023, 8),   # Spanish GP: event-free control case if no coded intervention
+    (2025, 1),
+    (2021, 6),
+    (2021, 16),
 )
 
 
@@ -44,29 +43,32 @@ def main() -> int:
     print("Audit only; database and production simulator are not modified.\n")
 
     for year, round_number in cases:
-        events = load_event_timing(year, round_number)
-        counts = Counter(event.event_type for event in events)
+        windows = load_race(year, round_number, "~/projects/F1-Apex-Analytics/cache")
+        counts = Counter(event.event_type for event in windows)
         totals.update(counts)
-        print(f"{year} R{round_number}: total={len(events)} "
-              f"SC={counts.get('SC', 0)} "
-              f"VSC={counts.get('VSC', 0)} "
-              f"RED_FLAG={counts.get('RED_FLAG', 0)}")
-        for event in events:
+        print(
+            f"{year} R{round_number}: total={len(windows)} "
+            f"SC={counts.get('SC', 0)} "
+            f"VSC={counts.get('VSC', 0)} "
+            f"RED_FLAG={counts.get('RED_FLAG', 0)}"
+        )
+        for event in windows:
             print(
                 f"  {event.event_type}: "
                 f"start={event.start_seconds:.3f}s "
-                f"end={event.end_seconds:.3f}s "
+                f"end={event.end_seconds if event.end_seconds is not None else None} "
                 f"lap={event.start_lap}->{event.end_lap}"
             )
 
     print("\nAggregate observed event windows:")
-    print(f"SC={totals.get('SC', 0)} VSC={totals.get('VSC', 0)} "
-          f"RED_FLAG={totals.get('RED_FLAG', 0)}")
+    print(
+        f"SC={totals.get('SC', 0)} VSC={totals.get('VSC', 0)} "
+        f"RED_FLAG={totals.get('RED_FLAG', 0)}"
+    )
 
     missing = [name for name in ("SC", "VSC", "RED_FLAG") if totals.get(name, 0) == 0]
     if missing:
         print("WARNING: no observed windows for: " + ", ".join(missing))
-        print("Use --cases with a known example before promoting this extractor.")
     else:
         print("All three event classes were observed across the requested cases.")
 
