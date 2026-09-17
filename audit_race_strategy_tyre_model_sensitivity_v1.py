@@ -32,6 +32,7 @@ from audit_race_strategy_tyre_model_walkforward_v2 import (
     _low_confidence,
     _ols,
     _pearson,
+    _race_diversity,
     _raw_stint_slopes,
     load_meta,
     load_rows,
@@ -182,7 +183,7 @@ def _score_config(
             )
         target_relative = target_cache[target_key]
 
-        per_model_stints: dict[str, list[tuple[float | None, float]]] = defaultdict(list)
+        per_model_stints: dict[str, list[tuple[float | None, float, int]]] = defaultdict(list)
 
         for compound in COMPOUNDS:
             fit = fits[compound]
