@@ -4,9 +4,7 @@ import pandas as pd
 
 from audit_race_strategy_event_timing_v1 import EventWindow
 from audit_race_strategy_traffic_v1 import (
-    AuditCounters,
     LapRecord,
-    RaceMeta,
     TrafficExposure,
     _classify,
     _compute_exposure,
@@ -88,8 +86,9 @@ def test_compute_exposure_uses_elapsed_time_not_sample_count():
             "DriverAhead": [63, 63, 63, 63],
         }
     )
-    result = _compute_exposure(telemetry, [], (150.0,), 2.0)
-    valid, known, close, sustained, ahead_seconds, gap_error, empty_error = result
+    valid, known, close, sustained, ahead_seconds, gap_error, empty_error = _compute_exposure(
+        telemetry, [], (150.0,), 2.0
+    )
     assert math.isclose(valid, 4.0)
     assert math.isclose(known, 4.0)
     assert math.isclose(close[150.0], 2.0)
@@ -242,53 +241,41 @@ def test_clean_air_lap_is_not_reused_when_reuse_limit_is_one():
 
 
 def test_race_balanced_summary_weights_races_equally():
-    # Race 1 has two matched laps in one stint: mean = 2.0.
-    race1_a = TrafficMatchForTest(1, 1.0)
-    race1_b = TrafficMatchForTest(1, 3.0)
-    # Race 2 has one matched lap: mean = 10.0.
-    race2 = TrafficMatchForTest(2, 10.0)
-    matches = [race1_a.to_match(), race1_b.to_match(), race2.to_match()]
+    class MatchFactory:
+        @staticmethod
+        def make(race_id: int, delta: float):
+            from audit_race_strategy_traffic_v1 import TrafficMatch
+
+            return TrafficMatch(
+                race_id=race_id,
+                season_year=2024,
+                round_number=1,
+                regulation_era="2022-2025",
+                driver_key="44",
+                driver_label="Lewis Hamilton",
+                stint_number=1,
+                compound="MEDIUM",
+                close_lap=20,
+                clean_lap=15,
+                close_tyre_age=10,
+                clean_tyre_age=10,
+                close_fraction=0.5,
+                close_sustained_seconds=10.0,
+                traffic_delta_seconds=delta,
+                position_delta=0.0,
+            )
+
+    matches = [MatchFactory.make(1, 1.0), MatchFactory.make(1, 3.0), MatchFactory.make(2, 10.0)]
     rows = _race_balanced_summary(
         matches,
-        [],
         threshold=150.0,
         unmatched_close=0,
         min_races_for_gate=1,
         min_pairs_for_gate=1,
         min_era_races_for_gate=1,
         min_era_pairs_for_gate=1,
-        scope_label="overall",
     )
     overall = rows[0]
     assert math.isclose(overall["mean_traffic_delta_seconds_race_balanced"], 6.0)
     assert overall["races"] == 2
     assert overall["matched_pairs"] == 3
-
-
-class TrafficMatchForTest:
-    def __init__(self, race_id: int, delta: float):
-        from audit_race_strategy_traffic_v1 import TrafficMatch
-
-        self.race_id = race_id
-        self.delta = delta
-        self._cls = TrafficMatch
-
-    def to_match(self):
-        return self._cls(
-            race_id=self.race_id,
-            season_year=2024,
-            round_number=1,
-            regulation_era="2022-2025",
-            driver_key="44",
-            driver_label="Lewis Hamilton",
-            stint_number=1,
-            compound="MEDIUM",
-            close_lap=20,
-            clean_lap=15,
-            close_tyre_age=10,
-            clean_tyre_age=10,
-            close_fraction=0.5,
-            close_sustained_seconds=10.0,
-            traffic_delta_seconds=self.delta,
-            position_delta=0.0,
-        )
