@@ -1,0 +1,1 @@
+Temporary audit note: batch event timing validation is audit-only and uses the existing event extractor. Production event probabilities remain unchanged until event-type coverage and timing quality are validated.
