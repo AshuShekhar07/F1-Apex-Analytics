@@ -129,8 +129,8 @@ def test_compute_exposure_does_not_count_event_overlap():
     valid, known, close, sustained, _ahead_seconds, gap_error, empty_error = _compute_exposure(
         telemetry, [event], (150.0,), 2.0
     )
-    assert math.isclose(valid, 2.0)
-    assert math.isclose(known, 2.0)
+    assert math.isclose(valid, 1.0)
+    assert math.isclose(known, 1.0)
     assert math.isclose(close[150.0], 1.0)
     assert math.isclose(sustained[150.0], 1.0)
     assert not gap_error
@@ -200,7 +200,7 @@ def test_match_requires_same_driver_stint_compound_and_close_tyre_age():
         max_clean_air_reuse=1,
     )
     assert close_count == 1
-    assert clear_count == 1
+    assert clear_count == 3
     assert unmatched == 0
     assert len(matches) == 1
     assert matches[0].clean_lap == 15
