@@ -322,6 +322,17 @@ def _prepare_laps(
         if lap_number <= first_laps_to_exclude:
             counters.first_lap_excluded += 1
             continue
+
+        # Record explicit race-control filters before generic lap-quality filters.
+        # This keeps pit/event exclusions visible instead of silently folding them
+        # into invalid_lap_excluded when a FastF1 lap also has another quality flag.
+        if _pit_lap(row):
+            counters.pit_excluded += 1
+            continue
+        if _lap_overlaps_event(row, events):
+            counters.event_excluded += 1
+            continue
+
         if "IsAccurate" in row.index and not _is_missing(row.get("IsAccurate")) and not bool(row.get("IsAccurate")):
             counters.invalid_lap_excluded += 1
             continue
@@ -331,12 +342,6 @@ def _prepare_laps(
         lap_time = _lap_time_seconds(row)
         if lap_time is None:
             counters.invalid_lap_excluded += 1
-            continue
-        if _pit_lap(row):
-            counters.pit_excluded += 1
-            continue
-        if _lap_overlaps_event(row, events):
-            counters.event_excluded += 1
             continue
 
         driver = _driver_key(row)
