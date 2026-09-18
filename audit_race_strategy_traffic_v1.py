@@ -655,7 +655,9 @@ def _audit_gate(summary_rows: list[dict[str, Any]], primary_threshold: float) ->
     if primary is None or not primary["minimum_sample_gate_pass"]:
         return "INSUFFICIENT_EVIDENCE"
     era_rows = [r for r in summary_rows if r["scope"] == "era"]
-    if not era_rows or any(not r["minimum_sample_gate_pass"] for r in era_rows):
+    if not era_rows or len({r["regulation_era"] for r in era_rows}) < 2:
+        return "INSUFFICIENT_EVIDENCE"
+    if any(not r["minimum_sample_gate_pass"] for r in era_rows):
         return "INSUFFICIENT_EVIDENCE"
     primary_value = primary["mean_traffic_delta_seconds_race_balanced"]
     if primary_value is None or float(primary_value) == 0.0:
