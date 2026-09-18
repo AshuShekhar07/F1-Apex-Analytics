@@ -10,8 +10,11 @@ from audit_race_strategy_traffic_v1 import (
     _compute_exposure,
     _interval_overlap_seconds,
     _match_exposures,
+    _prepare_laps,
     _race_balanced_summary,
     _tyre_age,
+    AuditCounters,
+    RaceMeta,
     parse_thresholds,
 )
 
@@ -279,3 +282,96 @@ def test_race_balanced_summary_weights_races_equally():
     assert math.isclose(overall["mean_traffic_delta_seconds_race_balanced"], 6.0)
     assert overall["races"] == 2
     assert overall["matched_pairs"] == 3
+
+
+def test_prepare_laps_accounts_for_pit_and_event_before_generic_invalid_flags():
+    class FakeLaps:
+        def __init__(self, frame):
+            self._frame = frame
+
+        def iterrows(self):
+            return self._frame.iterrows()
+
+    class FakeSession:
+        def __init__(self, frame):
+            self.laps = FakeLaps(frame)
+
+    frame = pd.DataFrame(
+        [
+            {
+                "DriverNumber": "44",
+                "LapNumber": 4,
+                "LapTime": pd.Timedelta(seconds=90),
+                "LapStartTime": pd.Timedelta(seconds=270),
+                "Time": pd.Timedelta(seconds=360),
+                "PitInTime": pd.NaT,
+                "PitOutTime": pd.NaT,
+                "IsAccurate": True,
+                "Deleted": False,
+                "Stint": 1,
+                "Compound": "MEDIUM",
+                "TyreLife": 4,
+                "Position": 5,
+            },
+            {
+                "DriverNumber": "44",
+                "LapNumber": 5,
+                "LapTime": pd.Timedelta(seconds=90),
+                "LapStartTime": pd.Timedelta(seconds=360),
+                "Time": pd.Timedelta(seconds=450),
+                "PitInTime": pd.Timestamp("2024-01-01"),
+                "PitOutTime": pd.NaT,
+                "IsAccurate": True,
+                "Deleted": False,
+                "Stint": 1,
+                "Compound": "MEDIUM",
+                "TyreLife": 5,
+                "Position": 5,
+            },
+            {
+                "DriverNumber": "44",
+                "LapNumber": 6,
+                "LapTime": pd.Timedelta(seconds=90),
+                "LapStartTime": pd.Timedelta(seconds=450),
+                "Time": pd.Timedelta(seconds=540),
+                "PitInTime": pd.NaT,
+                "PitOutTime": pd.NaT,
+                "IsAccurate": True,
+                "Deleted": True,
+                "Stint": 1,
+                "Compound": "MEDIUM",
+                "TyreLife": 6,
+                "Position": 5,
+            },
+            {
+                "DriverNumber": "44",
+                "LapNumber": 7,
+                "LapTime": pd.Timedelta(seconds=90),
+                "LapStartTime": pd.Timedelta(seconds=540),
+                "Time": pd.Timedelta(seconds=630),
+                "PitInTime": pd.NaT,
+                "PitOutTime": pd.NaT,
+                "IsAccurate": True,
+                "Deleted": False,
+                "Stint": 1,
+                "Compound": "MEDIUM",
+                "TyreLife": 7,
+                "Position": 5,
+            },
+        ]
+    )
+
+    counters = AuditCounters()
+    records = _prepare_laps(
+        FakeSession(frame),
+        RaceMeta(1, 2024, 1, "2022-2025", False),
+        [EventWindow("SC", 455.0, 475.0, 6, 6)],
+        counters,
+        min_field_laps=1,
+        first_laps_to_exclude=0,
+    )
+
+    assert counters.pit_excluded == 1
+    assert counters.event_excluded == 1
+    assert counters.invalid_lap_excluded == 1
+    assert [record.lap_number for record in records] == [4, 7]
