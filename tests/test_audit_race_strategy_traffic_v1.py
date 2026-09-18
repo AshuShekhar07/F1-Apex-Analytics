@@ -365,7 +365,7 @@ def test_prepare_laps_accounts_for_pit_and_event_before_generic_invalid_flags():
     records = _prepare_laps(
         FakeSession(frame),
         RaceMeta(1, 2024, 1, "2022-2025", False),
-        [EventWindow("SC", 455.0, 475.0, 6, 6)],
+        [EventWindow("SC", 545.0, 565.0, 7, 7)],
         counters,
         min_field_laps=1,
         first_laps_to_exclude=0,
