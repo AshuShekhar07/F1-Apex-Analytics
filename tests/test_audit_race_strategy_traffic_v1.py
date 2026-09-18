@@ -4,8 +4,11 @@ import pandas as pd
 
 from audit_race_strategy_event_timing_v1 import EventWindow
 from audit_race_strategy_traffic_v1 import (
+    AuditCounters,
     LapRecord,
+    RaceMeta,
     TrafficExposure,
+    _audit_gate,
     _classify,
     _compute_exposure,
     _interval_overlap_seconds,
@@ -282,6 +285,26 @@ def test_race_balanced_summary_weights_races_equally():
     assert math.isclose(overall["mean_traffic_delta_seconds_race_balanced"], 6.0)
     assert overall["races"] == 2
     assert overall["matched_pairs"] == 3
+
+
+def test_audit_gate_requires_at_least_two_regulation_eras():
+    summary_rows = [
+        {
+            "scope": "overall",
+            "threshold_m": 150.0,
+            "regulation_era": "ALL",
+            "minimum_sample_gate_pass": True,
+            "mean_traffic_delta_seconds_race_balanced": 0.10,
+        },
+        {
+            "scope": "era",
+            "threshold_m": 150.0,
+            "regulation_era": "era1",
+            "minimum_sample_gate_pass": True,
+            "mean_traffic_delta_seconds_race_balanced": 0.08,
+        },
+    ]
+    assert _audit_gate(summary_rows, 150.0) == "INSUFFICIENT_EVIDENCE"
 
 
 def test_prepare_laps_accounts_for_pit_and_event_before_generic_invalid_flags():
