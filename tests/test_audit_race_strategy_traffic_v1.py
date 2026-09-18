@@ -358,6 +358,21 @@ def test_prepare_laps_accounts_for_pit_and_event_before_generic_invalid_flags():
                 "TyreLife": 7,
                 "Position": 5,
             },
+            {
+                "DriverNumber": "44",
+                "LapNumber": 8,
+                "LapTime": pd.Timedelta(seconds=90),
+                "LapStartTime": pd.Timedelta(seconds=630),
+                "Time": pd.Timedelta(seconds=720),
+                "PitInTime": pd.NaT,
+                "PitOutTime": pd.NaT,
+                "IsAccurate": True,
+                "Deleted": True,
+                "Stint": 1,
+                "Compound": "MEDIUM",
+                "TyreLife": 8,
+                "Position": 5,
+            },
         ]
     )
 
