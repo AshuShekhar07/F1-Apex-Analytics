@@ -234,6 +234,8 @@ def load_tyre_observations(
                     lap_time_delta_seconds=delta,
                     wet_state="dry",
                     stint_key=stint_key,
+                    season_year=int(row["season_year"]) if row.get("season_year") is not None else None,
+                    regulation_era=str(row["regulation_era"]) if row.get("regulation_era") is not None else None,
                 )
             )
 
