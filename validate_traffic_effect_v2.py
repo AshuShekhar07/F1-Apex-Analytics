@@ -322,7 +322,7 @@ def main() -> int:
     print(f"\nWrote {args.output_prefix}_effects.csv")
     print(f"Wrote {args.output_prefix}_race_deltas_150m.csv")
     print(f"Wrote {args.output_prefix}_unmatched.csv")
-    print(f"Wrote {args.output-prefix}_stability.csv")
+    print(f"Wrote {args.output_prefix}_stability.csv")
     return 0
 
 
