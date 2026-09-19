@@ -199,7 +199,7 @@ def main() -> int:
     # Tertile contrast is expressed as ms/lap between high and low exposure;
     # partial slope is expressed as ms/lap for a full 1.0 exposure increase.
     out.to_csv(f"{args.output_prefix}_summary.csv", index=False)
-    race_out.to_csv(f"{args.output-prefix}_races.csv".replace("-", "_"), index=False)
+    race_out.to_csv(f"{args.output_prefix}_races.csv", index=False)
 
     print("=== TRAFFIC SPECIFICATION RECONCILIATION V1 ===")
     print(out.to_string(index=False))
