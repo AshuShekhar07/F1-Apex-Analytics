@@ -849,10 +849,23 @@ def _deserialize_exposure(payload: dict[str, Any]) -> TrafficExposure:
     )
 
 
+_CHECKPOINT_COUNTER_FIELDS = tuple(
+    name
+    for name in AuditCounters.__dataclass_fields__
+    if name not in {
+        "races_seen",
+        "races_loaded",
+        "races_skipped",
+        "dry_races",
+        "wet_races_skipped",
+    }
+)
+
+
 def _counter_delta(before: AuditCounters, after: AuditCounters) -> dict[str, int]:
     return {
         name: int(getattr(after, name) - getattr(before, name))
-        for name in AuditCounters.__dataclass_fields__
+        for name in _CHECKPOINT_COUNTER_FIELDS
     }
 
 
