@@ -66,10 +66,19 @@ def first_differences(df: pd.DataFrame, *, min_pairs: int = 5) -> pd.DataFrame:
         g = g.sort_values("lap_number").drop_duplicates("lap_number")
         if len(g) < min_pairs + 1:
             continue
-        dx = g["x"].to_numpy(float)[1:] - g["x"].to_numpy(float)[:-1]
-        dy = g["y"].to_numpy(float)[1:] - g["y"].to_numpy(float)[:-1]
-        lap2 = g["lap_number"].to_numpy(int)[1:]
-        keep = np.isfinite(dx) & np.isfinite(dy) & (np.abs(dx) > 1e-5)
+        lap_values = g["lap_number"].to_numpy(int)
+        dx_raw = g["x"].to_numpy(float)[1:] - g["x"].to_numpy(float)[:-1]
+        dy_raw = g["y"].to_numpy(float)[1:] - g["y"].to_numpy(float)[:-1]
+        lap2 = lap_values[1:]
+        consecutive = lap_values[1:] == lap_values[:-1] + 1
+        keep = (
+            consecutive
+            & np.isfinite(dx_raw)
+            & np.isfinite(dy_raw)
+            & (np.abs(dx_raw) > 1e-5)
+        )
+        dx = dx_raw
+        dy = dy_raw
         if keep.sum() < min_pairs:
             continue
 
