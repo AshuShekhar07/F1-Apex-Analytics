@@ -18,10 +18,12 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
 from math import sqrt
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
 from audit_race_strategy_tyre_model_v2 import COMPOUNDS
@@ -327,6 +329,7 @@ def main() -> int:
     parser.add_argument("--race-csv", default="tyre_model_walkforward_v3_races.csv")
     args = parser.parse_args()
 
+    load_dotenv(dotenv_path=Path.cwd() / ".env")
     url = os.getenv("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_URL is not set")
