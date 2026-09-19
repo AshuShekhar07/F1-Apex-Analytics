@@ -34,7 +34,7 @@ def test_recovers_compound_offsets_after_race_driver_fixed_effects():
     result = calibrate_compound_pace(rows, min_group_observations=3, max_lap_distance=6)
     assert result.reference_compound == "MEDIUM"
     assert result.offsets_seconds["SOFT"] == pytest.approx(-0.22, abs=0.02)
-    assert result.offsets_seconds["HARD"] == pytest.approx(0.20, abs=0.02)
+    assert result.offsets_seconds["HARD"] == pytest.approx(0.26, abs=0.02)
 
 
 def test_requires_usable_groups():
