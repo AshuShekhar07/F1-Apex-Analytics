@@ -19,10 +19,15 @@ def test_recovers_compound_offsets_after_race_driver_fixed_effects():
     for race in range(1, 9):
         for driver in ("1", "2", "3"):
             rows.extend([
+                _row(race, driver, 1, "MEDIUM", 0.0),
                 _row(race, driver, 2, "MEDIUM", 0.0),
-                _row(race, driver, 3, "SOFT", -0.25),
-                _row(race, driver, 4, "HARD", 0.20),
-                _row(race, driver, 5, "MEDIUM", 0.0),
+                _row(race, driver, 3, "MEDIUM", 0.0),
+                _row(race, driver, 4, "SOFT", -0.25),
+                _row(race, driver, 5, "SOFT", -0.25),
+                _row(race, driver, 6, "SOFT", -0.25),
+                _row(race, driver, 7, "HARD", 0.20),
+                _row(race, driver, 8, "HARD", 0.20),
+                _row(race, driver, 9, "HARD", 0.20),
             ])
     result = calibrate_compound_pace(rows, min_group_observations=3)
     assert result.reference_compound == "MEDIUM"
@@ -39,3 +44,20 @@ def test_requires_usable_groups():
                 compound="MEDIUM", lap_time_seconds=90.0,
             )
         ])
+
+
+def test_single_compound_groups_do_not_identify_offsets():
+    rows = []
+    for race in range(1, 5):
+        rows.extend([
+            _row(race, "1", 2, "MEDIUM", 0.0),
+            _row(race, "1", 3, "MEDIUM", 0.0),
+            _row(race, "1", 4, "MEDIUM", 0.0),
+        ])
+        rows.extend([
+            _row(race, "2", 2, "SOFT", -0.25),
+            _row(race, "2", 3, "SOFT", -0.25),
+            _row(race, "2", 4, "SOFT", -0.25),
+        ])
+    with pytest.raises(ValueError, match="comparisons against MEDIUM"):
+        calibrate_compound_pace(rows, min_group_observations=3)
