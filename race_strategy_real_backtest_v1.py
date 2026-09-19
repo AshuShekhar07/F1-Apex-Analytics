@@ -275,6 +275,7 @@ def run_backtest(
     simulations_per_strategy: int,
     seed: int,
     csv_path: str | None = None,
+    objective: str = "p1",
 ) -> tuple[RaceBacktestResult, ...]:
     targets = list_targets(db, start_year=start_year, end_year=end_year)
     if not targets:
@@ -288,7 +289,7 @@ def run_backtest(
         try:
             eligible_pace = tuple(r for r in all_pace_rows if r.season_year < target.year)
             case = build_case(db, target, pace_rows=eligible_pace)
-            result = run_case(case, build_candidates(case), simulations_per_strategy=simulations_per_strategy, seed=seed + index)
+            result = run_case(case, build_candidates(case), simulations_per_strategy=simulations_per_strategy, seed=seed + index, objective=objective)
             results.append(result)
             actual_strategy = case.outcome.actual_strategy
             actual_seq = " → ".join(actual_strategy.sequence) if actual_strategy else "N/A"
@@ -367,6 +368,7 @@ def main() -> None:
     parser.add_argument("--start-year", type=int, default=2024)
     parser.add_argument("--end-year", type=int, default=2025)
     parser.add_argument("--simulations", type=int, default=1000)
+    parser.add_argument("--objective", choices=("p1", "expected_finish"), default="p1")
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--csv", type=str, default="")
     args = parser.parse_args()
@@ -385,6 +387,7 @@ def main() -> None:
             simulations_per_strategy=args.simulations,
             seed=args.seed,
             csv_path=args.csv or None,
+            objective=args.objective,
         )
 
 
