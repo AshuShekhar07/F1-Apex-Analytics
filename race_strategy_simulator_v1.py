@@ -428,10 +428,39 @@ def build_candidate_strategies(total_laps: int, allowed_sequences: Iterable[Sequ
     return candidates
 
 
-def optimize_strategies(candidates: Sequence[Strategy], context: RaceContext, competitors: Sequence[CompetitorProfile], allocation: TyreAllocation, params: SimulationParameters, simulations_per_strategy: int = 3000, seed: int = 7) -> list[StrategyEvaluation]:
-    """Evaluate the bounded candidate family and rank primarily by P(P1)."""
+def optimize_strategies(
+    candidates: Sequence[Strategy],
+    context: RaceContext,
+    competitors: Sequence[CompetitorProfile],
+    allocation: TyreAllocation,
+    params: SimulationParameters,
+    simulations_per_strategy: int = 3000,
+    seed: int = 7,
+    objective: str = "p1",
+) -> list[StrategyEvaluation]:
+    """Evaluate candidates and rank them by an explicit strategy objective.
+
+    ``p1`` preserves the v1 product objective. ``expected_finish`` is useful for
+    walk-forward experiments because the backtest scores predicted finishing
+    position rather than only win probability.
+    """
+    if objective not in {"p1", "expected_finish"}:
+        raise ValueError("objective must be p1 or expected_finish")
+
     evaluations = [
-        evaluate_strategy(strategy, context, competitors, allocation, params, simulations_per_strategy, seed + i)
+        evaluate_strategy(
+            strategy, context, competitors, allocation, params,
+            simulations_per_strategy, seed + i,
+        )
         for i, strategy in enumerate(candidates)
     ]
-    return sorted(evaluations, key=lambda x: (x.win_probability, x.podium_probability, -x.expected_finish), reverse=True)
+    if objective == "expected_finish":
+        return sorted(
+            evaluations,
+            key=lambda x: (x.expected_finish, -x.podium_probability, -x.win_probability),
+        )
+    return sorted(
+        evaluations,
+        key=lambda x: (x.win_probability, x.podium_probability, -x.expected_finish),
+        reverse=True,
+    )
