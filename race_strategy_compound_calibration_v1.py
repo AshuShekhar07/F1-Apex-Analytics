@@ -96,123 +96,98 @@ def calibrate_compound_pace(
     min_age: int = 1,
     max_age: int = 3,
     min_group_observations: int = 3,
+    max_lap_distance: int = 3,
 ) -> CompoundPaceCalibration:
-    """Estimate compound offsets from within race-driver comparisons to MEDIUM.
+    """Estimate compound offsets using matched same-age, same-race-driver laps.
 
-    A race-driver group contributes only when MEDIUM and another dry compound
-    are both observed in the early-stint window. For each compound pair we use
-    the median lap time and median race-lap number within that early window,
-    then estimate:
-        time_delta = compound_offset + fuel_slope * lap_number_delta + error
+    Each SOFT/HARD observation is matched to the nearest MEDIUM observation for
+    the same race, driver and tyre age. The matched race-lap numbers must be
+    within ``max_lap_distance``. We then take a median delta per
+    race-driver-compound group and a robust median across groups.
 
-    This avoids the previous ill-conditioned fixed-effect regression, where
-    groups containing only one compound could not identify a compound effect.
+    Matching on tyre age removes most age confounding, while matching close in
+    race lap limits fuel-load / track-evolution differences. Groups without
+    enough matched pairs are excluded instead of forcing an unstable regression.
     """
+    if max_lap_distance < 0:
+        raise ValueError("max_lap_distance must be non-negative")
+
     rows = _valid_rows(observations, min_age, max_age)
     groups: dict[tuple[int, str], list[CompoundPaceObservation]] = {}
     for row in rows:
         groups.setdefault((row.race_id, row.driver_key), []).append(row)
 
-    comparison_rows: list[tuple[str, float, float]] = []
-    comparison_groups: set[tuple[int, str]] = set()
+    comparison_groups: dict[tuple[int, str, str], list[float]] = {}
     for key, values in groups.items():
-        by_compound: dict[str, list[CompoundPaceObservation]] = {}
-        for row in values:
-            by_compound.setdefault(row.compound, []).append(row)
-        medium = by_compound.get("MEDIUM")
-        if not medium or len(medium) < min_group_observations:
+        medium = [v for v in values if v.compound == "MEDIUM"]
+        if len(medium) < min_group_observations:
             continue
-
-        medium_time = median(v.lap_time_seconds for v in medium)
-        medium_lap = median(v.lap_number for v in medium)
-
         for compound in ("SOFT", "HARD"):
-            other = by_compound.get(compound)
-            if not other or len(other) < min_group_observations:
+            targets = [v for v in values if v.compound == compound]
+            if len(targets) < min_group_observations:
                 continue
-            other_time = median(v.lap_time_seconds for v in other)
-            other_lap = median(v.lap_number for v in other)
-            comparison_rows.append(
-                (
-                    compound,
-                    float(other_time - medium_time),
-                    float(other_lap - medium_lap),
+            for target in targets:
+                candidates = [
+                    ref for ref in medium
+                    if ref.tyre_age_laps == target.tyre_age_laps
+                    and abs(ref.lap_number - target.lap_number) <= max_lap_distance
+                ]
+                if not candidates:
+                    continue
+                reference = min(
+                    candidates,
+                    key=lambda ref: (
+                        abs(ref.lap_number - target.lap_number),
+                        ref.lap_number,
+                    ),
                 )
-            )
-            comparison_groups.add(key)
+                comparison_groups.setdefault((*key, compound), []).append(
+                    float(target.lap_time_seconds - reference.lap_time_seconds)
+                )
 
-    if not comparison_rows:
+    usable = {
+        key: deltas
+        for key, deltas in comparison_groups.items()
+        if len(deltas) >= min_group_observations
+    }
+    if not usable:
         raise ValueError(
-            "No usable race-driver compound comparisons against MEDIUM were found"
+            "No usable same-age, near-lap compound comparisons against MEDIUM were found"
         )
 
-    # OLS with no intercept: MEDIUM is the zero reference. The lap-number delta
-    # absorbs the coarse fuel/load progression caused by compounds being run at
-    # different race positions.
-    xtx = [[0.0] * 3 for _ in range(3)]
-    xty = [0.0] * 3
-    for compound, y, lap_delta in comparison_rows:
-        x = [
-            float(compound == "SOFT"),
-            float(compound == "HARD"),
-            float(lap_delta),
-        ]
-        for i in range(3):
-            xty[i] += x[i] * y
-            for j in range(3):
-                xtx[i][j] += x[i] * x[j]
-    for i in range(3):
-        xtx[i][i] += 1e-9
+    group_medians = {key: median(values) for key, values in usable.items()}
+    soft_values = [v for (*_, compound), v in group_medians.items() if compound == "SOFT"]
+    hard_values = [v for (*_, compound), v in group_medians.items() if compound == "HARD"]
+    if not soft_values and not hard_values:
+        raise ValueError("No usable SOFT/HARD compound comparison groups were found")
 
-    beta = _solve_3x3(xtx, xty)
-    soft_delta, hard_delta, fuel_slope = beta
+    soft_delta = median(soft_values) if soft_values else 0.0
+    hard_delta = median(hard_values) if hard_values else 0.0
 
-    residuals = []
-    for compound, y, lap_delta in comparison_rows:
-        predicted = (
-            soft_delta * float(compound == "SOFT")
-            + hard_delta * float(compound == "HARD")
-            + fuel_slope * lap_delta
-        )
-        residuals.append(y - predicted)
-
+    all_deltas = soft_values + hard_values
     residual_scale = max(
         0.005,
-        1.4826 * median(abs(v - median(residuals)) for v in residuals),
+        1.4826 * median(abs(v - median(all_deltas)) for v in all_deltas),
     )
 
     warnings: list[str] = []
-    if len(comparison_groups) < 50:
-        warnings.append(
-            f"Low race-driver comparison-group sample: n={len(comparison_groups)}"
-        )
+    if not soft_values:
+        warnings.append("No usable SOFT-vs-MEDIUM groups were found")
+    if not hard_values:
+        warnings.append("No usable HARD-vs-MEDIUM groups were found")
+    if len(usable) < 50:
+        warnings.append(f"Low matched race-driver compound-group sample: n={len(usable)}")
     if abs(soft_delta) > 1.5 or abs(hard_delta) > 1.5:
-        warnings.append(
-            "Estimated compound offset is unusually large; inspect compound-selection and lap-position confounding"
-        )
-    if abs(fuel_slope) > 0.2:
-        warnings.append(
-            "Estimated race-lap progression slope is unusually large; inspect fuel/load confounding"
-        )
+        warnings.append("Estimated compound offset is unusually large; inspect matching and selection confounding")
     warnings.append(
-        "Offsets are relative to MEDIUM and estimated from early stint laps in "
-        "within race-driver comparisons; research calibration only"
+        "Offsets are relative to MEDIUM and use same-age, near-lap matched dry-race observations; research calibration only"
     )
 
     return CompoundPaceCalibration(
         reference_compound="MEDIUM",
-        offsets_seconds={
-            "SOFT": float(soft_delta),
-            "MEDIUM": 0.0,
-            "HARD": float(hard_delta),
-        },
-        offset_std_seconds={
-            "SOFT": float(residual_scale),
-            "MEDIUM": 0.0,
-            "HARD": float(residual_scale),
-        },
+        offsets_seconds={"SOFT": float(soft_delta), "MEDIUM": 0.0, "HARD": float(hard_delta)},
+        offset_std_seconds={"SOFT": float(residual_scale), "MEDIUM": 0.0, "HARD": float(residual_scale)},
         observations=len(rows),
-        groups=len(comparison_groups),
+        groups=len(usable),
         warnings=tuple(warnings),
     )
-
