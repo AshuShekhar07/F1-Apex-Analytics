@@ -94,7 +94,7 @@ def reconstruct_matches(
         reuse: Counter[int] = Counter()
         for close_index, close_row in close.iterrows():
             candidates = clear[
-                (clear["tyre_age"] - close_row["tyre_age"]).abs() <= max_tyre_age_diff
+                ((clear["tyre_age"] - close_row["tyre_age"]).abs() <= max_tyre_age_diff)
                 & ((clear["lap_number"] - close_row["lap_number"]).abs() <= max_lap_distance)
             ].copy()
             if candidates.empty:
@@ -171,14 +171,20 @@ def bootstrap_ci(values: np.ndarray, *, iterations: int = 10000, seed: int = 17)
     return float(np.quantile(boot_means, 0.025)), float(np.quantile(boot_means, 0.975))
 
 
-def effect_stats(race_table: pd.DataFrame, label: str) -> dict[str, object]:
+def effect_stats(
+    race_table: pd.DataFrame,
+    label: str,
+    *,
+    bootstrap_iterations: int = 10000,
+    seed: int = 17,
+) -> dict[str, object]:
     values = race_table["race_mean_delta_seconds"].to_numpy(dtype=float)
     n = len(values)
     mean_value = float(values.mean()) if n else float("nan")
     median_value = float(np.median(values)) if n else float("nan")
     sd = float(values.std(ddof=1)) if n > 1 else float("nan")
     se = sd / np.sqrt(n) if n > 1 else float("nan")
-    ci_low, ci_high = bootstrap_ci(values)
+    ci_low, ci_high = bootstrap_ci(values, iterations=bootstrap_iterations, seed=seed)
 
     return {
         "scope": label,
@@ -268,9 +274,23 @@ def main() -> int:
     if race_table.empty:
         raise SystemExit("No matched traffic pairs found")
 
-    all_stats = [effect_stats(race_table, "overall")]
+    all_stats = [
+        effect_stats(
+            race_table,
+            "overall",
+            bootstrap_iterations=args.bootstrap_iterations,
+            seed=args.seed,
+        )
+    ]
     for era, era_rows in race_table.groupby("regulation_era", sort=True):
-        all_stats.append(effect_stats(era_rows, f"era:{era}"))
+        all_stats.append(
+            effect_stats(
+                era_rows,
+                f"era:{era}",
+                bootstrap_iterations=args.bootstrap_iterations,
+                seed=args.seed,
+            )
+        )
 
     stats = pd.DataFrame(all_stats)
     stats.to_csv(f"{args.output_prefix}.csv", index=False)
