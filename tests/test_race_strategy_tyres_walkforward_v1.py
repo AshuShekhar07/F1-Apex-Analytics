@@ -13,6 +13,8 @@ def test_empty_year_returns_zero_scored_stints():
         TyreCalibrationObservation("MEDIUM", 1, 0.1, stint_key="s"),
     )
     result = validate_target_year(rows, target_year=2024, era="era2")
+    assert result["training_observations"] == 0
+    assert result["target_observations"] == 0
     assert result["scored_stints"] == 0
 
 
