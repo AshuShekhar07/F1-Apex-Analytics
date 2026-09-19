@@ -10,6 +10,7 @@ from audit_race_strategy_traffic_v1 import (
     TrafficExposure,
     _audit_gate,
     _classify,
+    _counter_delta,
     _compute_exposure,
     _interval_overlap_seconds,
     _match_exposures,
@@ -285,6 +286,31 @@ def test_race_balanced_summary_weights_races_equally():
     assert math.isclose(overall["mean_traffic_delta_seconds_race_balanced"], 6.0)
     assert overall["races"] == 2
     assert overall["matched_pairs"] == 3
+
+
+def test_checkpoint_counter_delta_excludes_outer_race_counters():
+    before = AuditCounters(
+        races_seen=24,
+        races_loaded=10,
+        dry_races=19,
+    )
+    after = AuditCounters(
+        races_seen=24,
+        races_loaded=11,
+        dry_races=19,
+        lap_rows_seen=100,
+        first_lap_excluded=3,
+        pit_excluded=5,
+    )
+
+    delta = _counter_delta(before, after)
+
+    assert "races_seen" not in delta
+    assert "races_loaded" not in delta
+    assert "dry_races" not in delta
+    assert delta["lap_rows_seen"] == 100
+    assert delta["first_lap_excluded"] == 3
+    assert delta["pit_excluded"] == 5
 
 
 def test_audit_gate_requires_at_least_two_regulation_eras():
