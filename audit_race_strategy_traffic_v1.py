@@ -480,9 +480,7 @@ def _lap_telemetry(
     if full_driver_telemetry is None:
         raise ValueError(f"No cached telemetry for driver={driver_key}")
     single_lap = full_driver_telemetry.slice_by_lap(selected.iloc[[0]])
-    # Preserve the agreed audit design: add_driver_ahead is still calculated on
-    # one lap at a time. The expensive raw telemetry merge is cached per driver.
-    return single_lap.add_driver_ahead()
+    return single_lap
 
 
 def _classify(
@@ -748,7 +746,11 @@ def _process_race(
     for driver_key in driver_keys:
         driver_laps = session.laps[session.laps["DriverNumber"].astype(str) == str(driver_key)]
         try:
-            driver_telemetry_cache[driver_key] = driver_laps.get_telemetry()
+            # Reconstruct DriverAhead/DistanceToDriverAhead once per driver for
+            # the full race telemetry, then slice individual laps from it.
+            # This avoids repeating the expensive GPS-based reconstruction for
+            # every lap in the race.
+            driver_telemetry_cache[driver_key] = driver_laps.get_telemetry().add_driver_ahead()
         except Exception as exc:
             counters.telemetry_errors += 1
             print(
