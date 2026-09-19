@@ -24,7 +24,7 @@ def test_fp2_calibration_recovers_offsets():
             rows.append(_row(1, 1, driver, lap, "MEDIUM", 0.0, age))
         for age, lap in enumerate((20, 21, 22, 23, 24), start=1):
             rows.append(_row(1, 1, driver, lap, "SOFT", -0.25, age))
-        for age, lap in enumerate((30, 31, 32, 33, 34), start=1):
+        for age, lap in enumerate((25, 26, 27, 28, 29), start=1):
             rows.append(_row(1, 1, driver, lap, "HARD", 0.20, age))
     result = calibrate_fp2_compound_pace(rows, min_pairs_per_group=1, max_lap_distance=15)
     assert result.offsets_seconds["SOFT"] == pytest.approx(-0.25, abs=0.02)
