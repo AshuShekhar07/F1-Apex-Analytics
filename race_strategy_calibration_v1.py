@@ -37,6 +37,8 @@ class TyreCalibrationObservation:
     lap_time_delta_seconds: float
     wet_state: str = "dry"
     stint_key: str = ""
+    season_year: int | None = None
+    regulation_era: str | None = None
 
 
 @dataclass(frozen=True)
