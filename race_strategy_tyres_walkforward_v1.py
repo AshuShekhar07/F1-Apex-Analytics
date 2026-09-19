@@ -72,7 +72,11 @@ def validate_target_year(
             "target_observations": len(target),
             "scored_stints": 0,
             "slope_mae_seconds_per_lap": float("nan"),
+            "slope_baseline_mae_seconds_per_lap": float("nan"),
+            "slope_improvement_pct": float("nan"),
             "prediction_mae_seconds": float("nan"),
+            "baseline_mae_seconds": float("nan"),
+            "prediction_mae_improvement_pct": float("nan"),
         }
 
     calibrated, warnings = calibrate_tyre_degradation(training)
