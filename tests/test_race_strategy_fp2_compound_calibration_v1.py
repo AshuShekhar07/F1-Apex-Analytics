@@ -13,7 +13,7 @@ def _row(session, race, driver, lap, compound, offset, age):
         lap_number=lap,
         stint_age=age,
         compound=compound,
-        lap_time_seconds=90.0 + 0.01 * lap + offset,
+        lap_time_seconds=90.0 + offset,
     )
 
 
