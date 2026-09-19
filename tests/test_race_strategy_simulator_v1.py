@@ -207,3 +207,30 @@ def test_simulation_event_classes_are_mutually_exclusive_per_lap():
     assert not (set(events.safety_car_laps) & set(events.vsc_laps))
     assert not (set(events.safety_car_laps) & set(events.red_flag_laps))
     assert not (set(events.vsc_laps) & set(events.red_flag_laps))
+
+
+def test_optimizer_rejects_unknown_objective():
+    from race_strategy_simulator_v1 import optimize_strategies
+    with pytest.raises(ValueError, match="objective"):
+        optimize_strategies([], context(), [], TyreAllocation({"MEDIUM": 1, "HARD": 1}), SimulationParameters(), objective="unknown")
+
+
+def test_optimizer_can_use_expected_finish_objective(monkeypatch):
+    from race_strategy_simulator_v1 import StrategyEvaluation, optimize_strategies
+    a = Strategy("A", (StrategyStint("MEDIUM", 1, 25), StrategyStint("HARD", 26, 50)))
+    b = Strategy("B", (StrategyStint("HARD", 1, 25), StrategyStint("MEDIUM", 26, 50)))
+    evaluations = {
+        "A": StrategyEvaluation(a, 100, 0.60, 0.80, 8.0, 0.50, 0.70),
+        "B": StrategyEvaluation(b, 100, 0.55, 0.85, 5.0, 0.45, 0.65),
+    }
+
+    def fake_evaluate(strategy, *args, **kwargs):
+        return evaluations[strategy.name]
+
+    monkeypatch.setattr("race_strategy_simulator_v1.evaluate_strategy", fake_evaluate)
+    alloc = TyreAllocation({"MEDIUM": 1, "HARD": 1})
+    candidates = [a, b]
+    p1 = optimize_strategies(candidates, context(), [], alloc, SimulationParameters(), objective="p1")
+    finish = optimize_strategies(candidates, context(), [], alloc, SimulationParameters(), objective="expected_finish")
+    assert p1[0].strategy.name == "A"
+    assert finish[0].strategy.name == "B"
