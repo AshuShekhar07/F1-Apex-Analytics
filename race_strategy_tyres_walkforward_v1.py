@@ -79,6 +79,7 @@ def validate_target_year(
     target_groups = _stint_rows(target)
 
     slope_errors: list[float] = []
+    slope_baseline_errors: list[float] = []
     prediction_errors: list[float] = []
     baseline_errors: list[float] = []
     scored_stints = 0
@@ -94,6 +95,7 @@ def validate_target_year(
 
         scored_stints += 1
         slope_errors.append(abs(observed_slope - dist.mean))
+        slope_baseline_errors.append(abs(observed_slope))
 
         for row in rows:
             predicted_delta = dist.mean * row.tyre_age_laps
@@ -107,6 +109,13 @@ def validate_target_year(
         "target_observations": len(target),
         "scored_stints": scored_stints,
         "slope_mae_seconds_per_lap": mean(slope_errors) if slope_errors else float("nan"),
+        "slope_baseline_mae_seconds_per_lap": (
+            mean(slope_baseline_errors) if slope_baseline_errors else float("nan")
+        ),
+        "slope_improvement_pct": (
+            100.0 * (mean(slope_baseline_errors) - mean(slope_errors)) / mean(slope_baseline_errors)
+            if slope_baseline_errors and mean(slope_baseline_errors) > 0 else float("nan")
+        ),
         "prediction_mae_seconds": mean(prediction_errors) if prediction_errors else float("nan"),
         "baseline_mae_seconds": mean(baseline_errors) if baseline_errors else float("nan"),
         "prediction_mae_improvement_pct": (
@@ -141,7 +150,7 @@ def main() -> None:
 
         eras = sorted({r.regulation_era for r in rows})
         print("=== LEAKAGE-SAFE TYRE DEGRADATION WALK-FORWARD ===")
-        print("target_year regulation_era training_obs target_obs scored_stints slope_MAE_s_per_lap baseline_MAE_s prediction_MAE_s improvement_pct")
+        print("target_year regulation_era training_obs target_obs scored_stints slope_MAE_s_per_lap slope_baseline_MAE_s_per_lap slope_improvement_pct baseline_MAE_s prediction_MAE_s prediction_improvement_pct")
 
         for era in eras:
             for year in range(args.start_target_year, args.end_target_year + 1):
@@ -151,9 +160,11 @@ def main() -> None:
                     f"{result['training_observations']:12d} {result['target_observations']:10d} "
                     f"{result['scored_stints']:13d} "
                     f"{result['slope_mae_seconds_per_lap']:16.5f} "
+                    f"{result['slope_baseline_mae_seconds_per_lap']:23.5f} "
+                    f"{result['slope_improvement_pct']:21.2f} "
                     f"{result['baseline_mae_seconds']:13.5f} "
                     f"{result['prediction_mae_seconds']:14.5f} "
-                    f"{result['prediction_mae_improvement_pct']:14.2f}"
+                    f"{result['prediction_mae_improvement_pct']:24.2f}"
                 )
 
         print("\nNo simulator integration is performed by this validation.")
