@@ -113,8 +113,10 @@ def calibrate_compound_pace(
     x_rows: list[tuple[float, float, float]] = []
     y_rows: list[float] = []
     for values in usable.values():
-        y_bar = median(v.lap_time_seconds for v in values)
-        lap_bar = median(v.lap_number for v in values)
+        # Use arithmetic means for the exact within-group fixed-effect
+        # transformation; the median would leave an implicit intercept.
+        y_bar = sum(v.lap_time_seconds for v in values) / len(values)
+        lap_bar = sum(v.lap_number for v in values) / len(values)
         soft_bar = sum(v.compound == "SOFT" for v in values) / len(values)
         hard_bar = sum(v.compound == "HARD" for v in values) / len(values)
         for row in values:
