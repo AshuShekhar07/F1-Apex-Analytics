@@ -17,6 +17,7 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 from race_strategy_calibration_v1 import calibrate_event_hazards, calibrate_tyre_degradation
@@ -370,6 +371,7 @@ def main() -> None:
     parser.add_argument("--csv", type=str, default="")
     args = parser.parse_args()
 
+    load_dotenv(dotenv_path=Path.cwd() / ".env")
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL is required (load your normal project .env before running)")
