@@ -97,41 +97,66 @@ def calibrate_compound_pace(
     max_age: int = 3,
     min_group_observations: int = 3,
 ) -> CompoundPaceCalibration:
-    """Estimate compound offsets with race-driver fixed effects and lap trend."""
+    """Estimate compound offsets from within race-driver comparisons to MEDIUM.
+
+    A race-driver group contributes only when MEDIUM and another dry compound
+    are both observed in the early-stint window. For each compound pair we use
+    the median lap time and median race-lap number within that early window,
+    then estimate:
+        time_delta = compound_offset + fuel_slope * lap_number_delta + error
+
+    This avoids the previous ill-conditioned fixed-effect regression, where
+    groups containing only one compound could not identify a compound effect.
+    """
     rows = _valid_rows(observations, min_age, max_age)
     groups: dict[tuple[int, str], list[CompoundPaceObservation]] = {}
     for row in rows:
         groups.setdefault((row.race_id, row.driver_key), []).append(row)
 
-    usable: dict[tuple[int, str], list[CompoundPaceObservation]] = {
-        key: values for key, values in groups.items() if len(values) >= min_group_observations
-    }
-    if not usable:
-        raise ValueError("No usable race-driver groups for compound pace calibration")
-
-    # Within-group demean removes the unknown race-driver pace intercept.
-    x_rows: list[tuple[float, float, float]] = []
-    y_rows: list[float] = []
-    for values in usable.values():
-        # Use arithmetic means for the exact within-group fixed-effect
-        # transformation; the median would leave an implicit intercept.
-        y_bar = sum(v.lap_time_seconds for v in values) / len(values)
-        lap_bar = sum(v.lap_number for v in values) / len(values)
-        soft_bar = sum(v.compound == "SOFT" for v in values) / len(values)
-        hard_bar = sum(v.compound == "HARD" for v in values) / len(values)
+    comparison_rows: list[tuple[str, float, float]] = []
+    comparison_groups: set[tuple[int, str]] = set()
+    for key, values in groups.items():
+        by_compound: dict[str, list[CompoundPaceObservation]] = {}
         for row in values:
-            x_rows.append(
+            by_compound.setdefault(row.compound, []).append(row)
+        medium = by_compound.get("MEDIUM")
+        if not medium or len(medium) < min_group_observations:
+            continue
+
+        medium_time = median(v.lap_time_seconds for v in medium)
+        medium_lap = median(v.lap_number for v in medium)
+
+        for compound in ("SOFT", "HARD"):
+            other = by_compound.get(compound)
+            if not other or len(other) < min_group_observations:
+                continue
+            other_time = median(v.lap_time_seconds for v in other)
+            other_lap = median(v.lap_number for v in other)
+            comparison_rows.append(
                 (
-                    float(row.lap_number - lap_bar),
-                    float((row.compound == "SOFT") - soft_bar),
-                    float((row.compound == "HARD") - hard_bar),
+                    compound,
+                    float(other_time - medium_time),
+                    float(other_lap - medium_lap),
                 )
             )
-            y_rows.append(float(row.lap_time_seconds - y_bar))
+            comparison_groups.add(key)
 
+    if not comparison_rows:
+        raise ValueError(
+            "No usable race-driver compound comparisons against MEDIUM were found"
+        )
+
+    # OLS with no intercept: MEDIUM is the zero reference. The lap-number delta
+    # absorbs the coarse fuel/load progression caused by compounds being run at
+    # different race positions.
     xtx = [[0.0] * 3 for _ in range(3)]
     xty = [0.0] * 3
-    for x, y in zip(x_rows, y_rows):
+    for compound, y, lap_delta in comparison_rows:
+        x = [
+            float(compound == "SOFT"),
+            float(compound == "HARD"),
+            float(lap_delta),
+        ]
         for i in range(3):
             xty[i] += x[i] * y
             for j in range(3):
@@ -140,21 +165,38 @@ def calibrate_compound_pace(
         xtx[i][i] += 1e-9
 
     beta = _solve_3x3(xtx, xty)
-    lap_slope, soft_delta, hard_delta = beta
+    soft_delta, hard_delta, fuel_slope = beta
 
-    # A robust residual-derived scale is reported for uncertainty diagnostics.
     residuals = []
-    for x, y in zip(x_rows, y_rows):
-        residuals.append(y - (lap_slope * x[0] + soft_delta * x[1] + hard_delta * x[2]))
-    residual_scale = max(0.005, 1.4826 * median(abs(v - median(residuals)) for v in residuals))
+    for compound, y, lap_delta in comparison_rows:
+        predicted = (
+            soft_delta * float(compound == "SOFT")
+            + hard_delta * float(compound == "HARD")
+            + fuel_slope * lap_delta
+        )
+        residuals.append(y - predicted)
+
+    residual_scale = max(
+        0.005,
+        1.4826 * median(abs(v - median(residuals)) for v in residuals),
+    )
 
     warnings: list[str] = []
-    if len(usable) < 50:
-        warnings.append(f"Low race-driver group sample: n={len(usable)}")
+    if len(comparison_groups) < 50:
+        warnings.append(
+            f"Low race-driver comparison-group sample: n={len(comparison_groups)}"
+        )
     if abs(soft_delta) > 1.5 or abs(hard_delta) > 1.5:
-        warnings.append("Estimated compound offset is unusually large; inspect age/fuel confounding")
+        warnings.append(
+            "Estimated compound offset is unusually large; inspect compound-selection and lap-position confounding"
+        )
+    if abs(fuel_slope) > 0.2:
+        warnings.append(
+            "Estimated race-lap progression slope is unusually large; inspect fuel/load confounding"
+        )
     warnings.append(
-        "Offsets are relative to MEDIUM and estimated from early stint laps; this is not yet a production-calibrated tyre model"
+        "Offsets are relative to MEDIUM and estimated from early stint laps in "
+        "within race-driver comparisons; research calibration only"
     )
 
     return CompoundPaceCalibration(
@@ -170,6 +212,7 @@ def calibrate_compound_pace(
             "HARD": float(residual_scale),
         },
         observations=len(rows),
-        groups=len(usable),
+        groups=len(comparison_groups),
         warnings=tuple(warnings),
     )
+
