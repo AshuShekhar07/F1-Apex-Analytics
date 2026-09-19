@@ -1,4 +1,6 @@
-import pytest\n\nfrom race_strategy_compound_calibration_v1 import CompoundPaceObservation, calibrate_compound_pace
+import pytest
+
+from race_strategy_compound_calibration_v1 import CompoundPaceObservation, calibrate_compound_pace
 
 
 def _row(race, driver, lap, compound, offset):
@@ -29,7 +31,7 @@ def test_recovers_compound_offsets_after_race_driver_fixed_effects():
                 _row(race, driver, 8, "HARD", 0.20),
                 _row(race, driver, 9, "HARD", 0.20),
             ])
-    result = calibrate_compound_pace(rows, min_group_observations=3)
+    result = calibrate_compound_pace(rows, min_group_observations=3, max_lap_distance=6)
     assert result.reference_compound == "MEDIUM"
     assert result.offsets_seconds["SOFT"] == pytest.approx(-0.25, abs=0.02)
     assert result.offsets_seconds["HARD"] == pytest.approx(0.20, abs=0.02)
