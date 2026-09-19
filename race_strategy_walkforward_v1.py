@@ -131,6 +131,7 @@ def run_case(
     *,
     simulations_per_strategy: int = 1500,
     seed: int = 17,
+    objective: str = "p1",
 ) -> RaceBacktestResult:
     """Optimize from the frozen pre-race snapshot and score against the outcome."""
     _validate_case(case)
@@ -145,6 +146,7 @@ def run_case(
         case.snapshot.parameters,
         simulations_per_strategy=simulations_per_strategy,
         seed=seed,
+        objective=objective,
     )
     selected = evaluations[0]
 
@@ -187,6 +189,7 @@ def walk_forward_evaluate(
     simulations_per_strategy: int = 1500,
     seed: int = 17,
     reject_leakage: bool = True,
+    objective: str = "p1",
 ) -> WalkForwardReport:
     """Run chronological strategy evaluations with explicit leakage accounting."""
     ordered = sorted(cases, key=lambda case: (case.year, case.race_id))
@@ -208,6 +211,7 @@ def walk_forward_evaluate(
             candidates,
             simulations_per_strategy=simulations_per_strategy,
             seed=seed + index,
+            objective=objective,
         )
         results.append(result)
 
