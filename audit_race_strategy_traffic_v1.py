@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
+from dataclasses import asdict
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from math import isfinite
@@ -818,6 +820,82 @@ def _process_race(
     return exposures
 
 
+def _serialize_exposure(exposure: TrafficExposure) -> dict[str, Any]:
+    return {
+        "lap": asdict(exposure.lap),
+        "valid_seconds": exposure.valid_seconds,
+        "known_ahead_seconds": exposure.known_ahead_seconds,
+        "close_seconds_by_threshold": [list(item) for item in exposure.close_seconds_by_threshold],
+        "sustained_close_seconds_by_threshold": [list(item) for item in exposure.sustained_close_seconds_by_threshold],
+        "dominant_driver_ahead": exposure.dominant_driver_ahead,
+    }
+
+
+def _deserialize_exposure(payload: dict[str, Any]) -> TrafficExposure:
+    lap = LapRecord(**payload["lap"])
+    return TrafficExposure(
+        lap=lap,
+        valid_seconds=float(payload["valid_seconds"]),
+        known_ahead_seconds=float(payload["known_ahead_seconds"]),
+        close_seconds_by_threshold=tuple(
+            (float(threshold), float(value))
+            for threshold, value in payload["close_seconds_by_threshold"]
+        ),
+        sustained_close_seconds_by_threshold=tuple(
+            (float(threshold), float(value))
+            for threshold, value in payload["sustained_close_seconds_by_threshold"]
+        ),
+        dominant_driver_ahead=payload.get("dominant_driver_ahead"),
+    )
+
+
+def _counter_delta(before: AuditCounters, after: AuditCounters) -> dict[str, int]:
+    return {
+        name: int(getattr(after, name) - getattr(before, name))
+        for name in AuditCounters.__dataclass_fields__
+    }
+
+
+def _apply_counter_delta(counters: AuditCounters, delta: dict[str, int]) -> None:
+    for name, value in delta.items():
+        setattr(counters, name, getattr(counters, name) + int(value))
+
+
+def _checkpoint_path(checkpoint_dir: str, meta: RaceMeta) -> str:
+    return os.path.join(
+        os.path.expanduser(checkpoint_dir),
+        f"{meta.season_year}_R{meta.round_number:02d}.json",
+    )
+
+
+def _write_checkpoint(
+    path: str,
+    meta: RaceMeta,
+    exposures: list[TrafficExposure],
+    counters_delta: dict[str, int],
+) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = {
+        "season_year": meta.season_year,
+        "round_number": meta.round_number,
+        "race_id": meta.race_id,
+        "regulation_era": meta.regulation_era,
+        "exposures": [_serialize_exposure(exposure) for exposure in exposures],
+        "counters_delta": counters_delta,
+    }
+    temp_path = f"{path}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, separators=(",", ":"))
+    os.replace(temp_path, path)
+
+
+def _load_checkpoint(path: str) -> tuple[list[TrafficExposure], dict[str, int]]:
+    with open(path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    exposures = [_deserialize_exposure(item) for item in payload["exposures"]]
+    return exposures, {str(k): int(v) for k, v in payload["counters_delta"].items()}
+
+
 def _exposure_rows(
     exposures: list[TrafficExposure],
     *,
@@ -878,6 +956,7 @@ def run_audit(
     min_field_laps: int = DEFAULT_MIN_FIELD_LAPS,
     first_laps_to_exclude: int = DEFAULT_FIRST_LAPS_TO_EXCLUDE,
     max_clean_air_reuse: int = DEFAULT_MAX_CLEAN_AIR_REUSE,
+    checkpoint_dir: str | None = "traffic_checkpoints_v1",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], AuditCounters]:
     if start_year > end_year:
         raise ValueError("start_year cannot be greater than end_year")
@@ -905,7 +984,29 @@ def run_audit(
             counters.wet_races_skipped += 1
             print(f"SKIP WET {meta.season_year} R{meta.round_number}", flush=True)
             continue
+
         counters.dry_races += 1
+        checkpoint_path = _checkpoint_path(checkpoint_dir, meta) if checkpoint_dir else None
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            try:
+                cached_exposures, cached_delta = _load_checkpoint(checkpoint_path)
+                _apply_counter_delta(counters, cached_delta)
+                counters.races_loaded += 1
+                exposures.extend(cached_exposures)
+                print(
+                    f"RESUME CHECKPOINT {meta.season_year} R{meta.round_number}: "
+                    f"exposures={len(cached_exposures)}",
+                    flush=True,
+                )
+                continue
+            except Exception as exc:
+                print(
+                    f"CHECKPOINT_INVALID {meta.season_year} R{meta.round_number}: {exc}; "
+                    f"reprocessing race",
+                    flush=True,
+                )
+
+        counters_before_race = AuditCounters(**asdict(counters))
         try:
             race_exposures = _process_race(
                 meta,
@@ -925,6 +1026,13 @@ def run_audit(
             continue
         counters.races_loaded += 1
         exposures.extend(race_exposures)
+        if checkpoint_path:
+            _write_checkpoint(
+                checkpoint_path,
+                meta,
+                race_exposures,
+                _counter_delta(counters_before_race, counters),
+            )
         print(f"{meta.season_year} R{meta.round_number}: exposures={len(race_exposures)}", flush=True)
 
     exposure_rows = _exposure_rows(
@@ -987,6 +1095,7 @@ def main() -> int:
     parser.add_argument("--min-field-laps", type=int, default=DEFAULT_MIN_FIELD_LAPS)
     parser.add_argument("--first-laps-to-exclude", type=int, default=DEFAULT_FIRST_LAPS_TO_EXCLUDE)
     parser.add_argument("--max-clean-air-reuse", type=int, default=DEFAULT_MAX_CLEAN_AIR_REUSE)
+    parser.add_argument("--checkpoint-dir", default="traffic_checkpoints_v1")
     parser.add_argument("--csv", default="traffic_exposure_v1.csv")
     parser.add_argument("--summary-csv", default="traffic_effect_summary_v1.csv")
     args = parser.parse_args()
@@ -1007,6 +1116,7 @@ def main() -> int:
         min_field_laps=args.min_field_laps,
         first_laps_to_exclude=args.first_laps_to_exclude,
         max_clean_air_reuse=args.max_clean_air_reuse,
+        checkpoint_dir=args.checkpoint_dir,
     )
 
     exposure_fields = [
