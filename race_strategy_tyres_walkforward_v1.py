@@ -50,8 +50,20 @@ def validate_target_year(
     target_year: int,
     era: str,
 ) -> dict[str, float | int]:
-    training = [r for r in observations if r.season_year < target_year and r.regulation_era == era]
-    target = [r for r in observations if r.season_year == target_year and r.regulation_era == era]
+    training = [
+        r for r in observations
+        if r.season_year is not None
+        and r.regulation_era is not None
+        and r.season_year < target_year
+        and r.regulation_era == era
+    ]
+    target = [
+        r for r in observations
+        if r.season_year is not None
+        and r.regulation_era is not None
+        and r.season_year == target_year
+        and r.regulation_era == era
+    ]
 
     if not training or not target:
         return {
@@ -68,6 +80,7 @@ def validate_target_year(
 
     slope_errors: list[float] = []
     prediction_errors: list[float] = []
+    baseline_errors: list[float] = []
     scored_stints = 0
 
     for stint_key, rows in target_groups.items():
@@ -84,7 +97,9 @@ def validate_target_year(
 
         for row in rows:
             predicted_delta = dist.mean * row.tyre_age_laps
-            prediction_errors.append(abs(row.lap_time_delta_seconds - predicted_delta))
+            actual_delta = row.lap_time_delta_seconds
+            prediction_errors.append(abs(actual_delta - predicted_delta))
+            baseline_errors.append(abs(actual_delta))
 
     return {
         "target_year": target_year,
@@ -93,6 +108,11 @@ def validate_target_year(
         "scored_stints": scored_stints,
         "slope_mae_seconds_per_lap": mean(slope_errors) if slope_errors else float("nan"),
         "prediction_mae_seconds": mean(prediction_errors) if prediction_errors else float("nan"),
+        "baseline_mae_seconds": mean(baseline_errors) if baseline_errors else float("nan"),
+        "prediction_mae_improvement_pct": (
+            100.0 * (mean(baseline_errors) - mean(prediction_errors)) / mean(baseline_errors)
+            if baseline_errors and mean(baseline_errors) > 0 else float("nan")
+        ),
     }
 
 
@@ -121,7 +141,7 @@ def main() -> None:
 
         eras = sorted({r.regulation_era for r in rows})
         print("=== LEAKAGE-SAFE TYRE DEGRADATION WALK-FORWARD ===")
-        print("target_year regulation_era training_obs target_obs scored_stints slope_MAE_s_per_lap prediction_MAE_s")
+        print("target_year regulation_era training_obs target_obs scored_stints slope_MAE_s_per_lap baseline_MAE_s prediction_MAE_s improvement_pct")
 
         for era in eras:
             for year in range(args.start_target_year, args.end_target_year + 1):
@@ -131,7 +151,9 @@ def main() -> None:
                     f"{result['training_observations']:12d} {result['target_observations']:10d} "
                     f"{result['scored_stints']:13d} "
                     f"{result['slope_mae_seconds_per_lap']:16.5f} "
-                    f"{result['prediction_mae_seconds']:14.5f}"
+                    f"{result['baseline_mae_seconds']:13.5f} "
+                    f"{result['prediction_mae_seconds']:14.5f} "
+                    f"{result['prediction_mae_improvement_pct']:14.2f}"
                 )
 
         print("\nNo simulator integration is performed by this validation.")
