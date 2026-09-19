@@ -177,6 +177,8 @@ def load_tyre_observations(
         f"""
         SELECT
             r.id AS race_id,
+            r.season_year,
+            r.regulation_era,
             rs.race_entry_id,
             rs.stint_number,
             rs.compound,
