@@ -16,6 +16,10 @@ def test_empty_year_returns_zero_scored_stints():
     assert result["training_observations"] == 0
     assert result["target_observations"] == 0
     assert result["scored_stints"] == 0
+    assert "slope_baseline_mae_seconds_per_lap" in result
+    assert "slope_improvement_pct" in result
+    assert "baseline_mae_seconds" in result
+    assert "prediction_mae_improvement_pct" in result
 
 
 def test_target_year_only_uses_earlier_training_years():
