@@ -4,16 +4,6 @@ from race_strategy_tyres_walkforward_v1 import validate_target_year
 from race_strategy_calibration_v1 import TyreCalibrationObservation
 
 
-def _row(year, era, stint, compound, age, delta):
-    return TyreCalibrationObservation(
-        compound=compound,
-        tyre_age_laps=age,
-        lap_time_delta_seconds=delta,
-        wet_state="dry",
-        stint_key=stint,
-    )
-
-
 def test_helper_module_imports():
     assert validate_target_year
 
@@ -24,3 +14,25 @@ def test_empty_year_returns_zero_scored_stints():
     )
     result = validate_target_year(rows, target_year=2024, era="era2")
     assert result["scored_stints"] == 0
+
+
+def test_target_year_only_uses_earlier_training_years():
+    rows = []
+    for year in (2020, 2021):
+        for age in range(1, 6):
+            rows.append(
+                TyreCalibrationObservation(
+                    "MEDIUM",
+                    age,
+                    0.10 * age if year == 2020 else 10.0 + 0.10 * age,
+                    stint_key=f"{year}-stint",
+                    season_year=year,
+                    regulation_era="era1",
+                )
+            )
+
+    result = validate_target_year(tuple(rows), target_year=2021, era="era1")
+    assert result["training_observations"] == 5
+    assert result["target_observations"] == 5
+    assert result["scored_stints"] == 1
+    assert result["slope_mae_seconds_per_lap"] == pytest.approx(0.0, abs=1e-9)
