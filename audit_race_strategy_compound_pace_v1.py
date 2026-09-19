@@ -26,6 +26,7 @@ def main() -> None:
     parser.add_argument("--min-age", type=int, default=1)
     parser.add_argument("--max-age", type=int, default=3)
     parser.add_argument("--min-groups", type=int, default=50)
+    parser.add_argument("--max-lap-distance", type=int, default=3)
     args = parser.parse_args()
 
     load_dotenv(dotenv_path=Path.cwd() / ".env")
@@ -56,7 +57,7 @@ def main() -> None:
             for year in years:
                 train = [r for r in observations if r.regulation_era == era and r.season_year < year]
                 try:
-                    result = calibrate_compound_pace(train)
+                    result = calibrate_compound_pace(train, max_lap_distance=args.max_lap_distance)
                 except ValueError as exc:
                     print(f"{year:4d} {era:28s} ERROR {exc}")
                     continue
@@ -73,7 +74,7 @@ def main() -> None:
         for era in eras:
             rows = [r for r in observations if r.regulation_era == era]
             try:
-                result = calibrate_compound_pace(rows)
+                result = calibrate_compound_pace(rows, max_lap_distance=args.max_lap_distance)
             except ValueError as exc:
                 print(f"  {era}: ERROR {exc}")
                 continue
