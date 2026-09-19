@@ -140,14 +140,21 @@ def summarize(race_df: pd.DataFrame, value_col: str, spec: str, threshold: float
     n = len(v)
     m = float(v.mean()) if n else np.nan
     lo, hi = bootstrap(v, iterations, seed)
+    if "partial_residual_slope" in spec:
+        scale_label = "ms_per_10pct_exposure"
+        scale = 100.0
+    else:
+        scale_label = "ms_high_minus_low_tertile"
+        scale = 1000.0
     return {
         "specification": spec,
         "threshold_m": threshold,
         "races": n,
-        "mean_effect_ms_per_10pct": m * 100,
-        "median_race_effect_ms_per_10pct": float(np.median(v) * 100) if n else np.nan,
-        "bootstrap_95ci_low_ms_per_10pct": lo * 100,
-        "bootstrap_95ci_high_ms_per_10pct": hi * 100,
+        "mean_effect": m * scale,
+        "median_race_effect": float(np.median(v) * scale) if n else np.nan,
+        "effect_scale": scale_label,
+        "bootstrap_95ci_low": lo * scale,
+        "bootstrap_95ci_high": hi * scale,
         "positive_race_rate": float((v > 0).mean()) if n else np.nan,
     }
 
@@ -171,9 +178,9 @@ def main() -> int:
         df = load_rows(args.checkpoint_dir, threshold)
         slopes, contrasts = stint_estimates(df, args.min_n, args.min_span)
 
-        for spec, stints, col, scale in [
-            ("partial_residual_slope", slopes, "slope", 100),
-            ("progress_adjusted_tertile_contrast", contrasts, "high_minus_low", 1),
+        for spec, stints, col in [
+            ("partial_residual_slope", slopes, "slope"),
+            ("progress_adjusted_tertile_contrast", contrasts, "high_minus_low"),
         ]:
             races = race_means(stints, col, "race_effect")
             if races.empty:
