@@ -36,7 +36,7 @@ def test_hierarchical_track_slope_shrinks_toward_global():
     train = (
         _synthetic_pair(track_id=10, slope=0.10, pair="r1:1:11-12")
         + _synthetic_pair(track_id=20, slope=0.04, pair="r2:1:11-12")
-        + _synthetic_pair(track_id=20, slope=0.04, pair="r3:1:13-14")
+        + _synthetic_pair(track_id=20, slope=0.06, pair="r3:1:13-14")
     )
     model = fit_hierarchical_slopes(train, prior_strength=4.0)
     local = model[("era2", "MEDIUM", 20)]
