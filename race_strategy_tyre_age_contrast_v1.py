@@ -398,6 +398,7 @@ def main() -> int:
     parser.add_argument("--min-training-races", type=int, default=15)
     parser.add_argument("--min-pair-points", type=int, default=5)
     parser.add_argument("--min-age-span", type=int, default=2)
+    parser.add_argument("--min-tyre-age", type=int, default=2)
     parser.add_argument("--csv", default="tyre_age_contrast_walkforward_v1.csv")
     args = parser.parse_args()
 
