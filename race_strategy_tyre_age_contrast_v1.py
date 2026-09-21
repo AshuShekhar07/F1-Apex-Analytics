@@ -188,19 +188,19 @@ def fit_pair_models(
     *,
     min_points: int = 5,
     min_age_span: int = 2,
-) -> dict[tuple[str, str, int], tuple[PairFit, ...]]:
-    grouped: dict[tuple[str, str, int, str], list[TyreAgeContrast]] = defaultdict(list)
+) -> dict[tuple[str, str, int, int], tuple[PairFit, ...]]:
+    grouped: dict[tuple[str, str, int, int, str], list[TyreAgeContrast]] = defaultdict(list)
     for row in observations:
-        grouped[(row.era, row.compound, row.race_id, row.pair_key)].append(row)
+        grouped[(row.era, row.compound, row.track_id, row.race_id, row.pair_key)].append(row)
 
-    out: dict[tuple[str, str, int], list[PairFit]] = defaultdict(list)
-    for (era, compound, race_id, pair_key), rows in grouped.items():
+    out: dict[tuple[str, str, int, int], list[PairFit]] = defaultdict(list)
+    for (era, compound, track_id, race_id, pair_key), rows in grouped.items():
         if len(rows) < min_points:
             continue
         fit = _center_pair(rows)
         if fit is None or fit.age_span < min_age_span or not isfinite(fit.slope):
             continue
-        out[(era, compound, race_id)].append(fit)
+        out[(era, compound, track_id, race_id)].append(fit)
     return {key: tuple(value) for key, value in out.items()}
 
 
@@ -233,26 +233,22 @@ def fit_hierarchical_slopes(
 
     global_pairs: dict[tuple[str, str], list[float]] = defaultdict(list)
     local_pairs: dict[tuple[str, str, int], list[float]] = defaultdict(list)
-    for (era, compound, race_id), fits in pair_models.items():
+    for (era, compound, track_id, race_id), fits in pair_models.items():
         for fit in fits:
             global_pairs[(era, compound)].append(fit.slope)
-            local_pairs[(era, compound, race_id)].append(fit.slope)
+            local_pairs[(era, compound, track_id)].append(fit.slope)
 
     global_slopes = {
         key: _robust_mean(values)
         for key, values in global_pairs.items()
     }
 
-    # Race is part of the local key above; collapse it to track is deferred to
-    # prediction because this model currently has no track key in the pair model.
-    # Build an era/compound predictor only; target-track calibration is handled
-    # by separate aggregation in the validation runner.
     result: dict[tuple[str, str, int], HierarchicalSlope] = {}
-    for key, fits in pair_models.items():
-        era, compound, race_id = key
+    for key, values in local_pairs.items():
+        era, compound, track_id = key
         global_slope = global_slopes[(era, compound)]
-        local_slope = _robust_mean([fit.slope for fit in fits])
-        n = len(fits)
+        local_slope = _robust_mean(values)
+        n = len(values)
         weight = n / (n + max(0.0, prior_strength))
         slope = weight * local_slope + (1.0 - weight) * global_slope
         result[key] = HierarchicalSlope(
@@ -271,7 +267,7 @@ def score_target(
     *,
     prior_strength: float = 4.0,
 ) -> dict[str, float | int]:
-    """Score a frozen era/compound slope against one target race."""
+    """Score track-shrunk slopes against one target race, equally by pair."""
     if not target:
         return {
             "pairs": 0,
@@ -281,40 +277,59 @@ def score_target(
             "improvement_pct": float("nan"),
         }
 
-    pair_models = fit_pair_models(train)
-    global_slopes: dict[tuple[str, str], list[float]] = defaultdict(list)
-    for (era, compound, _race_id), fits in pair_models.items():
-        for fit in fits:
-            global_slopes[(era, compound)].append(fit.slope)
+    model = fit_hierarchical_slopes(train, prior_strength=prior_strength)
 
-    slopes = {
-        key: _robust_mean(values)
-        for key, values in global_slopes.items()
-    }
-    actual_errors: list[float] = []
-    flat_errors: list[float] = []
+    global_slopes: dict[tuple[str, str], float] = {}
+    for (era, compound), values in _global_slope_values(train).items():
+        global_slopes[(era, compound)] = _robust_mean(values)
+
+    pair_groups: dict[str, list[TyreAgeContrast]] = defaultdict(list)
     for row in target:
-        key = (row.era, row.compound)
-        slope = slopes.get(key, 0.0)
-        predicted = slope * row.age_difference
-        actual = row.lap_time_difference
-        actual_errors.append(abs(actual - predicted))
-        flat_errors.append(abs(actual))
+        pair_groups[row.pair_key].append(row)
 
-    model_mae = sum(actual_errors) / len(actual_errors) if actual_errors else float("nan")
-    flat_mae = sum(flat_errors) / len(flat_errors) if flat_errors else float("nan")
+    pair_model_errors: list[float] = []
+    pair_flat_errors: list[float] = []
+    for pair_rows in pair_groups.values():
+        first = pair_rows[0]
+        fitted = model.get((first.era, first.compound, first.track_id))
+        if fitted is not None:
+            slope = fitted.slope
+        else:
+            slope = global_slopes.get((first.era, first.compound), 0.0)
+
+        model_error = sum(
+            abs(row.lap_time_difference - slope * row.age_difference)
+            for row in pair_rows
+        ) / len(pair_rows)
+        flat_error = sum(abs(row.lap_time_difference) for row in pair_rows) / len(pair_rows)
+        pair_model_errors.append(model_error)
+        pair_flat_errors.append(flat_error)
+
+    model_mae = sum(pair_model_errors) / len(pair_model_errors) if pair_model_errors else float("nan")
+    flat_mae = sum(pair_flat_errors) / len(pair_flat_errors) if pair_flat_errors else float("nan")
     improvement = (
         100.0 * (flat_mae - model_mae) / flat_mae
         if isfinite(flat_mae) and flat_mae > 0
         else float("nan")
     )
     return {
-        "pairs": len({r.pair_key for r in target}),
+        "pairs": len(pair_groups),
         "points": len(target),
         "model_mae": model_mae,
         "flat_mae": flat_mae,
         "improvement_pct": improvement,
     }
+
+
+def _global_slope_values(
+    observations: tuple[TyreAgeContrast, ...],
+) -> dict[tuple[str, str], list[float]]:
+    pair_models = fit_pair_models(observations)
+    values: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for (era, compound, _track_id, _race_id), fits in pair_models.items():
+        for fit in fits:
+            values[(era, compound)].append(fit.slope)
+    return values
 
 
 def walk_forward(
