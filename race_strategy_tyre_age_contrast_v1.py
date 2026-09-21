@@ -275,7 +275,14 @@ def score_target(
     *,
     prior_strength: float = 4.0,
 ) -> dict[str, float | int]:
-    """Score track-shrunk slopes against one target race, equally by pair."""
+    """Score the age effect itself, not the nuisance teammate pace offset.
+
+    Each held-out teammate pair gets an observed slope from its target-race
+    age/time contrast. The frozen training model predicts a track/compound
+    slope. The flat baseline predicts zero slope. This makes the score answer
+    the actual question: does the model predict how lap-time difference changes
+    with tyre-age difference?
+    """
     if not target:
         return {
             "pairs": 0,
@@ -286,42 +293,43 @@ def score_target(
         }
 
     model = fit_hierarchical_slopes(train, prior_strength=prior_strength)
-
     global_slopes: dict[tuple[str, str], float] = {}
-    for (era, compound), values in _global_slope_values(train).items():
-        global_slopes[(era, compound)] = _robust_mean(values)
+    for key, values in _global_slope_values(train).items():
+        global_slopes[key] = _robust_mean(values)
 
     pair_groups: dict[tuple[str, str], list[TyreAgeContrast]] = defaultdict(list)
     for row in target:
         pair_groups[(row.pair_key, row.compound)].append(row)
 
-    pair_model_errors: list[float] = []
-    pair_flat_errors: list[float] = []
+    model_errors: list[float] = []
+    flat_errors: list[float] = []
+    scored_pairs = 0
+
     for pair_rows in pair_groups.values():
         first = pair_rows[0]
+        observed_fit = _center_pair(pair_rows)
+        if observed_fit is None:
+            continue
+
         fitted = model.get((first.era, first.compound, first.track_id))
         if fitted is not None:
-            slope = fitted.slope
+            predicted_slope = fitted.slope
         else:
-            slope = global_slopes.get((first.era, first.compound), 0.0)
+            predicted_slope = global_slopes.get((first.era, first.compound), 0.0)
 
-        model_error = sum(
-            abs(row.lap_time_difference - slope * row.age_difference)
-            for row in pair_rows
-        ) / len(pair_rows)
-        flat_error = sum(abs(row.lap_time_difference) for row in pair_rows) / len(pair_rows)
-        pair_model_errors.append(model_error)
-        pair_flat_errors.append(flat_error)
+        model_errors.append(abs(observed_fit.slope - predicted_slope))
+        flat_errors.append(abs(observed_fit.slope))
+        scored_pairs += 1
 
-    model_mae = sum(pair_model_errors) / len(pair_model_errors) if pair_model_errors else float("nan")
-    flat_mae = sum(pair_flat_errors) / len(pair_flat_errors) if pair_flat_errors else float("nan")
+    model_mae = sum(model_errors) / len(model_errors) if model_errors else float("nan")
+    flat_mae = sum(flat_errors) / len(flat_errors) if flat_errors else float("nan")
     improvement = (
         100.0 * (flat_mae - model_mae) / flat_mae
         if isfinite(flat_mae) and flat_mae > 0
         else float("nan")
     )
     return {
-        "pairs": len(pair_groups),
+        "pairs": scored_pairs,
         "points": len(target),
         "model_mae": model_mae,
         "flat_mae": flat_mae,
