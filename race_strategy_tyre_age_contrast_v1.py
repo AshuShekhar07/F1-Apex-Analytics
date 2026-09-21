@@ -283,9 +283,9 @@ def score_target(
     for (era, compound), values in _global_slope_values(train).items():
         global_slopes[(era, compound)] = _robust_mean(values)
 
-    pair_groups: dict[str, list[TyreAgeContrast]] = defaultdict(list)
+    pair_groups: dict[tuple[str, str], list[TyreAgeContrast]] = defaultdict(list)
     for row in target:
-        pair_groups[row.pair_key].append(row)
+        pair_groups[(row.pair_key, row.compound)].append(row)
 
     pair_model_errors: list[float] = []
     pair_flat_errors: list[float] = []
