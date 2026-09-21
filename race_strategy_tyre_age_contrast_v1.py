@@ -79,6 +79,7 @@ def load_contrasts(
     end_year: int,
     min_pair_points: int = 5,
     min_age_span: int = 2,
+    min_tyre_age: int = 2,
 ) -> tuple[TyreAgeContrast, ...]:
     """Load same-team/same-lap/same-compound teammate age contrasts.
 
@@ -133,7 +134,8 @@ def load_contrasts(
         start_lap = int(row["start_lap"])
         end_lap = int(row["end_lap"])
         lap_number = int(row["lap_number"])
-        if lap_number <= start_lap or lap_number >= end_lap:
+        tyre_age = lap_number - start_lap
+        if tyre_age < min_tyre_age or lap_number >= end_lap:
             continue
         key = (
             int(row["race_id"]),
@@ -412,6 +414,7 @@ def main() -> int:
             end_year=args.end_year,
             min_pair_points=args.min_pair_points,
             min_age_span=args.min_age_span,
+            min_tyre_age=args.min_tyre_age,
         )
     finally:
         db.close()
