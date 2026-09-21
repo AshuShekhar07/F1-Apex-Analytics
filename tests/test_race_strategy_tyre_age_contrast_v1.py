@@ -14,6 +14,7 @@ def _synthetic_pair(*, track_id=10, slope=0.06, offset=0.8, pair="r:1:11-12"):
             race_id=1,
             track_id=track_id,
             season_year=2024,
+            race_date="2024-01-01",
             era="era2",
             pair_key=pair,
             compound="MEDIUM",
@@ -49,11 +50,11 @@ def test_score_target_uses_zero_as_strong_baseline():
         + _synthetic_pair(track_id=20, slope=0.06, pair="r2:1:11-12")
     )
     target = (
-        TyreAgeContrast(3, 20, 2025, "era2", "r3:1:11-12", "MEDIUM", -4, 0.8 - 0.24),
-        TyreAgeContrast(3, 20, 2025, "era2", "r3:1:11-12", "MEDIUM", -2, 0.8 - 0.12),
-        TyreAgeContrast(3, 20, 2025, "era2", "r3:1:11-12", "MEDIUM", 0, 0.8),
-        TyreAgeContrast(3, 20, 2025, "era2", "r3:1:11-12", "MEDIUM", 2, 0.8 + 0.12),
-        TyreAgeContrast(3, 20, 2025, "era2", "r3:1:11-12", "MEDIUM", 4, 0.8 + 0.24),
+        TyreAgeContrast(3, 20, 2025, "2025-01-01", "era2", "r3:1:11-12", "MEDIUM", -4, 0.8 - 0.24),
+        TyreAgeContrast(3, 20, 2025, "2025-01-01", "era2", "r3:1:11-12", "MEDIUM", -2, 0.8 - 0.12),
+        TyreAgeContrast(3, 20, 2025, "2025-01-01", "era2", "r3:1:11-12", "MEDIUM", 0, 0.8),
+        TyreAgeContrast(3, 20, 2025, "2025-01-01", "era2", "r3:1:11-12", "MEDIUM", 2, 0.8 + 0.12),
+        TyreAgeContrast(3, 20, 2025, "2025-01-01", "era2", "r3:1:11-12", "MEDIUM", 4, 0.8 + 0.24),
     )
     result = score_target(train, target)
     assert result["model_mae"] < result["flat_mae"]
