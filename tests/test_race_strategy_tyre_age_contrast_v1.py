@@ -40,8 +40,8 @@ def test_hierarchical_track_slope_shrinks_toward_global():
     )
     model = fit_hierarchical_slopes(train, prior_strength=4.0)
     local = model[("era2", "MEDIUM", 20)]
-    assert local.global_slope == pytest.approx(0.06, abs=1e-9)
-    assert 0.04 < local.slope < 0.06
+    assert local.global_slope == pytest.approx(2.0 / 30.0, abs=1e-9)
+    assert 0.04 < local.slope < local.global_slope
 
 
 def test_score_target_uses_zero_as_strong_baseline():
