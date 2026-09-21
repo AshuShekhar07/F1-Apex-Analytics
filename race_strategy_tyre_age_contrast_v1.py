@@ -27,6 +27,7 @@ class TyreAgeContrast:
     race_id: int
     track_id: int
     season_year: int
+    race_date: str
     era: str
     pair_key: str
     compound: str
@@ -91,6 +92,7 @@ def load_contrasts(
                 r.id AS race_id,
                 r.track_id,
                 r.season_year,
+                r.race_date,
                 r.regulation_era AS era,
                 re.driver_id,
                 re.team_id,
@@ -164,6 +166,7 @@ def load_contrasts(
                         race_id=int(left["race_id"]),
                         track_id=int(left["track_id"]),
                         season_year=int(left["season_year"]),
+                        race_date=str(left["race_date"]),
                         era=str(left["era"]),
                         pair_key=pair_key,
                         compound=str(left["compound"]).upper(),
@@ -250,7 +253,10 @@ def fit_hierarchical_slopes(
         local_slope = _robust_mean(values)
         n = len(values)
         weight = n / (n + max(0.0, prior_strength))
-        slope = weight * local_slope + (1.0 - weight) * global_slope
+        slope = max(
+            0.0,
+            weight * local_slope + (1.0 - weight) * global_slope,
+        )
         result[key] = HierarchicalSlope(
             slope=slope,
             local_slope=local_slope,
@@ -338,8 +344,8 @@ def walk_forward(
     min_training_races: int = 15,
 ) -> list[dict[str, float | int]]:
     metas = sorted(
-        {(r.race_id, r.season_year, r.era) for r in observations},
-        key=lambda value: (value[1], value[0]),
+        {(r.race_id, r.season_year, r.race_date, r.era) for r in observations},
+        key=lambda value: (value[2], value[0]),
     )
     rows_by_race: dict[int, tuple[TyreAgeContrast, ...]] = defaultdict(tuple)
     temp: dict[int, list[TyreAgeContrast]] = defaultdict(list)
@@ -348,11 +354,11 @@ def walk_forward(
     rows_by_race = {key: tuple(value) for key, value in temp.items()}
 
     output: list[dict[str, float | int]] = []
-    for target_race_id, target_year, target_era in metas:
+    for target_race_id, target_year, target_date, target_era in metas:
         prior_races = [
             race_id
-            for race_id, year, era in metas
-            if era == target_era and (year, race_id) < (target_year, target_race_id)
+            for race_id, year, race_date, era in metas
+            if era == target_era and (race_date, race_id) < (target_date, target_race_id)
         ]
         if len(prior_races) < min_training_races:
             continue
