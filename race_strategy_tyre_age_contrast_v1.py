@@ -141,7 +141,7 @@ def load_contrasts(
         )
         by_race_lap_team_compound[key].append(dict(row))
 
-    pair_rows: dict[str, list[TyreAgeContrast]] = defaultdict(list)
+    pair_rows: dict[tuple[str, str], list[TyreAgeContrast]] = defaultdict(list)
     for key, rows in by_race_lap_team_compound.items():
         if len(rows) < 2:
             continue
@@ -159,7 +159,7 @@ def load_contrasts(
                 )
                 left_age = int(left["lap_number"]) - int(left["start_lap"])
                 right_age = int(right["lap_number"]) - int(right["start_lap"])
-                pair_rows[pair_key].append(
+                pair_rows[(pair_key, str(left["compound"]).upper())].append(
                     TyreAgeContrast(
                         race_id=int(left["race_id"]),
                         track_id=int(left["track_id"]),
