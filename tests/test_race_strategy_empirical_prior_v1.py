@@ -119,3 +119,27 @@ def test_probabilities_sum_to_one():
     )
     total = sum(p.probability for p in posterior.values())
     assert math.isclose(total, 1.0, rel_tol=1e-9, abs_tol=1e-9)
+
+
+def test_strategy_choice_metrics_is_driver_race_top1_not_all_drivers():
+    from race_strategy_empirical_prior_v1 import strategy_choice_metrics, StrategyPrediction
+
+    target_a = make_obs(99, date(2025, 1, 1), ("M", "H"), 0.0, driver_id=1)
+    target_b = make_obs(99, date(2025, 1, 1), ("S", "H"), 0.0, driver_id=2)
+
+    posterior_a = {
+        ("M", "H"): StrategyPrediction(("M", "H"), 0.0, 0.8, 1.0),
+        ("S", "H"): StrategyPrediction(("S", "H"), 0.0, 0.2, 1.0),
+    }
+    posterior_b = {
+        ("M", "H"): StrategyPrediction(("M", "H"), 0.0, 0.8, 1.0),
+        ("S", "H"): StrategyPrediction(("S", "H"), 0.0, 0.2, 1.0),
+    }
+
+    metrics = strategy_choice_metrics([
+        (target_a, posterior_a),
+        (target_b, posterior_b),
+    ])
+
+    assert metrics["top1_accuracy"] == 0.5
+    assert metrics["mean_race_top1_accuracy"] == 0.5
