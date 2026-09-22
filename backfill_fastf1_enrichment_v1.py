@@ -218,10 +218,12 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int, session_typ
 
         try:
             session = api_call(fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type])
+            # Lap.get_telemetry() requires the session's car/position
+            # telemetry to have been loaded first.
             api_call(
                 session.load,
                 laps=True,
-                telemetry=False,
+                telemetry=True,
                 weather=False,
                 messages=False,
             )
@@ -562,7 +564,10 @@ def backfill_circuit_corners(engine, *, start_year: int, end_year: int) -> dict[
                 continue
 
             session = api_call(fastf1.get_session, year, rnd, "Q")
-            api_call(session.load, laps=False, telemetry=False, weather=False, messages=False)
+            # Session.get_circuit_info() computes marker distances from a
+            # reference lap's position telemetry, so both laps and telemetry
+            # must be loaded here.
+            api_call(session.load, laps=True, telemetry=True, weather=False, messages=False)
             info = session.get_circuit_info()
             corners = getattr(info, "corners", None)
             rotation = safe_float(getattr(info, "rotation", None))
@@ -570,7 +575,7 @@ def backfill_circuit_corners(engine, *, start_year: int, end_year: int) -> dict[
                 # Some weekends may not expose Q circuit info; race is an
                 # independent fallback.
                 session = api_call(fastf1.get_session, year, rnd, "R")
-                api_call(session.load, laps=False, telemetry=False, weather=False, messages=False)
+                api_call(session.load, laps=True, telemetry=True, weather=False, messages=False)
                 info = session.get_circuit_info()
                 corners = getattr(info, "corners", None)
                 rotation = safe_float(getattr(info, "rotation", None))
@@ -684,9 +689,11 @@ def backfill_race_events(engine, *, start_year: int, end_year: int) -> dict[str,
 
         try:
             session = api_call(fastf1.get_session, year, rnd, "Race")
+            # track_status is loaded as part of laps=True; race-control
+            # messages are loaded independently via messages=True.
             api_call(
                 session.load,
-                laps=False,
+                laps=True,
                 telemetry=False,
                 weather=False,
                 messages=True,
@@ -936,6 +943,10 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                 try:
                     lap_slice = session.laps.loc[[idx]]
                     telemetry = lap_slice.get_telemetry()
+                    # DriverAhead/DistanceToDriverAhead are not present in
+                    # raw merged telemetry; calculate them per lap before
+                    # summarising traffic exposure.
+                    telemetry = telemetry.add_driver_ahead()
                     summary = telemetry_summary(telemetry)
                     if summary is None:
                         continue
