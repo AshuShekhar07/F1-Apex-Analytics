@@ -24,8 +24,10 @@ def test_grid_band_fixed_boundary():
 
 
 def test_pit_timing_bucket_boundaries():
+    # Thirds are defined by exact fractions: <1/3, <2/3, otherwise late.
     assert pit_timing_bucket(10, 100) == "early"
-    assert pit_timing_bucket(33, 100) == "middle"
+    assert pit_timing_bucket(33, 100) == "early"
+    assert pit_timing_bucket(34, 100) == "middle"
     assert pit_timing_bucket(66, 100) == "middle"
     assert pit_timing_bucket(67, 100) == "late"
 
