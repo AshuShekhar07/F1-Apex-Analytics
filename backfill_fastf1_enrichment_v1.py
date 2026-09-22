@@ -324,7 +324,7 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int, session_typ
     return {"sessions_done": sessions_done, "rows_updated": updated, "failures": failures}
 
 
-def backfill_weather_samples(engine, *, start_year: int, end_year: int) -> dict[str, int]:
+def backfill_weather_samples(engine, *, start_year: int, end_year: int, session_types: tuple[str, ...] = ('FP2', 'Q', 'R')) -> dict[str, int]:
     sessions_done = 0
     samples_written = 0
     failures = 0
@@ -334,7 +334,7 @@ def backfill_weather_samples(engine, *, start_year: int, end_year: int) -> dict[
             conn,
             start_year,
             end_year,
-            tuple(SESSION_LOAD_NAMES.keys()),
+            session_types,
         )
 
     print(f"[weather-samples] sessions={len(sessions)}", flush=True)
@@ -1044,6 +1044,11 @@ def main() -> int:
         default="Q,FP2,R",
         help="Comma-separated DB session codes for lap-metadata mode",
     )
+    parser.add_argument(
+        "--weather-sessions",
+        default="Q,FP2,R",
+        help="Comma-separated DB session codes for weather mode",
+    )
     parser.add_argument("--cache-dir", default="")
     args = parser.parse_args()
 
@@ -1081,8 +1086,23 @@ def main() -> int:
         )
 
     if args.mode in {"weather", "all"}:
+        weather_sessions = tuple(
+            token.strip().upper()
+            for token in args.weather_sessions.split(",")
+            if token.strip()
+        )
+        invalid = sorted(set(weather_sessions) - set(SESSION_LOAD_NAMES))
+        if invalid:
+            raise SystemExit(f"Unknown weather session type(s): {invalid}")
         print("\n=== WEATHER SAMPLE BACKFILL ===")
-        print(backfill_weather_samples(engine, start_year=args.start_year, end_year=args.end_year))
+        print(
+            backfill_weather_samples(
+                engine,
+                start_year=args.start_year,
+                end_year=args.end_year,
+                session_types=weather_sessions,
+            )
+        )
 
     if args.mode in {"events", "all"}:
         print("\n=== RACE EVENT BACKFILL ===")
