@@ -449,6 +449,156 @@ def message_fingerprint(session_id: int, row: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def backfill_circuit_corners(engine, *, start_year: int, end_year: int) -> dict[str, int]:
+    """Backfill FastF1 circuit corner geometry once per race weekend."""
+    races_done = 0
+    corners_written = 0
+    failures = 0
+
+    with engine.begin() as conn:
+        races = conn.execute(
+            text(
+                """
+                SELECT r.id AS race_id, r.track_id, r.season_year, r.round_number
+                FROM races r
+                WHERE r.season_year BETWEEN :start_year AND :end_year
+                  AND r.race_date <= CURRENT_DATE
+                ORDER BY r.race_date, r.id
+                """
+            ),
+            {"start_year": start_year, "end_year": end_year},
+        ).mappings().all()
+
+    print(f"[circuit-corners] races={len(races)}", flush=True)
+
+    for item in races:
+        year = int(item["season_year"])
+        rnd = int(item["round_number"])
+        race_id = int(item["race_id"])
+        track_id = int(item["track_id"])
+
+        try:
+            with engine.begin() as conn:
+                exists = conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM track_corners
+                        WHERE track_id = :track_id
+                          AND season_year = :year
+                        LIMIT 1
+                        """
+                    ),
+                    {"track_id": track_id, "year": year},
+                ).first()
+            if exists:
+                continue
+
+            session = fastf1.get_session(year, rnd, "Q")
+            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            info = session.get_circuit_info()
+            corners = getattr(info, "corners", None)
+            rotation = safe_float(getattr(info, "rotation", None))
+            if corners is None or corners.empty:
+                # Some weekends may not expose Q circuit info; race is an
+                # independent fallback.
+                session = fastf1.get_session(year, rnd, "R")
+                session.load(laps=False, telemetry=False, weather=False, messages=False)
+                info = session.get_circuit_info()
+                corners = getattr(info, "corners", None)
+                rotation = safe_float(getattr(info, "rotation", None))
+
+            if corners is None or corners.empty:
+                continue
+
+            rows: list[dict[str, Any]] = []
+            for _, corner in corners.iterrows():
+                number = safe_int(corner.get("Number"))
+                if number is None:
+                    continue
+                rows.append(
+                    {
+                        "track_id": track_id,
+                        "year": year,
+                        "number": number,
+                        "letter": (
+                            None
+                            if corner.get("Letter") is None
+                            else str(corner.get("Letter"))
+                        ),
+                        "x": safe_float(corner.get("X")),
+                        "y": safe_float(corner.get("Y")),
+                        "angle": safe_float(corner.get("Angle")),
+                        # FastF1 circuit info uses meter-scale track distance.
+                        "distance": safe_float(corner.get("Distance")),
+                        "rotation": rotation,
+                    }
+                )
+
+            with engine.begin() as conn:
+                for row in rows:
+                    result = conn.execute(
+                        text(
+                            """
+                            INSERT INTO track_corners (
+                                track_id, season_year, corner_number, corner_letter,
+                                x_coord, y_coord, angle_deg, distance_m,
+                                circuit_rotation_deg
+                            )
+                            VALUES (
+                                :track_id, :year, :number, :letter,
+                                :x, :y, :angle, :distance, :rotation
+                            )
+                            ON CONFLICT (
+                                track_id, season_year, corner_number, corner_letter, source
+                            )
+                            DO UPDATE SET
+                                x_coord = EXCLUDED.x_coord,
+                                y_coord = EXCLUDED.y_coord,
+                                angle_deg = EXCLUDED.angle_deg,
+                                distance_m = EXCLUDED.distance_m,
+                                circuit_rotation_deg = EXCLUDED.circuit_rotation_deg
+                            """
+                        ),
+                        row,
+                    )
+                    corners_written += int(result.rowcount or 0)
+
+                conn.execute(
+                    text(
+                        """
+                        UPDATE tracks
+                        SET num_turns = (
+                            SELECT COUNT(*)
+                            FROM track_corners tc
+                            WHERE tc.track_id = :track_id
+                              AND tc.season_year = :year
+                        )
+                        WHERE id = :track_id
+                          AND (num_turns IS NULL OR num_turns = 0)
+                        """
+                    ),
+                    {"track_id": track_id, "year": year},
+                )
+
+            races_done += 1
+            print(
+                f"  [{races_done}/{len(races)}] {year} R{rnd}: corners={len(rows)}",
+                flush=True,
+            )
+        except Exception as exc:
+            failures += 1
+            print(f"  {year} R{rnd}: FAILED {exc}", flush=True)
+
+        time.sleep(0.2)
+
+    return {
+        "races_done": races_done,
+        "corners_written": corners_written,
+        "failures": failures,
+    }
+
+
 def backfill_race_events(engine, *, start_year: int, end_year: int) -> dict[str, int]:
     intervals_written = 0
     messages_written = 0
@@ -776,7 +926,7 @@ def main() -> int:
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument(
         "--mode",
-        choices=("lap-metadata", "weather", "events", "telemetry", "all"),
+        choices=("lap-metadata", "weather", "events", "circuit-corners", "telemetry", "all"),
         default="all",
     )
     parser.add_argument(
@@ -812,6 +962,16 @@ def main() -> int:
     if args.mode in {"events", "all"}:
         print("\n=== RACE EVENT BACKFILL ===")
         print(backfill_race_events(engine, start_year=args.start_year, end_year=args.end_year))
+
+    if args.mode in {"circuit-corners", "all"}:
+        print("\n=== CIRCUIT CORNER BACKFILL ===")
+        print(
+            backfill_circuit_corners(
+                engine,
+                start_year=args.start_year,
+                end_year=args.end_year,
+            )
+        )
 
     if args.mode == "telemetry":
         session_types = tuple(
