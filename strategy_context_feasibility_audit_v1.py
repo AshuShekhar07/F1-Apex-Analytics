@@ -123,7 +123,9 @@ def load_dry_race_context(
             r.race_date,
             re.id AS race_entry_id,
             re.driver_id,
+            re.team_id,
             rr.starting_grid_position,
+            rr.finishing_position,
             rr.status AS finishing_status
         FROM races r
         JOIN sessions s
@@ -210,6 +212,35 @@ def load_observed_lap_counts(engine, dry_race_ids: set[int]) -> tuple[dict[int, 
         race_laps[race_id] = max(race_laps.get(race_id, 0), laps)
     return race_laps, driver_laps
 
+def load_post_pit_compounds(engine, dry_race_ids: set[int]) -> pd.DataFrame:
+    """Load the tyre compound on the first recorded lap after each pit."""
+    if not dry_race_ids:
+        return pd.DataFrame()
+
+    query = text(
+        """
+        SELECT
+            p.race_id,
+            p.race_entry_id,
+            p.pit_lap,
+            l.tire_compound AS post_pit_compound
+        FROM race_strategy_pit_stops p
+        JOIN sessions s
+          ON s.race_id = p.race_id
+         AND s.session_type = 'R'
+        JOIN laps l
+          ON l.session_id = s.id
+         AND l.race_entry_id = p.race_entry_id
+         AND l.lap_number = p.pit_lap + 1
+        WHERE p.race_id = ANY(:race_ids)
+          AND p.source = 'fastf1'
+          AND l.tire_compound IS NOT NULL
+        ORDER BY p.race_id, p.race_entry_id, p.pit_lap
+        """
+    )
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"race_ids": list(dry_race_ids)})
+
 def load_pit_stops(engine, dry_race_ids: set[int]) -> pd.DataFrame:
     if not dry_race_ids:
         return pd.DataFrame()
@@ -237,6 +268,7 @@ def reconstruct_observed_strategy_patterns(
     context_df: pd.DataFrame,
     race_laps: dict[int, int],
     driver_laps: dict[tuple[int, int], int],
+    post_pit_compounds: pd.DataFrame,
 ) -> tuple[dict[tuple[int, int], dict[str, Any]], set[tuple[int, int]], set[tuple[int, int]]]:
     """
     Build driver-race strategy observations.
@@ -264,9 +296,17 @@ def reconstruct_observed_strategy_patterns(
     pits_by_entry: dict[tuple[int, int], list[int]] = defaultdict(list)
     if not pit_stops.empty:
         for row in pit_stops.itertuples(index=False):
-            pits_by_entry[(int(row.race_id), int(row.race_entry_id))].append(
-                int(row.pit_lap)
-            )
+            pits_by_entry[(int(row.race_id), int(row.race_entry_id))].append(int(row.pit_lap))
+
+    post_pit_compound_by_key: dict[tuple[int, int, int], str] = {}
+    if not post_pit_compounds.empty:
+        for row in post_pit_compounds.itertuples(index=False):
+            compound = str(row.post_pit_compound).upper()
+            if compound not in {"SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"}:
+                continue
+            post_pit_compound_by_key[
+                (int(row.race_id), int(row.race_entry_id), int(row.pit_lap))
+            ] = compound
 
     for (race_id, race_entry_id), group in stints.groupby(
         ["race_id", "race_entry_id"], sort=False
@@ -312,18 +352,15 @@ def reconstruct_observed_strategy_patterns(
                     valid = False
                     break
 
-                next_stints = g[g["start_lap"].astype(int) > pit_lap]
-                if next_stints.empty:
+                next_compound = post_pit_compound_by_key.get(
+                    (race_id, race_entry_id, pit_lap)
+                )
+                if next_compound is None:
                     valid = False
                     break
 
-                next_compound = str(
-                    next_stints.sort_values("start_lap").iloc[0]["compound"]
-                ).upper()
                 compounds_list.append(next_compound)
-                pit_buckets_list.append(
-                    pit_timing_bucket(pit_lap, total_laps)
-                )
+                pit_buckets_list.append(pit_timing_bucket(pit_lap, total_laps))
 
             if not valid:
                 continue
@@ -543,6 +580,7 @@ def run_audit(
     dry_race_ids = set(context["race_id"].astype(int)) if not context.empty else set()
     stints = load_stints(engine, dry_race_ids)
     pits = load_pit_stops(engine, dry_race_ids)
+    post_pit_compounds = load_post_pit_compounds(engine, dry_race_ids)
     race_laps, driver_laps = load_observed_lap_counts(engine, dry_race_ids)
 
     patterns, all_driver_races, usable_driver_races = (
@@ -552,6 +590,7 @@ def run_audit(
             context,
             race_laps,
             driver_laps,
+            post_pit_compounds,
         )
     )
 
@@ -608,6 +647,7 @@ def run_audit(
         "all_driver_race_stint_records": len(all_driver_races),
         "usable_driver_race_strategy_records": len(usable_driver_races),
         "pit_stop_records_used": int(len(pits)),
+        "post_pit_compound_records_used": int(len(post_pit_compounds)),
         "races_with_observed_lap_distance": len(race_laps),
         "driver_race_lap_counts": len(driver_laps),
         "archetype_grouping_exists": ARCHETYPE_GROUPING_EXISTS,
@@ -634,6 +674,7 @@ def run_audit(
     print(f"all_driver_race_stint_records={len(all_driver_races)}")
     print(f"usable_driver_race_strategy_records={len(usable_driver_races)}")
     print(f"pit_stop_records_used={len(pits)}")
+    print(f"post_pit_compound_records_used={len(post_pit_compounds)}")
     print(f"races_with_observed_lap_distance={len(race_laps)}")
     print(f"driver_race_lap_counts={len(driver_laps)}")
 
