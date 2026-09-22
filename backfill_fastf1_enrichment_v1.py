@@ -823,6 +823,7 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
             with engine.connect() as conn:
                 entries = entry_map(conn, race_id)
 
+            pending_rows: list[dict[str, Any]] = []
             for idx, lap_row in laps.iterrows():
                 lap_number = safe_int(lap_row.get("LapNumber"))
                 car_number = safe_int(lap_row.get("DriverNumber"))
@@ -839,61 +840,14 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                     if summary is None:
                         continue
 
-                    row = {
-                        "session_id": session_id,
-                        "entry_id": entry_id,
-                        "lap_number": lap_number,
-                        **summary,
-                    }
-                    with engine.begin() as conn:
-                        conn.execute(
-                            text(
-                                """
-                                INSERT INTO lap_telemetry_summary (
-                                    session_id, race_entry_id, lap_number,
-                                    mean_speed_kmh, max_speed_kmh,
-                                    mean_throttle_pct, full_throttle_pct,
-                                    brake_active_pct, drs_active_pct,
-                                    mean_rpm, mean_gear, distance_m,
-                                    mean_distance_to_driver_ahead_m,
-                                    close_traffic_150m_pct, driver_ahead_samples,
-                                    telemetry_samples, telemetry_quality
-                                )
-                                VALUES (
-                                    :session_id, :entry_id, :lap_number,
-                                    :mean_speed_kmh, :max_speed_kmh,
-                                    :mean_throttle_pct, :full_throttle_pct,
-                                    :brake_active_pct, :drs_active_pct,
-                                    :mean_rpm, :mean_gear, :distance_m,
-                                    :mean_distance_to_driver_ahead_m,
-                                    :close_traffic_150m_pct, :driver_ahead_samples,
-                                    :telemetry_samples, :telemetry_quality
-                                )
-                                ON CONFLICT (
-                                    session_id, race_entry_id, lap_number, source
-                                )
-                                DO UPDATE SET
-                                    mean_speed_kmh = EXCLUDED.mean_speed_kmh,
-                                    max_speed_kmh = EXCLUDED.max_speed_kmh,
-                                    mean_throttle_pct = EXCLUDED.mean_throttle_pct,
-                                    full_throttle_pct = EXCLUDED.full_throttle_pct,
-                                    brake_active_pct = EXCLUDED.brake_active_pct,
-                                    drs_active_pct = EXCLUDED.drs_active_pct,
-                                    mean_rpm = EXCLUDED.mean_rpm,
-                                    mean_gear = EXCLUDED.mean_gear,
-                                    distance_m = EXCLUDED.distance_m,
-                                    mean_distance_to_driver_ahead_m =
-                                        EXCLUDED.mean_distance_to_driver_ahead_m,
-                                    close_traffic_150m_pct =
-                                        EXCLUDED.close_traffic_150m_pct,
-                                    driver_ahead_samples = EXCLUDED.driver_ahead_samples,
-                                    telemetry_samples = EXCLUDED.telemetry_samples,
-                                    telemetry_quality = EXCLUDED.telemetry_quality
-                                """
-                            ),
-                            row,
-                        )
-                    written += 1
+                    pending_rows.append(
+                        {
+                            "session_id": session_id,
+                            "entry_id": entry_id,
+                            "lap_number": lap_number,
+                            **summary,
+                        }
+                    )
                 except Exception as exc:
                     failures += 1
                     if failures <= 10:
@@ -901,6 +855,57 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                             f"    telemetry lap {lap_number} failed: {exc}",
                             flush=True,
                         )
+
+            if pending_rows:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO lap_telemetry_summary (
+                                session_id, race_entry_id, lap_number,
+                                mean_speed_kmh, max_speed_kmh,
+                                mean_throttle_pct, full_throttle_pct,
+                                brake_active_pct, drs_active_pct,
+                                mean_rpm, mean_gear, distance_m,
+                                mean_distance_to_driver_ahead_m,
+                                close_traffic_150m_pct, driver_ahead_samples,
+                                telemetry_samples, telemetry_quality
+                            )
+                            VALUES (
+                                :session_id, :entry_id, :lap_number,
+                                :mean_speed_kmh, :max_speed_kmh,
+                                :mean_throttle_pct, :full_throttle_pct,
+                                :brake_active_pct, :drs_active_pct,
+                                :mean_rpm, :mean_gear, :distance_m,
+                                :mean_distance_to_driver_ahead_m,
+                                :close_traffic_150m_pct, :driver_ahead_samples,
+                                :telemetry_samples, :telemetry_quality
+                            )
+                            ON CONFLICT (
+                                session_id, race_entry_id, lap_number, source
+                            )
+                            DO UPDATE SET
+                                mean_speed_kmh = EXCLUDED.mean_speed_kmh,
+                                max_speed_kmh = EXCLUDED.max_speed_kmh,
+                                mean_throttle_pct = EXCLUDED.mean_throttle_pct,
+                                full_throttle_pct = EXCLUDED.full_throttle_pct,
+                                brake_active_pct = EXCLUDED.brake_active_pct,
+                                drs_active_pct = EXCLUDED.drs_active_pct,
+                                mean_rpm = EXCLUDED.mean_rpm,
+                                mean_gear = EXCLUDED.mean_gear,
+                                distance_m = EXCLUDED.distance_m,
+                                mean_distance_to_driver_ahead_m =
+                                    EXCLUDED.mean_distance_to_driver_ahead_m,
+                                close_traffic_150m_pct =
+                                    EXCLUDED.close_traffic_150m_pct,
+                                driver_ahead_samples = EXCLUDED.driver_ahead_samples,
+                                telemetry_samples = EXCLUDED.telemetry_samples,
+                                telemetry_quality = EXCLUDED.telemetry_quality
+                            """
+                        ),
+                        pending_rows,
+                    )
+                written += len(pending_rows)
 
             sessions_done += 1
             print(
