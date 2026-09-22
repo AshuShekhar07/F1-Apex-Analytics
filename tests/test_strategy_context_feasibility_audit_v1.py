@@ -100,7 +100,7 @@ def test_strategy_pattern_uses_actual_pit_table_and_keeps_same_compound_stop():
     )
 
     patterns, all_obs, usable = reconstruct_observed_strategy_patterns(
-        stints, pits, context
+        stints, pits, context, {1: 60}
     )
 
     key = (1, 10)
@@ -140,7 +140,7 @@ def test_unclassified_driver_is_not_usable():
     )
 
     patterns, all_obs, usable = reconstruct_observed_strategy_patterns(
-        stints, pits, context
+        stints, pits, context, {1: 50}
     )
 
     assert (1, 10) in all_obs
@@ -192,3 +192,52 @@ def test_bucket_builder_separates_all_and_usable_observations():
     assert stats.usable_obs == 1
     assert stats.median_obs_per_race() == 2.0
     assert len(stats.patterns) == 1
+
+
+def test_observed_race_distance_not_nominal_track_distance():
+    stints = pd.DataFrame(
+        [
+            {
+                "race_id": 2,
+                "race_entry_id": 20,
+                "driver_id": 7,
+                "stint_number": 1,
+                "compound": "MEDIUM",
+                "start_lap": 1,
+                "end_lap": 40,
+                "stint_length": 40,
+            },
+            {
+                "race_id": 2,
+                "race_entry_id": 20,
+                "driver_id": 7,
+                "stint_number": 2,
+                "compound": "HARD",
+                "start_lap": 41,
+                "end_lap": 50,
+                "stint_length": 10,
+            },
+        ]
+    )
+    pits = pd.DataFrame(
+        [
+            {"race_id": 2, "race_entry_id": 20, "pit_lap": 40, "source": "fastf1"},
+        ]
+    )
+    context = pd.DataFrame(
+        [
+            {
+                "race_id": 2,
+                "race_entry_id": 20,
+                "driver_id": 7,
+                "finishing_status": "Finished",
+            }
+        ]
+    )
+
+    patterns, _, usable = reconstruct_observed_strategy_patterns(
+        stints, pits, context, {2: 50}
+    )
+
+    assert (2, 20) in usable
+    assert patterns[(2, 20)]["pit_buckets"] == ("late",)
