@@ -268,7 +268,7 @@ def reconstruct_observed_strategy_patterns(
     context_df: pd.DataFrame,
     race_laps: dict[int, int],
     driver_laps: dict[tuple[int, int], int],
-    post_pit_compounds: pd.DataFrame,
+    post_pit_compounds: pd.DataFrame | None = None,
 ) -> tuple[dict[tuple[int, int], dict[str, Any]], set[tuple[int, int]], set[tuple[int, int]]]:
     """
     Build driver-race strategy observations.
@@ -282,6 +282,8 @@ def reconstruct_observed_strategy_patterns(
     pre-race context feature.
     """
     patterns: dict[tuple[int, int], dict[str, Any]] = {}
+    if post_pit_compounds is None:
+        post_pit_compounds = pd.DataFrame()
     all_driver_races: set[tuple[int, int]] = set()
     usable_driver_races: set[tuple[int, int]] = set()
 
