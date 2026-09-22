@@ -291,6 +291,21 @@ def posterior_strategy_prior(
     return posterior
 
 
+def predict_strategy_distribution(
+    target: StrategyResidualObservation,
+    history: Iterable[StrategyResidualObservation],
+    track_overtaking_index: dict[tuple[int, str], float],
+    *,
+    config: EmpiricalPriorConfig | None = None,
+) -> dict[tuple[str, ...], StrategyPrediction]:
+    return posterior_strategy_prior(
+        target,
+        history,
+        track_overtaking_index,
+        config=config,
+    )
+
+
 def predict_actual_strategy(
     target: StrategyResidualObservation,
     history: Iterable[StrategyResidualObservation],
@@ -298,7 +313,8 @@ def predict_actual_strategy(
     *,
     config: EmpiricalPriorConfig | None = None,
 ) -> StrategyPrediction | None:
-    posterior = posterior_strategy_prior(
+    # Convenience accessor for the descriptive residual-effect evaluation.
+    posterior = predict_strategy_distribution(
         target,
         history,
         track_overtaking_index,
@@ -547,6 +563,56 @@ def build_strategy_residual_dataset(
     return tuple(output)
 
 
+def strategy_choice_metrics(
+    rows: Iterable[tuple[StrategyResidualObservation, dict[tuple[str, ...], StrategyPrediction]]],
+) -> dict[str, float | int]:
+    """Evaluate pre-race strategy-family probability predictions.
+
+    This is the actual strategy-selection test. The target family's identity is
+    only used after the posterior has been generated.
+    """
+    items = list(rows)
+    if not items:
+        return {
+            "races": 0,
+            "observations": 0,
+            "top1_accuracy": float("nan"),
+            "mean_actual_strategy_probability": float("nan"),
+            "log_loss": float("nan"),
+        }
+
+    race_top1: dict[int, list[bool]] = defaultdict(list)
+    log_losses: list[float] = []
+    actual_probs: list[float] = []
+    observations = 0
+
+    for target, posterior in items:
+        if not posterior:
+            continue
+        predicted_family = max(
+            posterior.values(),
+            key=lambda p: (p.probability, -p.predicted_residual, str(p.strategy_family)),
+        ).strategy_family
+        actual_prob = max(
+            1e-12,
+            float(posterior.get(target.strategy_family, StrategyPrediction(
+                target.strategy_family, 0.0, 0.0, 0.0
+            )).probability),
+        )
+        race_top1[target.race_id].append(predicted_family == target.strategy_family)
+        actual_probs.append(actual_prob)
+        log_losses.append(-math.log(actual_prob))
+        observations += 1
+
+    return {
+        "races": len(race_top1),
+        "observations": observations,
+        "top1_accuracy": _mean([1.0 if all(values) else 0.0 for values in race_top1.values()]),
+        "mean_actual_strategy_probability": _mean(actual_probs),
+        "log_loss": _mean(log_losses),
+    }
+
+
 def race_balanced_metrics(
     predictions: Iterable[tuple[StrategyResidualObservation, float]],
 ) -> dict[str, float | int]:
@@ -647,15 +713,27 @@ def run_walk_forward(
 
     model_predictions: list[tuple[StrategyResidualObservation, float]] = []
     baseline_predictions: list[tuple[StrategyResidualObservation, float]] = []
+    strategy_choice_predictions: list[
+        tuple[StrategyResidualObservation, dict[tuple[str, ...], StrategyPrediction]]
+    ] = []
     output_rows: list[dict[str, Any]] = []
 
     for target, history, oi in training_rows_by_target:
-        prediction = predict_actual_strategy(target, history, oi, config=config)
+        posterior = predict_strategy_distribution(target, history, oi, config=config)
+        if not posterior:
+            continue
+        prediction = posterior.get(target.strategy_family)
         if prediction is None:
             continue
 
+        strategy_choice_predictions.append((target, posterior))
         model_predictions.append((target, prediction.predicted_residual))
         baseline_predictions.append((target, 0.0))
+
+        predicted_family = max(
+            posterior.values(),
+            key=lambda p: (p.probability, -p.predicted_residual, str(p.strategy_family)),
+        ).strategy_family
 
         output_rows.append({
             "race_id": target.race_id,
@@ -666,6 +744,9 @@ def run_walk_forward(
             "driver_id": target.driver_id,
             "team_id": target.team_id,
             "strategy_family": strategy_family_label(target.strategy_family),
+            "predicted_strategy_family": strategy_family_label(predicted_family),
+            "strategy_top1_match": predicted_family == target.strategy_family,
+            "actual_strategy_probability": prediction.probability,
             "pit_buckets": "|".join(target.pit_buckets),
             "actual_finish": target.finish_position,
             "expected_pace_rank": target.expected_pace_rank,
@@ -677,6 +758,7 @@ def run_walk_forward(
 
     metrics = race_balanced_metrics(model_predictions)
     baseline_metrics = race_balanced_metrics(baseline_predictions)
+    choice_metrics = strategy_choice_metrics(strategy_choice_predictions)
 
     improvement_pct = (
         100.0 * (baseline_metrics["mae"] - metrics["mae"]) / baseline_metrics["mae"]
@@ -698,6 +780,7 @@ def run_walk_forward(
         "model_predictions": len(model_predictions),
         "model_metrics": metrics,
         "baseline_metrics": baseline_metrics,
+        "strategy_choice_metrics": choice_metrics,
         "mae_improvement_pct": improvement_pct,
         "pace_warnings": list(pace_warnings),
         "output_csv": output_csv,
@@ -711,6 +794,9 @@ def run_walk_forward(
     print(f"baseline_zero_mae={baseline_metrics['mae']:.4f}")
     print(f"mae_improvement_pct={improvement_pct:.3f}")
     print(f"positive_race_rate={metrics['positive_race_rate']:.3f}")
+    print(f"strategy_top1_accuracy={choice_metrics['top1_accuracy']:.3f}")
+    print(f"strategy_mean_actual_probability={choice_metrics['mean_actual_strategy_probability']:.3f}")
+    print(f"strategy_log_loss={choice_metrics['log_loss']:.4f}")
     print(f"correlation={metrics['correlation']:.4f}")
     print(f"wrote={output_csv}")
     print("Production integration intentionally disabled.")
