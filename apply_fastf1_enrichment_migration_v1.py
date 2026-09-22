@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 
 MIGRATION_PATH = Path(__file__).with_name("migration_fastf1_enrichment_v1.sql")
@@ -21,10 +21,9 @@ def main() -> None:
     sql = MIGRATION_PATH.read_text(encoding="utf-8")
     engine = create_engine(database_url)
     with engine.begin() as conn:
-        for statement in sql.split(";"):
-            statement = statement.strip()
-            if statement:
-                conn.execute(text(statement))
+        # Execute the migration as one PostgreSQL script. Splitting on semicolons
+        # is unsafe because SQL comments may become standalone statements.
+        conn.exec_driver_sql(sql)
 
     print("Applied FastF1 enrichment migration successfully")
 
