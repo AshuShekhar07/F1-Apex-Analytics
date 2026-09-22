@@ -170,13 +170,8 @@ def load_stints(engine, dry_race_ids: set[int]) -> pd.DataFrame:
             rs.compound,
             rs.start_lap,
             rs.end_lap,
-            rs.stint_length,
-            t.total_race_laps
+            rs.stint_length
         FROM race_stints rs
-        JOIN races r
-          ON r.id = rs.race_id
-        JOIN tracks t
-          ON t.id = r.track_id
         JOIN race_entries re
           ON re.id = rs.race_entry_id
         WHERE rs.race_id = ANY(:race_ids)
@@ -184,8 +179,41 @@ def load_stints(engine, dry_race_ids: set[int]) -> pd.DataFrame:
         """
     )
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"race_ids": list(dry_race_ids)})
-    return df
+        return pd.read_sql(query, conn, params={"race_ids": list(dry_race_ids)})
+
+
+def load_actual_race_laps(engine, dry_race_ids: set[int]) -> dict[int, int]:
+    """Return observed race distance (max recorded race lap) per dry race."""
+    if not dry_race_ids:
+        return {}
+
+    query = text(
+        """
+        SELECT
+            r.id AS race_id,
+            MAX(l.lap_number) AS actual_race_laps
+        FROM races r
+        JOIN sessions s
+          ON s.race_id = r.id
+         AND s.session_type = 'R'
+        JOIN laps l
+          ON l.session_id = s.id
+        WHERE r.id = ANY(:race_ids)
+          AND l.lap_number IS NOT NULL
+        GROUP BY r.id
+        """
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(
+            query,
+            {"race_ids": list(dry_race_ids)},
+        ).mappings().all()
+
+    return {
+        int(row["race_id"]): int(row["actual_race_laps"])
+        for row in rows
+        if row["actual_race_laps"] is not None
+    }
 
 
 def load_pit_stops(engine, dry_race_ids: set[int]) -> pd.DataFrame:
@@ -213,6 +241,7 @@ def reconstruct_observed_strategy_patterns(
     stints: pd.DataFrame,
     pit_stops: pd.DataFrame,
     context_df: pd.DataFrame,
+    actual_race_laps: dict[int, int],
 ) -> tuple[dict[tuple[int, int], dict[str, Any]], set[tuple[int, int]], set[tuple[int, int]]]:
     """
     Build driver-race strategy observations.
@@ -258,11 +287,11 @@ def reconstruct_observed_strategy_patterns(
 
         g = group.sort_values("stint_number").copy()
         g["compound"] = g["compound"].astype(str).str.upper()
-        total_laps_values = g["total_race_laps"].dropna().tolist()
-        if not total_laps_values:
-            continue
-        total_laps = int(total_laps_values[0])
-        if total_laps <= 0:
+
+        # Use the observed race distance, not nominal track distance. This
+        # handles races shortened by red flags or other race-ending events.
+        total_laps = actual_race_laps.get(race_id)
+        if total_laps is None or total_laps <= 0:
             continue
 
         initial = g.iloc[0]["compound"]
@@ -518,9 +547,15 @@ def run_audit(
     dry_race_ids = set(context["race_id"].astype(int)) if not context.empty else set()
     stints = load_stints(engine, dry_race_ids)
     pits = load_pit_stops(engine, dry_race_ids)
+    actual_race_laps = load_actual_race_laps(engine, dry_race_ids)
 
     patterns, all_driver_races, usable_driver_races = (
-        reconstruct_observed_strategy_patterns(stints, pits, context)
+        reconstruct_observed_strategy_patterns(
+            stints,
+            pits,
+            context,
+            actual_race_laps,
+        )
     )
 
     levels = {
@@ -575,6 +610,7 @@ def run_audit(
         "all_driver_race_stint_records": len(all_driver_races),
         "usable_driver_race_strategy_records": len(usable_driver_races),
         "pit_stop_records_used": int(len(pits)),
+        "races_with_observed_lap_distance": len(actual_race_laps),
         "archetype_grouping_exists": ARCHETYPE_GROUPING_EXISTS,
         "archetype_levels_tested": False,
         "level_sparsity": level_summaries,
@@ -599,6 +635,7 @@ def run_audit(
     print(f"all_driver_race_stint_records={len(all_driver_races)}")
     print(f"usable_driver_race_strategy_records={len(usable_driver_races)}")
     print(f"pit_stop_records_used={len(pits)}")
+    print(f"races_with_observed_lap_distance={len(actual_race_laps)}")
 
     print("\n=== PREREQUISITE GAP ===")
     print(
