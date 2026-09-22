@@ -100,7 +100,7 @@ def test_strategy_pattern_uses_actual_pit_table_and_keeps_same_compound_stop():
     )
 
     patterns, all_obs, usable = reconstruct_observed_strategy_patterns(
-        stints, pits, context, {1: 60}
+        stints, pits, context, {1: 60}, {(1, 10): 60}
     )
 
     key = (1, 10)
@@ -140,7 +140,7 @@ def test_unclassified_driver_is_not_usable():
     )
 
     patterns, all_obs, usable = reconstruct_observed_strategy_patterns(
-        stints, pits, context, {1: 50}
+        stints, pits, context, {1: 50}, {(1, 10): 50}
     )
 
     assert (1, 10) in all_obs
@@ -236,8 +236,46 @@ def test_observed_race_distance_not_nominal_track_distance():
     )
 
     patterns, _, usable = reconstruct_observed_strategy_patterns(
-        stints, pits, context, {2: 50}
+        stints, pits, context, {2: 50}, {(2, 20): 50}
     )
 
     assert (2, 20) in usable
     assert patterns[(2, 20)]["pit_buckets"] == ("late",)
+
+def test_classified_lapped_driver_uses_driver_laps_for_coverage():
+    stints = pd.DataFrame(
+        [
+            {
+                "race_id": 3,
+                "race_entry_id": 30,
+                "driver_id": 8,
+                "stint_number": 1,
+                "compound": "SOFT",
+                "start_lap": 1,
+                "end_lap": 48,
+                "stint_length": 48,
+            }
+        ]
+    )
+    pits = pd.DataFrame(columns=["race_id", "race_entry_id", "pit_lap", "source"])
+    context = pd.DataFrame(
+        [
+            {
+                "race_id": 3,
+                "race_entry_id": 30,
+                "driver_id": 8,
+                "finishing_status": "Lapped",
+            }
+        ]
+    )
+
+    patterns, _, usable = reconstruct_observed_strategy_patterns(
+        stints,
+        pits,
+        context,
+        {3: 50},
+        {(3, 30): 48},
+    )
+
+    assert (3, 30) in usable
+    assert patterns[(3, 30)]["stop_count"] == 0
