@@ -815,7 +815,7 @@ def run_walk_forward(
         "production_integration": False,
     }
 
-    print("=== LEAKAGE-SAFE EMPIRICAL STRATEGY PRIOR WALK-FORWARD V1 ===")
+    print("=== LEAKAGE-SAFE STRATEGY BEHAVIOR + RESIDUAL ASSOCIATION WALK-FORWARD V1 ===")
     print(f"target_races={result['target_races']}")
     print(f"model_predictions={result['model_predictions']}")
     print(f"model_race_balanced_mae={metrics['mae']:.4f}")
@@ -825,6 +825,7 @@ def run_walk_forward(
     print(f"strategy_top1_accuracy={choice_metrics['top1_accuracy']:.3f}")
     print(f"strategy_mean_actual_probability={choice_metrics['mean_actual_strategy_probability']:.3f}")
     print(f"strategy_log_loss={choice_metrics['log_loss']:.4f}")
+    print(f"strategy_mean_actual_effect_percentile={choice_metrics['mean_actual_effect_percentile']:.3f}")
     print(f"correlation={metrics['correlation']:.4f}")
     print(f"wrote={output_csv}")
     print("Production integration intentionally disabled.")
