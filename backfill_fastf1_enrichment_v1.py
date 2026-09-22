@@ -397,30 +397,57 @@ def backfill_weather_samples(engine, *, start_year: int, end_year: int) -> dict[
 
 
 def status_intervals(track_status: pd.DataFrame) -> list[dict[str, Any]]:
+    """Compress consecutive FastF1 status samples into status intervals."""
     if track_status is None or track_status.empty:
         return []
 
-    rows: list[tuple[float, str]] = []
+    samples: list[tuple[float, str]] = []
     for _, row in track_status.iterrows():
         timestamp = to_seconds(row.get("Time"))
         status = row.get("Status")
         if timestamp is None or status is None:
             continue
-        status_code = str(status)
-        if not rows or rows[-1] != (timestamp, status_code):
-            rows.append((timestamp, status_code))
+        samples.append((float(timestamp), str(status)))
+
+    if not samples:
+        return []
+
+    samples.sort(key=lambda item: item[0])
+
+    # FastF1 can contain repeated samples of the same status. It can also
+    # contain multiple status updates at the same timestamp; preserve the
+    # final state at that timestamp rather than creating zero-length intervals.
+    by_time: dict[float, str] = {}
+    for timestamp, status_code in samples:
+        by_time[timestamp] = status_code
+    ordered = sorted(by_time.items())
 
     intervals: list[dict[str, Any]] = []
-    for i, (start, status_code) in enumerate(rows):
-        end = rows[i + 1][0] if i + 1 < len(rows) else None
+    start_time, current_status = ordered[0]
+
+    for timestamp, status_code in ordered[1:]:
+        if status_code == current_status:
+            continue
+
         intervals.append(
             {
-                "start": round(start, 3),
-                "end": round(end, 3) if end is not None else None,
-                "status_code": status_code,
-                "status_name": TRACK_STATUS_NAMES.get(status_code, "UNKNOWN"),
+                "start": round(start_time, 3),
+                "end": round(timestamp, 3),
+                "status_code": current_status,
+                "status_name": TRACK_STATUS_NAMES.get(current_status, "UNKNOWN"),
             }
         )
+        start_time = timestamp
+        current_status = status_code
+
+    intervals.append(
+        {
+            "start": round(start_time, 3),
+            "end": None,
+            "status_code": current_status,
+            "status_name": TRACK_STATUS_NAMES.get(current_status, "UNKNOWN"),
+        }
+    )
     return intervals
 
 
