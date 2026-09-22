@@ -45,7 +45,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
 from race_status import is_classified
-from race_strategy_context_feasibility_audit_v1 import (
+from strategy_context_feasibility_audit_v1 import (
     load_dry_race_context,
     load_stints,
     load_pit_stops,
@@ -239,7 +239,10 @@ def posterior_strategy_prior(
     era_probs = _distribution_from_counts(era_counts)
     global_probs = _distribution_from_counts(global_counts)
 
-    families = set(global_counts)
+    # Include the target family even if it has never appeared in training.
+    # It then receives a zero-effect/default posterior rather than being
+    # silently dropped from evaluation.
+    families = set(global_counts) | {target.strategy_family}
     base_probs: dict[tuple[str, ...], float] = {}
     for family in families:
         base_probs[family] = (
@@ -680,9 +683,6 @@ def run_walk_forward(
         if math.isfinite(float(baseline_metrics["mae"])) and baseline_metrics["mae"] > 0
         else float("nan")
     )
-
-    seasons = sorted({row["year"] for row in []})
-    _ = seasons
 
     if output_csv:
         path = Path(output_csv)
