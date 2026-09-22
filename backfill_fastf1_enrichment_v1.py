@@ -893,8 +893,14 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                 coverage = conn.execute(
                     text(
                         """
-                        SELECT COUNT(*) AS total,
-                               COUNT(lap_start_time_seconds) AS populated
+                        SELECT
+                            COUNT(*) FILTER (WHERE lap_time_seconds IS NOT NULL)
+                                AS timed_laps,
+                            (
+                                SELECT COUNT(*)
+                                FROM lap_telemetry_summary lts
+                                WHERE lts.session_id = :session_id
+                            ) AS telemetry_rows
                         FROM laps
                         WHERE session_id = :session_id
                         """
@@ -902,17 +908,21 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                     {"session_id": session_id},
                 ).mappings().one()
 
-            total_laps = int(coverage["total"] or 0)
-            populated_laps = int(coverage["populated"] or 0)
-            if total_laps > 0 and total_laps == populated_laps:
+            timed_laps = int(coverage["timed_laps"] or 0)
+            telemetry_rows = int(coverage["telemetry_rows"] or 0)
+            if timed_laps > 0 and telemetry_rows >= timed_laps:
                 print(
                     f"  [skip] {year} R{rnd} {db_type}: "
-                    f"lap metadata already populated ({total_laps} laps)",
+                    f"telemetry summary already populated "
+                    f"({telemetry_rows}/{timed_laps} timed laps)",
                     flush=True,
                 )
                 sessions_done += 1
                 continue
 
+            # Telemetry backfill is independent of lap-metadata completeness.
+            # A session can have complete lap metadata and still have no
+            # telemetry summaries, so gate only on the target table above.
             session = api_call(
                 fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type]
             )
