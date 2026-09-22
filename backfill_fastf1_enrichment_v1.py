@@ -190,10 +190,9 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int) -> dict[str
             if laps is None or laps.empty:
                 continue
 
-            entries = entry_map(engine.connect(), race_id)
-            # Avoid keeping a connection open while FastF1 is being processed.
-            # A temporary connection above is short-lived and closed here.
-            #
+            with engine.connect() as conn:
+                entries = entry_map(conn, race_id)
+
             # Build a tiny update buffer first, then write one transaction.
             updates: list[dict[str, Any]] = []
             for _, row in laps.iterrows():
