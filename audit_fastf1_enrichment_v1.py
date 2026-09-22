@@ -59,6 +59,29 @@ def run_audit(engine, *, start_year: int, end_year: int) -> dict:
             {"start_year": start_year, "end_year": end_year},
         ).mappings().one()
 
+        lap_metadata_by_session = conn.execute(
+            text(
+                """
+                SELECT
+                    r.season_year,
+                    s.session_type,
+                    COUNT(*) AS total_laps,
+                    COUNT(l.lap_start_time_seconds) AS lap_start,
+                    COUNT(l.tyre_life_laps) AS tyre_life,
+                    COUNT(l.fresh_tyre) AS fresh_tyre,
+                    COUNT(l.speed_i1_kmh) AS speed_i1,
+                    COUNT(l.track_status_code) AS track_status
+                FROM laps l
+                JOIN sessions s ON s.id = l.session_id
+                JOIN races r ON r.id = s.race_id
+                WHERE r.season_year BETWEEN :start_year AND :end_year
+                GROUP BY r.season_year, s.session_type
+                ORDER BY r.season_year, s.session_type
+                """
+            ),
+            {"start_year": start_year, "end_year": end_year},
+        ).mappings().all()
+
         tables = {}
         for table in (
             "session_weather_samples",
@@ -94,6 +117,10 @@ def run_audit(engine, *, start_year: int, end_year: int) -> dict:
         "sessions": len(sessions),
         "session_counts": session_counts,
         "lap_metadata": {key: int(value or 0) for key, value in lap_rows.items()},
+        "lap_metadata_by_session": [
+            {key: int(value) if key not in {"session_type"} else str(value) for key, value in row.items()}
+            for row in lap_metadata_by_session
+        ],
         "enrichment_table_rows": tables,
         "telemetry_rows_by_session_type": {
             str(row["session_type"]): int(row["rows"]) for row in telemetry_by_session
@@ -104,6 +131,17 @@ def run_audit(engine, *, start_year: int, end_year: int) -> dict:
     print(f"sessions={result['sessions']}")
     print(f"session_counts={result['session_counts']}")
     print(f"lap_metadata={result['lap_metadata']}")
+    print("lap_metadata_by_session:")
+    for row in result["lap_metadata_by_session"]:
+        total = row["total_laps"] or 0
+        populated = row["lap_start"] or 0
+        coverage = 100.0 * populated / total if total else 0.0
+        print(
+            f"  {row['season_year']} {row['session_type']}: "
+            f"laps={total} lap_start={populated} coverage={coverage:.1f}% "
+            f"tyre_life={row['tyre_life']} fresh={row['fresh_tyre']} "
+            f"speed_i1={row['speed_i1']} track_status={row['track_status']}"
+        )
     print(f"enrichment_table_rows={result['enrichment_table_rows']}")
     print(
         "telemetry_rows_by_session_type="
