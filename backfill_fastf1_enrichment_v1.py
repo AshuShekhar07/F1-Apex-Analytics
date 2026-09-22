@@ -882,8 +882,16 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
         race_id = int(item["race_id"])
 
         try:
-            session = fastf1.get_session(year, rnd, SESSION_LOAD_NAMES[db_type])
-            api_call(session.load, laps=True, telemetry=False, weather=False, messages=False)
+            session = api_call(
+                fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type]
+            )
+            api_call(
+                session.load,
+                laps=True,
+                telemetry=False,
+                weather=False,
+                messages=False,
+            )
             laps = session.laps
             if laps is None or laps.empty:
                 continue
