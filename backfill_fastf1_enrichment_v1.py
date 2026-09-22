@@ -194,7 +194,7 @@ def entry_map(conn, race_id: int) -> dict[int, int]:
     return mapping
 
 
-def backfill_lap_metadata(engine, *, start_year: int, end_year: int) -> dict[str, int]:
+def backfill_lap_metadata(engine, *, start_year: int, end_year: int, session_types: tuple[str, ...] = ('FP2', 'Q', 'R')) -> dict[str, int]:
     updated = 0
     sessions_done = 0
     failures = 0
@@ -204,7 +204,7 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int) -> dict[str
             conn,
             start_year,
             end_year,
-            tuple(SESSION_LOAD_NAMES.keys()),
+            session_types,
         )
 
     print(f"[lap-metadata] sessions={len(sessions)}", flush=True)
@@ -882,6 +882,30 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
         race_id = int(item["race_id"])
 
         try:
+            with engine.connect() as conn:
+                coverage = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) AS total,
+                               COUNT(lap_start_time_seconds) AS populated
+                        FROM laps
+                        WHERE session_id = :session_id
+                        """
+                    ),
+                    {"session_id": session_id},
+                ).mappings().one()
+
+            total_laps = int(coverage["total"] or 0)
+            populated_laps = int(coverage["populated"] or 0)
+            if total_laps > 0 and total_laps == populated_laps:
+                print(
+                    f"  [skip] {year} R{rnd} {db_type}: "
+                    f"lap metadata already populated ({total_laps} laps)",
+                    flush=True,
+                )
+                sessions_done += 1
+                continue
+
             session = api_call(
                 fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type]
             )
@@ -1015,6 +1039,11 @@ def main() -> int:
         default="Q,FP2,R",
         help="Comma-separated DB session codes for telemetry mode",
     )
+    parser.add_argument(
+        "--lap-metadata-sessions",
+        default="Q,FP2,R",
+        help="Comma-separated DB session codes for lap-metadata mode",
+    )
     parser.add_argument("--cache-dir", default="")
     args = parser.parse_args()
 
@@ -1033,8 +1062,23 @@ def main() -> int:
     engine = create_engine(database_url)
 
     if args.mode in {"lap-metadata", "all"}:
+        lap_metadata_sessions = tuple(
+            token.strip().upper()
+            for token in args.lap_metadata_sessions.split(",")
+            if token.strip()
+        )
+        invalid = sorted(set(lap_metadata_sessions) - set(SESSION_LOAD_NAMES))
+        if invalid:
+            raise SystemExit(f"Unknown lap-metadata session type(s): {invalid}")
         print("\n=== LAP METADATA BACKFILL ===")
-        print(backfill_lap_metadata(engine, start_year=args.start_year, end_year=args.end_year))
+        print(
+            backfill_lap_metadata(
+                engine,
+                start_year=args.start_year,
+                end_year=args.end_year,
+                session_types=lap_metadata_sessions,
+            )
+        )
 
     if args.mode in {"weather", "all"}:
         print("\n=== WEATHER SAMPLE BACKFILL ===")
