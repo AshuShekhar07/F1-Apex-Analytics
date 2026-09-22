@@ -218,12 +218,10 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int, session_typ
 
         try:
             session = api_call(fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type])
-            # Lap.get_telemetry() requires the session's car/position
-            # telemetry to have been loaded first.
             api_call(
                 session.load,
                 laps=True,
-                telemetry=True,
+                telemetry=False,
                 weather=False,
                 messages=False,
             )
@@ -926,10 +924,12 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
             session = api_call(
                 fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type]
             )
+            # Lap.get_telemetry() requires the session's car and position
+            # telemetry to be loaded before requesting per-lap telemetry.
             api_call(
                 session.load,
                 laps=True,
-                telemetry=False,
+                telemetry=True,
                 weather=False,
                 messages=False,
             )
