@@ -102,3 +102,22 @@ CREATE INDEX IF NOT EXISTS idx_lap_telemetry_summary_entry_lap
 
 CREATE INDEX IF NOT EXISTS idx_lap_telemetry_summary_session
     ON lap_telemetry_summary(session_id);
+
+
+CREATE TABLE IF NOT EXISTS track_corners (
+    id BIGSERIAL PRIMARY KEY,
+    track_id INTEGER NOT NULL REFERENCES tracks(id),
+    season_year INTEGER NOT NULL,
+    corner_number INTEGER NOT NULL,
+    corner_letter VARCHAR(10),
+    x_coord NUMERIC(12,3),
+    y_coord NUMERIC(12,3),
+    angle_deg NUMERIC(8,3),
+    distance_m NUMERIC(12,3),
+    circuit_rotation_deg NUMERIC(8,3),
+    source VARCHAR(30) NOT NULL DEFAULT 'fastf1',
+    UNIQUE (track_id, season_year, corner_number, corner_letter, source)
+);
+
+CREATE INDEX IF NOT EXISTS idx_track_corners_track_year
+    ON track_corners(track_id, season_year);
