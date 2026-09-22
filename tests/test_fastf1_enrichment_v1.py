@@ -1,5 +1,6 @@
 import math
 import pandas as pd
+import pytest
 
 from backfill_fastf1_enrichment_v1 import (
     SESSION_LOAD_NAMES,
@@ -62,11 +63,11 @@ def test_telemetry_summary_extracts_core_metrics():
     result = telemetry_summary(df)
     assert result["mean_speed_kmh"] == 150.0
     assert result["max_speed_kmh"] == 200.0
-    assert result["full_throttle_pct"] == 66.66666666666666
-    assert result["brake_active_pct"] == 33.33333333333333
-    assert result["drs_active_pct"] == 33.33333333333333
+    assert result["full_throttle_pct"] == pytest.approx(66.66666666666667)
+    assert result["brake_active_pct"] == pytest.approx(33.33333333333333)
+    assert result["drs_active_pct"] == pytest.approx(33.33333333333333)
     assert result["distance_m"] == 2400.0
-    assert result["close_traffic_150m_pct"] == 33.33333333333333
+    assert result["close_traffic_150m_pct"] == pytest.approx(33.33333333333333)
     assert result["driver_ahead_samples"] == 3
     assert result["telemetry_quality"] == "full"
 
