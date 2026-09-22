@@ -892,7 +892,7 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
                     text(
                         """
                         SELECT
-                            COUNT(*) FILTER (WHERE lap_time_seconds IS NOT NULL)
+                            COUNT(*) FILTER (WHERE lap_time IS NOT NULL)
                                 AS timed_laps,
                             (
                                 SELECT COUNT(*)
