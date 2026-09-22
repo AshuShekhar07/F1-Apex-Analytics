@@ -27,6 +27,44 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 
+API_CALL_COUNT = 0
+THROTTLE_EVERY = 350
+THROTTLE_SECONDS = 15 * 60
+MAX_RETRIES = 3
+RETRY_SLEEP_SECONDS = 60 * 60
+
+
+def api_call(fn, *args, **kwargs):
+    """Call FastF1 with conservative throttling for large historical backfills."""
+    global API_CALL_COUNT
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            result = fn(*args, **kwargs)
+            API_CALL_COUNT += 1
+            if API_CALL_COUNT % THROTTLE_EVERY == 0:
+                print(
+                    f"  [throttle] {API_CALL_COUNT} FastF1 calls; "
+                    f"cooling down {THROTTLE_SECONDS // 60} min",
+                    flush=True,
+                )
+                time.sleep(THROTTLE_SECONDS)
+            return result
+        except Exception as exc:
+            message = str(exc).lower()
+            rate_limited = (
+                "rate" in message and "limit" in message
+            ) or "500 calls/h" in message or "too many requests" in message
+            if not rate_limited or attempt >= MAX_RETRIES:
+                raise
+            print(
+                f"  [rate limit] attempt {attempt}/{MAX_RETRIES}; "
+                f"sleeping {RETRY_SLEEP_SECONDS // 60} min",
+                flush=True,
+            )
+            time.sleep(RETRY_SLEEP_SECONDS)
+    raise RuntimeError("FastF1 API retry loop exhausted")
+
+
 SESSION_LOAD_NAMES = {
     "FP1": "Practice 1",
     "FP2": "Practice 2",
@@ -179,8 +217,9 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int) -> dict[str
         race_id = int(item["race_id"])
 
         try:
-            session = fastf1.get_session(year, rnd, SESSION_LOAD_NAMES[db_type])
-            session.load(
+            session = api_call(fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type])
+            api_call(
+                session.load,
                 laps=True,
                 telemetry=False,
                 weather=False,
@@ -322,8 +361,9 @@ def backfill_weather_samples(engine, *, start_year: int, end_year: int) -> dict[
             if exists:
                 continue
 
-            session = fastf1.get_session(year, rnd, SESSION_LOAD_NAMES[db_type])
-            session.load(
+            session = api_call(fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type])
+            api_call(
+                session.load,
                 laps=False,
                 telemetry=False,
                 weather=True,
@@ -521,16 +561,16 @@ def backfill_circuit_corners(engine, *, start_year: int, end_year: int) -> dict[
             if exists:
                 continue
 
-            session = fastf1.get_session(year, rnd, "Q")
-            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            session = api_call(fastf1.get_session, year, rnd, "Q")
+            api_call(session.load, laps=False, telemetry=False, weather=False, messages=False)
             info = session.get_circuit_info()
             corners = getattr(info, "corners", None)
             rotation = safe_float(getattr(info, "rotation", None))
             if corners is None or corners.empty:
                 # Some weekends may not expose Q circuit info; race is an
                 # independent fallback.
-                session = fastf1.get_session(year, rnd, "R")
-                session.load(laps=False, telemetry=False, weather=False, messages=False)
+                session = api_call(fastf1.get_session, year, rnd, "R")
+                api_call(session.load, laps=False, telemetry=False, weather=False, messages=False)
                 info = session.get_circuit_info()
                 corners = getattr(info, "corners", None)
                 rotation = safe_float(getattr(info, "rotation", None))
@@ -643,8 +683,9 @@ def backfill_race_events(engine, *, start_year: int, end_year: int) -> dict[str,
         session_id = int(item["session_id"])
 
         try:
-            session = fastf1.get_session(year, rnd, "Race")
-            session.load(
+            session = api_call(fastf1.get_session, year, rnd, "Race")
+            api_call(
+                session.load,
                 laps=False,
                 telemetry=False,
                 weather=False,
@@ -842,7 +883,7 @@ def backfill_telemetry(engine, *, start_year: int, end_year: int, session_types:
 
         try:
             session = fastf1.get_session(year, rnd, SESSION_LOAD_NAMES[db_type])
-            session.load(laps=True, telemetry=False, weather=False, messages=False)
+            api_call(session.load, laps=True, telemetry=False, weather=False, messages=False)
             laps = session.laps
             if laps is None or laps.empty:
                 continue
