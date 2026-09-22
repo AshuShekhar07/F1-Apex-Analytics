@@ -581,35 +581,63 @@ def strategy_choice_metrics(
             "log_loss": float("nan"),
         }
 
+    top1_hits: list[bool] = []
     race_top1: dict[int, list[bool]] = defaultdict(list)
     log_losses: list[float] = []
     actual_probs: list[float] = []
+    effect_percentiles: list[float] = []
     observations = 0
 
     for target, posterior in items:
         if not posterior:
             continue
+
         predicted_family = max(
             posterior.values(),
             key=lambda p: (p.probability, -p.predicted_residual, str(p.strategy_family)),
         ).strategy_family
-        actual_prob = max(
-            1e-12,
-            float(posterior.get(target.strategy_family, StrategyPrediction(
-                target.strategy_family, 0.0, 0.0, 0.0
-            )).probability),
+
+        actual_pred = posterior.get(
+            target.strategy_family,
+            StrategyPrediction(target.strategy_family, 0.0, 0.0, 0.0),
         )
-        race_top1[target.race_id].append(predicted_family == target.strategy_family)
+        actual_prob = max(1e-12, float(actual_pred.probability))
+
+        top1_hit = predicted_family == target.strategy_family
+        top1_hits.append(top1_hit)
+        race_top1[target.race_id].append(top1_hit)
         actual_probs.append(actual_prob)
         log_losses.append(-math.log(actual_prob))
+
+        # Descriptive placement of the actually chosen strategy in the
+        # learned residual-effect ordering. This is NOT a counterfactual
+        # performance estimate.
+        ordered_by_effect = sorted(
+            posterior.values(),
+            key=lambda p: (p.predicted_residual, -p.probability, str(p.strategy_family)),
+        )
+        actual_rank = next(
+            i for i, p in enumerate(ordered_by_effect, start=1)
+            if p.strategy_family == target.strategy_family
+        )
+        n_families = len(ordered_by_effect)
+        effect_percentiles.append(
+            1.0 - ((actual_rank - 1) / max(1, n_families - 1))
+            if n_families > 1 else 1.0
+        )
         observations += 1
 
     return {
         "races": len(race_top1),
         "observations": observations,
-        "top1_accuracy": _mean([1.0 if all(values) else 0.0 for values in race_top1.values()]),
+        "top1_accuracy": _mean([1.0 if x else 0.0 for x in top1_hits]),
+        "mean_race_top1_accuracy": _mean([
+            _mean([1.0 if x else 0.0 for x in values])
+            for values in race_top1.values()
+        ]),
         "mean_actual_strategy_probability": _mean(actual_probs),
         "log_loss": _mean(log_losses),
+        "mean_actual_effect_percentile": _mean(effect_percentiles),
     }
 
 
