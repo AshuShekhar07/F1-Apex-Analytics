@@ -731,13 +731,12 @@ def main() -> int:
         raise SystemExit("DATABASE_URL is not set")
 
     engine = create_engine(url)
-    with engine.connect() as db:
-        run_walk_forward(
-            db,
-            start_year=args.start_year,
-            end_year=args.end_year,
-            output_csv=args.csv,
-        )
+    run_walk_forward(
+        engine,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        output_csv=args.csv,
+    )
     return 0
 
 
