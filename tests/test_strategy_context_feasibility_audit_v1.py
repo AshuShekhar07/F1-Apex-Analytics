@@ -277,6 +277,7 @@ def test_classified_lapped_driver_uses_driver_laps_for_coverage():
         context,
         {3: 50},
         {(3, 30): 48},
+        pd.DataFrame(),
     )
 
     assert (3, 30) in usable
