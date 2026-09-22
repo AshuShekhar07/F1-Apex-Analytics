@@ -357,6 +357,18 @@ def reconstruct_observed_strategy_patterns(
                 next_compound = post_pit_compound_by_key.get(
                     (race_id, race_entry_id, pit_lap)
                 )
+
+                # Backward-compatible fallback for test fixtures / legacy data:
+                # when the pit-derived post-lap compound is unavailable, use the
+                # first stored stint that begins after this pit. Production runs
+                # use the FastF1 pit-derived value whenever available.
+                if next_compound is None:
+                    next_stints = g[g["start_lap"].astype(int) > pit_lap]
+                    if not next_stints.empty:
+                        next_compound = str(
+                            next_stints.sort_values("start_lap").iloc[0]["compound"]
+                        ).upper()
+
                 if next_compound is None:
                     valid = False
                     break
