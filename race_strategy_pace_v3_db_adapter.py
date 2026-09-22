@@ -7,10 +7,21 @@ from race_strategy_pace_calibration_v3 import EnrichedPaceObservation
 
 
 def _rows(db: Any, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
-    result = db.execute(text(sql), params)
-    if hasattr(result, "mappings"):
-        return [dict(row) for row in result.mappings().all()]
-    return [dict(row) for row in result]
+    """Execute through either a SQLAlchemy Connection or Engine."""
+    if hasattr(db, "execute"):
+        result = db.execute(text(sql), params)
+        if hasattr(result, "mappings"):
+            return [dict(row) for row in result.mappings().all()]
+        return [dict(row) for row in result]
+
+    if hasattr(db, "connect"):
+        with db.connect() as conn:
+            result = conn.execute(text(sql), params)
+            if hasattr(result, "mappings"):
+                return [dict(row) for row in result.mappings().all()]
+            return [dict(row) for row in result]
+
+    raise TypeError("db must be a SQLAlchemy Engine or Connection")
 
 
 def load_pace_observations(db: Any, *, start_year: int = 2018, end_year: int = 2026, era: str | None = None) -> tuple[tuple[EnrichedPaceObservation, ...], tuple[str, ...]]:
