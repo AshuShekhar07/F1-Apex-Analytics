@@ -10,7 +10,7 @@ router = APIRouter(prefix="/predict-and-compete", tags=["predict-and-compete"])
 @router.get("/{season_year}/{round_number}")
 def get_predict_and_compete(
     season_year: int = Path(..., ge=2018, le=2026),
-    round_number: int = Path(..., ge=1, le=23),
+    round_number: int = Path(..., ge=1, le=30),
     db: Session = Depends(get_db)
 ):
     race = db.execute(text("""
@@ -24,6 +24,8 @@ def get_predict_and_compete(
         raise HTTPException(status_code=404, detail="Race not found")
 
     # the model's real output: per-driver win probability for this specific race.
+    # simulate_season.py stores 'next_race' rows under as_of_round = the last
+    # COMPLETED round, so the prediction for round N lives at as_of_round N - 1.
     # NOT a full podium prediction -- the underlying simulator only computes win
     # probability, not joint podium combinations, so we don't fabricate a fake
     # "predicted P2/P3" the model never actually claimed.
@@ -35,7 +37,7 @@ def get_predict_and_compete(
         LEFT JOIN drivers d ON d.id = sp.entity_id
         LEFT JOIN race_entries re ON re.driver_id = sp.entity_id AND re.race_id = :race_id
         LEFT JOIN teams tm ON tm.id = re.team_id
-        WHERE sp.season_year = :sy AND sp.prediction_type = 'next_race' AND sp.as_of_round = :rn
+        WHERE sp.season_year = :sy AND sp.prediction_type = 'next_race' AND sp.as_of_round = :rn - 1
         ORDER BY sp.probability_pct DESC
     """), {"sy": season_year, "rn": round_number, "race_id": race["race_id"]}).mappings().all()
 

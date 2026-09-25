@@ -122,7 +122,7 @@ def get_driver_history(
         **dict(driver),
         "current_car_number": current_number_row["current_number"] if current_number_row else None,
         "career_summary": {
-            "races": len(history),
+            "races": int(career_stats["races"] or 0),
             "wins": wins,
             "podiums": podiums,
             "race_points": float(total_points),

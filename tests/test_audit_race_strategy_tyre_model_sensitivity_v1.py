@@ -21,11 +21,12 @@ def test_default_sensitivity_grid_has_expected_size():
 
 
 def test_summary_reports_v2_improvement_against_flat():
-    summary = [
-        {"model": "raw", "race_score_rmse": 3.0, "race_score_correlation": -0.1, "target_race_id": 1},
-        {"model": "v2", "race_score_rmse": 2.4, "race_score_correlation": 0.2, "target_race_id": 1},
-        {"model": "flat", "race_score_rmse": 2.5, "race_score_correlation": None, "target_race_id": 1},
-    ]
+    # _score_config returns race scores keyed by model (changed in ffefff4).
+    summary = {
+        "raw": [{"race_score_rmse": 3.0, "race_score_correlation": -0.1, "target_race_id": 1}],
+        "v2": [{"race_score_rmse": 2.4, "race_score_correlation": 0.2, "target_race_id": 1}],
+        "flat": [{"race_score_rmse": 2.5, "race_score_correlation": None, "target_race_id": 1}],
+    }
     stability = [
         {"low_confidence_training": False},
         {"low_confidence_training": True},

@@ -34,6 +34,7 @@ def compute_margins(db, season, era, position_col, results_table, session_type):
         JOIN {results_table} rr2 ON rr2.race_entry_id = re2.id
         JOIN sessions s ON s.race_id = r.id AND s.session_type = '{session_type}'
             AND rr1.session_id = s.id
+            AND rr2.session_id = s.id
         JOIN session_weather sw ON sw.session_id = s.id
         WHERE {' AND '.join(filters)}
     """

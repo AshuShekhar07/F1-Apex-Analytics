@@ -408,7 +408,7 @@ def get_position_battle(
         driver["positions_gained"] = (
             grid - finish
             if (
-                driver["status"] == "Finished"
+                is_classified(driver["status"])
                 and grid is not None
                 and finish is not None
             )
@@ -502,6 +502,8 @@ def get_qualifying(race_id: int, db: Session = Depends(get_db)):
 
         if row["q3_time"] is not None:
             eliminated_in = None
+        elif row["q2_time"] is not None and row["final_position"] is not None and row["final_position"] <= 10:
+            eliminated_in = None  # reached Q3 (always top 10) but set no Q3 time
         elif row["q2_time"] is not None:
             eliminated_in = "Q2"
         elif row["q1_time"] is not None:

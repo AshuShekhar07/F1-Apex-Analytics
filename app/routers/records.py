@@ -39,6 +39,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     top_driver("""
         SELECT d.name AS driver_name, COUNT(*) AS value
         FROM qualifying_results qr
+        JOIN sessions s ON s.id = qr.session_id AND s.session_type = 'Q'
         JOIN race_entries re ON re.id = qr.race_entry_id
         JOIN drivers d ON d.id = re.driver_id
         WHERE qr.final_position = 1

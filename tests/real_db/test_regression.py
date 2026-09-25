@@ -117,7 +117,7 @@ def test_global_invalid_cases():
     cases = [
         ("/races?season=2017", 422),
         ("/predict-and-compete/2017/1", 422),
-        ("/predict-and-compete/2026/24", 422),
+        ("/predict-and-compete/2026/31", 422),
         ("/races/137/practice/XYZ", 422),
         ("/compare/10/10", 422),
         ("/drivers/999999/profile", 404),

@@ -28,23 +28,33 @@ def get_practice_results(race_id: int, session_type: str, db: Session = Depends(
             FROM sessions s
             WHERE s.race_id = :race_id AND s.session_type = :session_type
         ),
-        best_laps AS (
-            SELECT
-                re.driver_id,
-                MIN(l.lap_time) AS best_lap_time,
-                COUNT(l.id) AS total_laps
+        -- rank per race entry, not per driver: FP1 reserve/rookie drivers have
+        -- their own entry (role != 'race_driver') and belong in the classification.
+        -- Laps deleted for track limits (FastF1 enrichment) do not count, matching
+        -- official timing; unenriched laps have is_deleted NULL and still count.
+        eligible_laps AS (
+            SELECT l.*
             FROM laps l
-            JOIN race_entries re ON l.race_entry_id = re.id
             WHERE l.session_id = (SELECT session_id FROM session_pick)
-            GROUP BY re.driver_id
+              AND l.lap_time IS NOT NULL
+              AND COALESCE(l.is_deleted, false) = false
+        ),
+        lap_counts AS (
+            SELECT l.race_entry_id, COUNT(l.id) AS total_laps
+            FROM laps l
+            WHERE l.session_id = (SELECT session_id FROM session_pick)
+            GROUP BY l.race_entry_id
+        ),
+        best_laps AS (
+            SELECT el.race_entry_id, MIN(el.lap_time) AS best_lap_time
+            FROM eligible_laps el
+            GROUP BY el.race_entry_id
         ),
         best_lap_detail AS (
-            SELECT DISTINCT ON (re.driver_id)
-                re.driver_id, l.sector_1_time, l.sector_2_time, l.sector_3_time, l.tire_compound
-            FROM laps l
-            JOIN race_entries re ON l.race_entry_id = re.id
-            WHERE l.session_id = (SELECT session_id FROM session_pick)
-            ORDER BY re.driver_id, l.lap_time ASC
+            SELECT DISTINCT ON (el.race_entry_id)
+                el.race_entry_id, el.sector_1_time, el.sector_2_time, el.sector_3_time, el.tire_compound
+            FROM eligible_laps el
+            ORDER BY el.race_entry_id, el.lap_time ASC, el.lap_number ASC
         ),
         track_record AS (
             SELECT MIN(l.lap_time) AS record_time
@@ -60,24 +70,24 @@ def get_practice_results(race_id: int, session_type: str, db: Session = Depends(
             RANK() OVER (ORDER BY bl.best_lap_time ASC) AS position,
             d.id AS driver_id,
             d.name AS driver,
+            re.role,
             tm.name AS team,
             tm.logo_url,
             bl.best_lap_time,
             bl.best_lap_time - MIN(bl.best_lap_time) OVER () AS gap_to_fastest,
-            bl.total_laps,
+            lc.total_laps,
             bld.tire_compound,
             bld.sector_1_time,
             bld.sector_2_time,
             bld.sector_3_time,
             bl.best_lap_time - (SELECT record_time FROM track_record) AS delta_to_track_record
         FROM best_laps bl
-        JOIN drivers d ON bl.driver_id = d.id
-        JOIN best_lap_detail bld ON bld.driver_id = bl.driver_id
-        JOIN race_entries re ON re.driver_id = bl.driver_id
-            AND re.race_id = :race_id AND re.role = 'race_driver'
+        JOIN race_entries re ON re.id = bl.race_entry_id AND re.race_id = :race_id
+        JOIN drivers d ON d.id = re.driver_id
+        JOIN best_lap_detail bld ON bld.race_entry_id = bl.race_entry_id
+        JOIN lap_counts lc ON lc.race_entry_id = bl.race_entry_id
         JOIN teams tm ON re.team_id = tm.id
-        WHERE bl.best_lap_time IS NOT NULL
-        ORDER BY position
+        ORDER BY position, d.name
     """), {"race_id": race_id, "session_type": session_type}).mappings().all()
 
     return {
