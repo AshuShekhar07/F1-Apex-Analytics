@@ -359,5 +359,9 @@ def get_driver_profile(driver_id: int, db: Session = Depends(get_db)):
         "current_team": dict(current_team) if current_team else None,
         "team_history": combined_team_history,
         "track_records_held": [dict(r) for r in track_records],
+        "track_records_note": (
+            "fastest valid race lap stored per circuit since 2018 (any layout), "
+            "not official FIA lap records"
+        ),
         "last_gp_win": dict(last_win) if last_win else None,
     }

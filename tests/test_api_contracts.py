@@ -220,6 +220,13 @@ def test_overtaking_index_by_era(client):
     # |2-1| + |1-2| + |4-3| + |3-4| over 4 cars; note the retired car (C) is counted
     assert eras["era1_13inch"]["avg_position_change"] == 1.0
     assert eras["era2_18inch_groundeffect"]["avg_position_change"] == 0.0
+    # finishers only: A, B, D each moved one place; retired C excluded
+    assert eras["era1_13inch"]["avg_position_change_classified"] == 1.0
+    assert body["overtaking"]["overall"]["avg_position_change_classified"] == 0.43  # 3 places over 7 finishers
+
+
+def test_practice_labels_track_record_source(client):
+    assert "not the official FIA lap record" in client.get("/races/1/practice/FP1").json()["track_record_note"]
 
 
 def test_track_stats_winners(client):

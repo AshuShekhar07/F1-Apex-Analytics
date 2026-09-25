@@ -93,5 +93,9 @@ def get_practice_results(race_id: int, session_type: str, db: Session = Depends(
     return {
         "race": dict(race),
         "session_type": session_type,
+        "track_record_note": (
+            "delta_to_track_record compares with the fastest valid race lap stored for this "
+            "circuit since 2018 (any layout), not the official FIA lap record"
+        ),
         "results": [dict(r) for r in rows],
     }

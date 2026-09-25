@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
+from race_status import CLASSIFIED_STATUSES
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
@@ -58,7 +59,10 @@ def get_overtaking_index(track_id: int, db: Session = Depends(get_db)):
         SELECT r.regulation_era,
                AVG(ABS(rr.starting_grid_position - rr.finishing_position)) AS avg_position_change,
                COUNT(*) AS driver_race_count,
-               COUNT(DISTINCT r.id) AS races_counted
+               COUNT(DISTINCT r.id) AS races_counted,
+               AVG(ABS(rr.starting_grid_position - rr.finishing_position)) FILTER (
+                   WHERE rr.status = ANY(:classified) AND rr.starting_grid_position > 0
+               ) AS avg_position_change_classified
         FROM race_results rr
         JOIN race_entries re ON re.id = rr.race_entry_id
         JOIN races r ON r.id = re.race_id
@@ -68,12 +72,15 @@ def get_overtaking_index(track_id: int, db: Session = Depends(get_db)):
           AND rr.finishing_position IS NOT NULL
         GROUP BY r.regulation_era
         ORDER BY r.regulation_era
-    """), {"id": track_id}).mappings().all()
+    """), {"id": track_id, "classified": list(CLASSIFIED_STATUSES)}).mappings().all()
 
     overall = db.execute(text("""
         SELECT AVG(ABS(rr.starting_grid_position - rr.finishing_position)) AS avg_position_change,
                COUNT(*) AS driver_race_count,
-               COUNT(DISTINCT r.id) AS races_counted
+               COUNT(DISTINCT r.id) AS races_counted,
+               AVG(ABS(rr.starting_grid_position - rr.finishing_position)) FILTER (
+                   WHERE rr.status = ANY(:classified) AND rr.starting_grid_position > 0
+               ) AS avg_position_change_classified
         FROM race_results rr
         JOIN race_entries re ON re.id = rr.race_entry_id
         JOIN races r ON r.id = re.race_id
@@ -81,7 +88,7 @@ def get_overtaking_index(track_id: int, db: Session = Depends(get_db)):
         WHERE r.track_id = :id
           AND rr.starting_grid_position IS NOT NULL
           AND rr.finishing_position IS NOT NULL
-    """), {"id": track_id}).mappings().first()
+    """), {"id": track_id, "classified": list(CLASSIFIED_STATUSES)}).mappings().first()
 
     # safety car / VSC historical likelihood at this track (same logic used by the
     # tire strategy predictor's flexibility note)
@@ -104,16 +111,22 @@ def get_overtaking_index(track_id: int, db: Session = Depends(get_db)):
         "overtaking": {
             "overall": {
                 "avg_position_change": round(float(overall["avg_position_change"]), 2) if overall["avg_position_change"] is not None else None,
+                "avg_position_change_classified": round(float(overall["avg_position_change_classified"]), 2) if overall["avg_position_change_classified"] is not None else None,
                 "races_counted": overall["races_counted"],
             },
             "by_regulation_era": [
                 {
                     "regulation_era": row["regulation_era"],
                     "avg_position_change": round(float(row["avg_position_change"]), 2),
+                    "avg_position_change_classified": round(float(row["avg_position_change_classified"]), 2) if row["avg_position_change_classified"] is not None else None,
                     "races_counted": row["races_counted"],
                 }
                 for row in by_era
             ],
+        },
+        "notes": {
+            "avg_position_change": "all cars with a grid and finishing position; retirements count as positions lost",
+            "avg_position_change_classified": "classified finishers only, pit-lane starts excluded",
         },
         "safety_car_likelihood_pct": sc_likelihood_pct,
         "safety_car_sample_races": sc_row["total_races"] if sc_row else 0,
