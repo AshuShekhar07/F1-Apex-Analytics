@@ -3,6 +3,11 @@
 Found by the forecast batch: 2025 Miami (race 155) and Imola (race 156) have 20
 qualifying rows each but no lap times, so no forecast or backtest can use them.
 
+Source: FastF1's qualifying results table. When that table has no times (2025
+Miami), fall back to FastF1's lap timing: split the session into Q1/Q2/Q3 and
+take each driver's fastest lap that was not deleted for track limits. That is
+official timing data, not an estimate; the script reports when it was used.
+
 Safety:
   * only NULL time columns are filled; existing times and positions are never changed
   * drivers are matched by car number within the race (race_entries.car_number)
@@ -63,6 +68,22 @@ def planned_updates(results: list[dict], entries: dict[int, int]) -> tuple[list[
     return updates, unmatched
 
 
+def results_from_lap_timing(segments) -> list[dict]:
+    """Rows shaped like FastF1 results ({"DriverNumber", "Q1", "Q2", "Q3"}) built from
+    the fastest non-deleted lap of each driver in each qualifying segment."""
+    best: dict[str, dict] = {}
+    for label, laps in zip(("Q1", "Q2", "Q3"), segments):
+        if laps is None or len(laps) == 0:
+            continue
+        frame = laps[laps["LapTime"].notna()]
+        if "Deleted" in frame.columns:
+            deleted = frame["Deleted"].map(lambda v: v is True or v == True)  # noqa: E712  (NA -> not deleted)
+            frame = frame[~deleted.astype(bool)]
+        for number, lap_time in frame.groupby("DriverNumber")["LapTime"].min().items():
+            best.setdefault(str(number), {"DriverNumber": str(number)})[label] = lap_time
+    return list(best.values())
+
+
 def apply_updates(conn, session_id: int, updates: list[dict]) -> int:
     changed = 0
     for u in updates:
@@ -105,8 +126,17 @@ def main() -> int:
                 "SELECT id FROM sessions WHERE race_id = :r AND session_type = 'Q'"), {"r": m["id"]}).scalar()
             session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
             session.load(laps=False, telemetry=False, weather=False, messages=False)
-            updates, unmatched = planned_updates(session.results.to_dict("records"), entry_map(conn, m["id"]))
-            print(f"race {m['id']} {m['track_name']}: FastF1 times for {len(updates)} drivers"
+            entries = entry_map(conn, m["id"])
+            updates, unmatched = planned_updates(session.results.to_dict("records"), entries)
+            source = "results table"
+            if not updates:
+                # results table empty: use lap timing (needs laps + status + race control messages)
+                session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
+                session.load(laps=True, telemetry=False, weather=False, messages=True)
+                rows = results_from_lap_timing(session.laps.split_qualifying_sessions())
+                updates, unmatched = planned_updates(rows, entries)
+                source = "lap timing (fastest non-deleted lap per segment)"
+            print(f"race {m['id']} {m['track_name']}: FastF1 times for {len(updates)} drivers from {source}"
                   + (f"; car numbers not in this race: {unmatched}" if unmatched else ""))
             if args.apply:
                 print(f"  updated {apply_updates(conn, session_id, updates)} rows")

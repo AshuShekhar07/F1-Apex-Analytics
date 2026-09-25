@@ -38,3 +38,22 @@ def test_apply_only_fills_missing_times(fixture_db_url):
     assert changed == 2
     assert [float(x) for x in rows[entries[1]]] == [90.5, 90.0, 89.5]
     assert [float(x) for x in rows[entries[2]]] == [90.6, 90.1, 70.0]
+
+
+def test_results_from_lap_timing_uses_fastest_non_deleted_lap_per_segment():
+    import pandas as pd
+
+    from fix_missing_quali_times_v1 import results_from_lap_timing
+
+    def laps(rows):
+        return pd.DataFrame(rows, columns=["DriverNumber", "LapTime", "Deleted"])
+
+    q1 = laps([("1", timedelta(seconds=81.0), False), ("1", timedelta(seconds=80.2), True),   # deleted
+               ("1", timedelta(seconds=80.6), False), ("44", timedelta(seconds=80.9), None),
+               ("44", pd.NaT, False)])
+    q2 = laps([("1", timedelta(seconds=80.1), False)])
+    rows = {r["DriverNumber"]: r for r in results_from_lap_timing([q1, q2, None])}
+    assert rows["1"] == {"DriverNumber": "1", "Q1": timedelta(seconds=80.6), "Q2": timedelta(seconds=80.1)}
+    assert rows["44"] == {"DriverNumber": "44", "Q1": timedelta(seconds=80.9)}
+    updates, _ = planned_updates(list(rows.values()), {1: 10, 44: 11})
+    assert {u["entry"]: (u["q1"], u["q2"], u["q3"]) for u in updates} == {10: (80.6, 80.1, None), 11: (80.9, None, None)}
