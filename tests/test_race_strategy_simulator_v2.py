@@ -138,3 +138,14 @@ def test_dry_only_guard():
     wet = Strategy("INTER", (StrategyStint("INTERMEDIATE", 1, LAPS),))
     with pytest.raises(ValueError, match="dry-only"):
         finish([car("A", 1, strategy=wet)], track())
+
+
+def test_retirements_are_classified_behind_finishers():
+    trk = TrackModel(**{**track().__dict__, "dnf_probability": 0.5})
+    cars = [car(f"C{i}", i + 1) for i in range(6)]
+    positions = simulate_race(cars, trk, NO_EVENTS, sims=400, seed=5)
+    # every car retires in roughly half the simulations, so even the pole car often finishes last
+    assert 0.3 < (positions[:, 0] >= 4).mean() < 0.8
+    assert all(sorted(row) == list(range(1, 7)) for row in positions)
+    no_dnf = simulate_race(cars, track(), NO_EVENTS, sims=50, seed=5)
+    assert (no_dnf == [1, 2, 3, 4, 5, 6]).all()

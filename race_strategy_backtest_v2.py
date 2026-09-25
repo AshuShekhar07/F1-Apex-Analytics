@@ -1,22 +1,24 @@
-"""Walk-forward backtest for strategy simulator v2, scored against EXTERNAL baselines.
+"""Walk-forward backtest of the layered strategy stack, for EVERY starter.
 
-The v1 backtest's "model better rate" compared the simulator's chosen strategy
-with the simulator's own expected finish for a fixed MEDIUM->HARD plan, so it
-never measured anything outside the model. Here every metric is compared with a
-simple baseline that does not use the simulator:
+Layers under test (see README "Strategy stack"):
+  1. strategy precedent  (race_strategy_precedent_v1) -- which strategy a car will run
+  2. outcome simulator   (race_strategy_simulator_v2) -- finishing position, P(win), P(podium)
+     with race pace from qualifying (race_pace_from_quali_v1), precedent strategies for
+     every car, retirements, SC/VSC hazards and pit loss v2
+  3. optimiser -- deliberately OFF: no validated tyre model exists, and the first
+     backtest showed the optimiser picking SOFT-MEDIUM-SOFT in all 34 races.
 
-  finish position   v2 expected finish      vs  grid position (finish = start)
-  win probability   Brier score of v2 P(P1) vs  historical pole-to-win rate
-  strategy          sequence / stop count / first-stop lap
-                                            vs  the era's most common strategy
+Every metric is compared with a baseline that does not use the layer under test:
+  finish position   simulator expected finish   vs  grid position
+  P(win), P(podium) simulator probabilities     vs  historical rate for that grid slot
+  strategy          precedent (track/grid band) vs  era's most common strategy
 
-Targets match race_strategy_real_backtest_v1 (the pole sitter of each dry race).
-Inputs use only seasons before the target (as v1), except pit loss, which uses
-races strictly before the target date. Competitor strategies and our candidate
-stop windows come from real race_stints history, not evenly spaced guesses.
+Confidence intervals resample whole RACES (drivers in one race are not
+independent). A layer is production-ready only if its interval lies entirely
+below zero (lower = better for every metric here).
 
-Paired bootstrap confidence intervals are reported for v2 - baseline. v2 should
-only replace v1 if its intervals are below zero out of sample.
+Walk-forward: every input uses seasons before the target season, except pit
+loss, which uses races before the target date.
 
     python race_strategy_backtest_v2.py --start-year 2024 --end-year 2025 --csv backtest_v2.csv
 """
@@ -29,100 +31,57 @@ import os
 import random
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from statistics import mean, median
-from typing import Any, Iterable, Sequence
+from statistics import mean
+from typing import Any, Sequence
 
+import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-from race_strategy_simulator_v1 import DRY_COMPOUNDS, Distribution, Strategy, StrategyStint, TyreAllocation
-from race_strategy_simulator_v2 import CarSpec, EventModel, TrackModel, evaluate_candidates
+from race_pace_from_quali_v1 import best_quali_times, fit_model, quali_gaps
+from race_pace_from_quali_v1 import load_observations as load_pace_observations
+from race_status import DNF_STATUSES
+from race_strategy_precedent_v1 import (
+    historical_strategy_options,
+    load_precedents,
+    precedent_options,
+)
+from race_strategy_simulator_v1 import Distribution, Strategy, StrategyStint, TyreAllocation
+from race_strategy_simulator_v2 import CarSpec, EventModel, TrackModel, simulate_race
 
 DEFAULT_ALLOCATION = TyreAllocation({"SOFT": 2, "MEDIUM": 2, "HARD": 2})
 
 
 @dataclass(frozen=True)
-class HistoricalStrategy:
-    sequence: tuple[str, ...]
-    stop_fractions: tuple[float, ...]  # stop lap / race laps
-
-
-@dataclass(frozen=True)
-class BacktestRow:
+class DriverRow:
     race_id: int
     year: int
+    driver_id: int
     grid: int
     actual_finish: int
-    actual_win: int
+    status: str | None
+    expected_finish: float
+    p_win: float
+    p_podium: float
+    baseline_p_win: float
+    baseline_p_podium: float
     actual_sequence: str | None
-    v2_selected: str
-    v2_expected_finish: float
-    v2_p1: float
-    v2_sequence_match: int | None
-    v2_stop_count_match: int | None
-    v2_first_stop_error: float | None
-    baseline_p1: float
-    baseline_strategy: str
-    baseline_sequence_match: int | None
-    baseline_stop_count_match: int | None
-    baseline_first_stop_error: float | None
-    pit_loss_source: str
-    competitors: int
+    precedent_strategy: str | None
+    precedent_source: str
+    precedent_sequence_match: int | None
+    precedent_stop_count_match: int | None
+    precedent_first_stop_error: float | None
+    era_mode_strategy: str | None
+    era_mode_sequence_match: int | None
+    era_mode_stop_count_match: int | None
+    era_mode_first_stop_error: float | None
 
 
 # --- pure helpers --------------------------------------------------------------
 
-def _is_legal_dry(sequence: Sequence[str]) -> bool:
-    return len(sequence) >= 2 and all(c in DRY_COMPOUNDS for c in sequence) and len(set(sequence)) >= 2
-
-
-def _strategy(sequence: Sequence[str], stops: Sequence[int], total_laps: int, name_prefix: str) -> Strategy | None:
-    stops = [max(2, min(total_laps - 1, int(s))) for s in stops]
-    if any(b <= a for a, b in zip(stops, stops[1:])):
-        return None
-    bounds = [0, *stops, total_laps]
-    stints = tuple(StrategyStint(sequence[i], bounds[i] + 1, bounds[i + 1]) for i in range(len(sequence)))
-    return Strategy(f"{name_prefix}{' → '.join(sequence)} [{','.join(map(str, stops))}]", stints, source="history")
-
-
-def historical_strategy_options(
-    history: Iterable[HistoricalStrategy], total_laps: int, *, top_k: int = 6
-) -> list[tuple[Strategy, float]]:
-    """Most frequent legal dry sequences with median stop laps, weighted by frequency."""
-    by_sequence: dict[tuple[str, ...], list[tuple[float, ...]]] = defaultdict(list)
-    for h in history:
-        if _is_legal_dry(h.sequence) and len(h.stop_fractions) == len(h.sequence) - 1:
-            by_sequence[h.sequence].append(h.stop_fractions)
-    ranked = sorted(by_sequence.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:top_k]
-    options = []
-    for sequence, fractions in ranked:
-        stops = [round(median(f[i] for f in fractions) * total_laps) for i in range(len(sequence) - 1)]
-        strategy = _strategy(sequence, stops, total_laps, "")
-        if strategy is not None:
-            options.append((strategy, float(len(fractions))))
-    return options
-
-
-def candidates_from_options(
-    options: Sequence[tuple[Strategy, float]], total_laps: int, offsets: Sequence[int] = (-6, -3, 0, 3, 6)
-) -> list[Strategy]:
-    """Our candidates: each historical sequence with its stops shifted by each offset."""
-    seen, out = set(), []
-    for strategy, _ in options:
-        for offset in offsets:
-            candidate = _strategy(strategy.sequence, [s + offset for s in strategy.stop_laps], total_laps, "")
-            if candidate is None:
-                continue
-            key = tuple((s.compound, s.start_lap, s.end_lap) for s in candidate.stints)
-            if key not in seen:
-                seen.add(key)
-                out.append(candidate)
-    return out
-
-
-def strategy_metrics(selected: Strategy, actual: Strategy | None) -> tuple[int | None, int | None, float | None]:
+def strategy_metrics(selected: Strategy | None, actual: Strategy | None) -> tuple[int | None, int | None, float | None]:
     """(sequence match, stop-count match, first-stop lap error) against the realised strategy."""
-    if actual is None:
+    if selected is None or actual is None:
         return None, None, None
     first = (abs(selected.stop_laps[0] - actual.stop_laps[0])
              if selected.stop_laps and actual.stop_laps else None)
@@ -135,184 +94,233 @@ def brier(probability: float, outcome: int) -> float:
     return (probability - outcome) ** 2
 
 
-def paired_bootstrap_ci(differences: Sequence[float], *, seed: int = 11, draws: int = 4000) -> tuple[float, float, float]:
-    """Mean difference with a 90% percentile bootstrap interval (resampling races)."""
-    values = [d for d in differences if d is not None]
-    if not values:
+def grid_slot_rates(history: Sequence[tuple[int, int]], field_size: int = 20) -> dict[int, tuple[float, float]]:
+    """P(win), P(podium) by grid slot from (grid, finish) history, Laplace-smoothed."""
+    counts = defaultdict(lambda: [0, 0, 0])
+    for grid, finish in history:
+        c = counts[grid]
+        c[0] += 1
+        c[1] += int(finish == 1)
+        c[2] += int(finish <= 3)
+    return {
+        g: ((counts[g][1] + 1 / field_size) / (counts[g][0] + 1),
+            (counts[g][2] + 3 / field_size) / (counts[g][0] + 1))
+        for g in range(1, field_size + 3)
+    }
+
+
+def race_clustered_ci(rows: Sequence[Any], metric, *, seed: int = 11, draws: int = 4000) -> tuple[float, float, float]:
+    """Mean of per-race means of metric(row) with a 90% bootstrap interval over races."""
+    per_race = defaultdict(list)
+    for row in rows:
+        value = metric(row)
+        if value is not None:
+            per_race[row.race_id].append(value)
+    race_means = [mean(v) for v in per_race.values() if v]
+    if not race_means:
         return float("nan"), float("nan"), float("nan")
     rng = random.Random(seed)
-    means = sorted(mean(rng.choices(values, k=len(values))) for _ in range(draws))
-    return mean(values), means[int(0.05 * draws)], means[int(0.95 * draws) - 1]
+    boots = sorted(mean(rng.choices(race_means, k=len(race_means))) for _ in range(draws))
+    return mean(race_means), boots[int(0.05 * draws)], boots[int(0.95 * draws) - 1]
 
 
-def summarise(rows: Sequence[BacktestRow]) -> dict[str, Any]:
-    finish_v2 = [abs(r.v2_expected_finish - r.actual_finish) for r in rows]
-    finish_base = [abs(r.grid - r.actual_finish) for r in rows]
-    brier_v2 = [brier(r.v2_p1, r.actual_win) for r in rows]
-    brier_base = [brier(r.baseline_p1, r.actual_win) for r in rows]
+def summarise(rows: Sequence[DriverRow]) -> dict[str, Any]:
+    def diff(a, b):
+        return lambda r: (a(r) - b(r)) if a(r) is not None and b(r) is not None else None
 
-    def rate(values):
-        values = [v for v in values if v is not None]
-        return (mean(values), len(values)) if values else (float("nan"), 0)
+    sim_err = lambda r: abs(r.expected_finish - r.actual_finish)
+    grid_err = lambda r: abs(r.grid - r.actual_finish)
+    sim_win = lambda r: brier(r.p_win, int(r.actual_finish == 1))
+    base_win = lambda r: brier(r.baseline_p_win, int(r.actual_finish == 1))
+    sim_pod = lambda r: brier(r.p_podium, int(r.actual_finish <= 3))
+    base_pod = lambda r: brier(r.baseline_p_podium, int(r.actual_finish <= 3))
+    miss = lambda field: (lambda r: None if getattr(r, field) is None else 1 - getattr(r, field))
+    err = lambda field: (lambda r: getattr(r, field))
 
     return {
-        "races": len(rows),
-        "finish_mae": {"v2": mean(finish_v2), "grid_baseline": mean(finish_base),
-                       "v2_minus_baseline": paired_bootstrap_ci([a - b for a, b in zip(finish_v2, finish_base)])},
-        "win_brier": {"v2": mean(brier_v2), "pole_rate_baseline": mean(brier_base),
-                      "v2_minus_baseline": paired_bootstrap_ci([a - b for a, b in zip(brier_v2, brier_base)])},
-        "sequence_match": {"v2": rate(r.v2_sequence_match for r in rows),
-                           "era_mode_baseline": rate(r.baseline_sequence_match for r in rows)},
-        "stop_count_match": {"v2": rate(r.v2_stop_count_match for r in rows),
-                             "era_mode_baseline": rate(r.baseline_stop_count_match for r in rows)},
-        "first_stop_error_laps": {"v2": rate(r.v2_first_stop_error for r in rows),
-                                  "era_mode_baseline": rate(r.baseline_first_stop_error for r in rows)},
+        "races": len({r.race_id for r in rows}),
+        "drivers": len(rows),
+        "finish_mae": (race_clustered_ci(rows, sim_err)[0], race_clustered_ci(rows, grid_err)[0],
+                       race_clustered_ci(rows, diff(sim_err, grid_err))),
+        "win_brier": (race_clustered_ci(rows, sim_win)[0], race_clustered_ci(rows, base_win)[0],
+                      race_clustered_ci(rows, diff(sim_win, base_win))),
+        "podium_brier": (race_clustered_ci(rows, sim_pod)[0], race_clustered_ci(rows, base_pod)[0],
+                         race_clustered_ci(rows, diff(sim_pod, base_pod))),
+        "sequence_miss": (race_clustered_ci(rows, miss("precedent_sequence_match"))[0],
+                          race_clustered_ci(rows, miss("era_mode_sequence_match"))[0],
+                          race_clustered_ci(rows, diff(miss("precedent_sequence_match"), miss("era_mode_sequence_match")))),
+        "stop_count_miss": (race_clustered_ci(rows, miss("precedent_stop_count_match"))[0],
+                            race_clustered_ci(rows, miss("era_mode_stop_count_match"))[0],
+                            race_clustered_ci(rows, diff(miss("precedent_stop_count_match"), miss("era_mode_stop_count_match")))),
+        "first_stop_error_laps": (race_clustered_ci(rows, err("precedent_first_stop_error"))[0],
+                                  race_clustered_ci(rows, err("era_mode_first_stop_error"))[0],
+                                  race_clustered_ci(rows, diff(err("precedent_first_stop_error"), err("era_mode_first_stop_error")))),
     }
 
 
 # --- database assembly ---------------------------------------------------------
 
-def load_history(db: Any, *, era: str, before_year: int) -> list[HistoricalStrategy]:
-    """Realised dry-race strategies of cars that covered >= 90% of the race distance."""
-    rows = db.execute(text("""
-        SELECT rs.race_id, rs.race_entry_id, rs.stint_number, UPPER(rs.compound) AS compound, rs.end_lap,
-               MAX(rs.end_lap) OVER (PARTITION BY rs.race_id) AS race_laps
-        FROM race_stints rs
-        JOIN races r ON r.id = rs.race_id
-        JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
-        JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
-        WHERE r.regulation_era = :era AND r.season_year < :year
-        ORDER BY rs.race_id, rs.race_entry_id, rs.stint_number
-    """), {"era": era, "year": before_year}).mappings().all()
-    by_car: dict[tuple[int, int], list[dict]] = defaultdict(list)
-    for row in rows:
-        by_car[(row["race_id"], row["race_entry_id"])].append(row)
-    history = []
-    for stints in by_car.values():
-        race_laps = stints[0]["race_laps"]
-        if not race_laps or stints[-1]["end_lap"] < 0.9 * race_laps:
-            continue
-        history.append(HistoricalStrategy(
-            tuple(s["compound"] for s in stints),
-            tuple(s["end_lap"] / race_laps for s in stints[:-1]),
-        ))
-    return history
-
-
-def pole_win_rate(db: Any, *, era: str, before_year: int) -> float:
-    row = db.execute(text("""
-        SELECT COUNT(*) FILTER (WHERE rr.finishing_position = 1) AS wins, COUNT(*) AS n
-        FROM race_results rr
-        JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
-        JOIN races r ON r.id = s.race_id
-        WHERE rr.starting_grid_position = 1 AND r.regulation_era = :era AND r.season_year < :year
-    """), {"era": era, "year": before_year}).mappings().one()
-    return (row["wins"] + 1) / (row["n"] + 2)  # Laplace smoothing for thin eras
+def _actual_strategies(db: Any, race_id: int) -> dict[int, Strategy]:
+    stints = defaultdict(list)
+    for driver_id, compound, start, end in db.execute(text("""
+        SELECT re.driver_id, UPPER(rs.compound), rs.start_lap, rs.end_lap
+        FROM race_stints rs JOIN race_entries re ON re.id = rs.race_entry_id
+        WHERE rs.race_id = :r ORDER BY re.driver_id, rs.stint_number
+    """), {"r": race_id}):
+        if compound and start is not None and end is not None:
+            try:
+                stints[int(driver_id)].append(StrategyStint(compound, int(start), int(end)))
+            except ValueError:
+                continue
+    return {d: Strategy(" → ".join(s.compound for s in st), tuple(st)) for d, st in stints.items()}
 
 
 def run_backtest(db: Any, *, start_year: int, end_year: int, sims: int, seed: int,
-                 overtake_threshold: float, objective: str) -> list[BacktestRow]:
-    # imported here so the pure helpers above stay importable without v1's DB stack
+                 overtake_threshold: float, deg_mode: str) -> list[DriverRow]:
     from race_strategy_calibration_v1 import calibrate_event_hazards, calibrate_tyre_degradation
     from race_strategy_data_adapter_v1 import load_event_observations, load_tyre_observations
-    from race_strategy_pace_calibration_v3 import build_residual_observations, predict_target_pace
-    from race_strategy_pace_v3_db_adapter import load_pace_observations
     from race_strategy_pit_calibration_v1 import calibrate_total_pit_lane_from_db
     from race_strategy_pit_loss_v2 import estimate_pit_loss, load_observations as load_pit_losses
-    from race_strategy_real_backtest_v1 import list_targets, load_actual_target_strategy
 
-    targets = list_targets(db, start_year=start_year, end_year=end_year)
-    pace_rows, _ = load_pace_observations(db, start_year=2018, end_year=end_year - 1)
+    races = db.execute(text("""
+        SELECT r.id, r.season_year, r.track_id, r.regulation_era, r.race_date, t.total_race_laps
+        FROM races r
+        JOIN tracks t ON t.id = r.track_id
+        JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
+        JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
+        WHERE r.season_year BETWEEN :a AND :b AND r.regulation_era IS NOT NULL
+        ORDER BY r.race_date
+    """), {"a": start_year, "b": end_year}).mappings().all()
+
+    pace_obs = load_pace_observations(db, start_year=2018, end_year=end_year)
     pit_observations = load_pit_losses(db, start_year=2018, end_year=end_year)
-    dates = dict(db.execute(text("SELECT id, race_date FROM races")).all())
+    per_year: dict[tuple[str, int], dict[str, Any]] = {}
+    precedents = {}
 
-    rows: list[BacktestRow] = []
-    for index, target in enumerate(targets):
+    rows: list[DriverRow] = []
+    for index, race in enumerate(races):
+        year, era = race["season_year"], race["regulation_era"]
         try:
-            year, era = target.year, target.era
-            residuals = build_residual_observations(tuple(r for r in pace_rows if r.season_year < year))
+            key = (era, year)
+            if key not in per_year:
+                history = [o for o in pace_obs if o.regulation_era == era and o.season_year < year]
+                tyre_obs, _ = load_tyre_observations(db, era=era, start_year=2018, end_year=year - 1)
+                deg_raw, _ = calibrate_tyre_degradation(tyre_obs)
+                event_obs, _ = load_event_observations(db, era=era, start_year=2018, end_year=year - 1)
+                hazards, _ = calibrate_event_hazards(event_obs)
+                finishes = db.execute(text("""
+                    SELECT rr.starting_grid_position, rr.finishing_position, rr.status
+                    FROM race_results rr
+                    JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+                    JOIN races r ON r.id = s.race_id
+                    WHERE r.regulation_era = :era AND r.season_year < :year
+                      AND rr.starting_grid_position > 0 AND rr.finishing_position IS NOT NULL
+                """), {"era": era, "year": year}).all()
+                dry_rates = [d.mean for c, d in deg_raw.items() if c in ("SOFT", "MEDIUM", "HARD")]
+                pooled = float(np.median(dry_rates)) if dry_rates else 0.0
+                per_year[key] = {
+                    "pace": fit_model(history),
+                    "deg": 0.0 if deg_mode == "zero" else float(np.clip(pooled, 0.0, 0.15)),
+                    "hazards": hazards,
+                    "dnf": (sum(s in DNF_STATUSES for *_, s in finishes) + 1) / (len(finishes) + 2),
+                    "slot_rates": grid_slot_rates([(int(g), int(f)) for g, f, _ in finishes]),
+                    "pit_lane_v1": None,
+                }
+                if year not in precedents:
+                    precedents[year] = load_precedents(db, before_year=year)
+            cfg = per_year[key]
+            model = cfg["pace"]
 
-            def pace(driver_id: int, team_id: int) -> Distribution:
-                p = predict_target_pace(residuals, target_track_id=target.track_id, target_era=era,
-                                        target_driver_key=str(driver_id), target_team_key=str(team_id),
-                                        as_of_year=year, min_track_races=1, min_team_races=1, min_driver_races=1)
-                return Distribution(p.mean_seconds, max(0.0, p.std_seconds), 40.0, 150.0)
+            times = best_quali_times(db, race["id"])
+            gaps = quali_gaps(times)
+            pole = min((t for t in times.values() if t), default=None)
+            entries = db.execute(text("""
+                SELECT re.driver_id, rr.starting_grid_position AS grid, rr.finishing_position AS finish, rr.status
+                FROM race_results rr
+                JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+                JOIN race_entries re ON re.id = rr.race_entry_id
+                WHERE s.race_id = :r AND rr.finishing_position IS NOT NULL
+            """), {"r": race["id"]}).mappings().all()
+            if pole is None or len(entries) < 10:
+                raise ValueError("missing qualifying or results")
+            total_laps = race["total_race_laps"] or db.execute(text("""
+                SELECT MAX(l.lap_number) FROM laps l JOIN sessions s ON s.id = l.session_id
+                WHERE s.race_id = :r AND s.session_type = 'R'
+            """), {"r": race["id"]}).scalar()
+            if not total_laps:
+                raise ValueError("race distance unknown")
 
-            history = load_history(db, era=era, before_year=year)
-            options = historical_strategy_options(history, target.total_laps)
-            if not options:
+            reference_lap = pole * model.race_to_pole_ratio
+            back_gap = max(gaps.values()) if gaps else 0.03
+            back_grid = len(entries) + 1
+            track_records = precedents[year]
+            era_options = historical_strategy_options(
+                (r.strategy for r in track_records if r.regulation_era == era), total_laps)
+            if not era_options:
                 raise ValueError("no historical dry strategies for this era")
 
-            tyre_obs, _ = load_tyre_observations(db, era=era, start_year=2018, end_year=year - 1)
-            deg, _ = calibrate_tyre_degradation(tyre_obs)
-            event_obs, _ = load_event_observations(db, era=era, start_year=2018, end_year=year - 1)
-            hazards, _ = calibrate_event_hazards(event_obs)
+            cars, meta = [], []
+            for e in sorted(entries, key=lambda e: (e["grid"] or back_grid, e["driver_id"])):
+                grid = int(e["grid"]) if e["grid"] and e["grid"] > 0 else back_grid  # pit-lane start
+                gap = gaps.get(int(e["driver_id"]), back_gap)
+                options, source = precedent_options(track_records, track_id=race["track_id"], regulation_era=era,
+                                                    grid=grid, before_year=year, total_laps=total_laps)
+                options = options or era_options
+                cars.append(CarSpec(
+                    f"driver:{e['driver_id']}", grid,
+                    Distribution(reference_lap * (1 + model.race_gap(gap)), reference_lap * model.residual_std,
+                                 reference_lap * 0.95, reference_lap * 1.10),
+                    tuple(options),
+                ))
+                meta.append((e, grid, options, source))
 
-            before = dates[target.race_id]
-            losses, source = {}, []
+            losses, sources = {}, []
             for condition in ("green", "sc", "vsc"):
-                est = estimate_pit_loss(pit_observations, track_id=target.track_id, regulation_era=era,
-                                        condition=condition, before_date=before)
+                est = estimate_pit_loss(pit_observations, track_id=race["track_id"], regulation_era=era,
+                                        condition=condition, before_date=race["race_date"])
                 if est is not None:
                     losses[condition] = Distribution(est.median_seconds, est.robust_std_seconds, 5.0, 60.0)
-                    source.append(f"{condition}:{est.source}")
+                    sources.append(f"{condition}:{est.source}")
             if "green" not in losses:
-                v1 = calibrate_total_pit_lane_from_db(db, start_year=2018, end_year=year - 1, era=era)
-                losses["green"] = v1.total_pit_lane_seconds
-                source.append("green:v1_pit_lane_fallback")
-            for condition in ("sc", "vsc"):  # no discount without evidence
-                if condition not in losses:
-                    losses[condition] = losses["green"]
-                    source.append(f"{condition}:=green")
+                if cfg["pit_lane_v1"] is None:
+                    cfg["pit_lane_v1"] = calibrate_total_pit_lane_from_db(
+                        db, start_year=2018, end_year=year - 1, era=era).total_pit_lane_seconds
+                losses["green"] = cfg["pit_lane_v1"]
+                sources.append("green:v1_pit_lane_fallback")
+            for condition in ("sc", "vsc"):
+                losses.setdefault(condition, losses["green"])
 
-            track = TrackModel(total_laps=target.total_laps, tyre_deg_per_lap=deg, pit_loss=losses,
-                               overtake_threshold_seconds=overtake_threshold)
-            events = EventModel(sc_per_lap=hazards["sc_probability_per_lap_dry"],
-                                vsc_per_lap=hazards["vsc_probability_per_lap_dry"],
-                                red_per_lap=hazards["red_flag_probability_per_lap_dry"])
+            deg = Distribution(cfg["deg"], cfg["deg"] * 0.3, 0.0, 0.3)
+            track = TrackModel(total_laps=int(total_laps), tyre_deg_per_lap={c: deg for c in ("SOFT", "MEDIUM", "HARD")},
+                               pit_loss=losses, overtake_threshold_seconds=overtake_threshold,
+                               dnf_probability=cfg["dnf"])
+            events = EventModel(sc_per_lap=cfg["hazards"]["sc_probability_per_lap_dry"],
+                                vsc_per_lap=cfg["hazards"]["vsc_probability_per_lap_dry"],
+                                red_per_lap=cfg["hazards"]["red_flag_probability_per_lap_dry"])
+            positions = simulate_race(cars, track, events, sims=sims, seed=seed + index)
 
-            grid_rows = db.execute(text("""
-                SELECT re.driver_id, re.team_id, COALESCE(rr.starting_grid_position, q.final_position) AS grid
-                FROM race_entries re
-                JOIN sessions sq ON sq.race_id = re.race_id AND sq.session_type = 'Q'
-                JOIN qualifying_results q ON q.session_id = sq.id AND q.race_entry_id = re.id
-                JOIN sessions sr ON sr.race_id = re.race_id AND sr.session_type = 'R'
-                JOIN race_results rr ON rr.session_id = sr.id AND rr.race_entry_id = re.id
-                WHERE re.race_id = :r AND COALESCE(rr.starting_grid_position, q.final_position) > 0
-            """), {"r": target.race_id}).mappings().all()
-            competitors = []
-            for g in grid_rows:
-                if g["driver_id"] == target.driver_id:
-                    continue
-                try:
-                    competitors.append(CarSpec(f"driver:{g['driver_id']}", int(g["grid"]),
-                                               pace(g["driver_id"], g["team_id"]), tuple(options)))
-                except ValueError:
-                    continue
-            if len(competitors) < 5:
-                raise ValueError(f"only {len(competitors)} competitors with pace history")
-
-            us = CarSpec("target", target.starting_grid, pace(target.driver_id, target.team_id), ())
-            results = evaluate_candidates(us, candidates_from_options(options, target.total_laps), competitors,
-                                          track, events, sims=sims, seed=seed + index,
-                                          allocation=DEFAULT_ALLOCATION, objective=objective)
-            best = results[0]
-            actual = load_actual_target_strategy(db, target)  # post-hoc only
-            baseline_strategy = options[0][0]
-            v2m = strategy_metrics(best.strategy, actual)
-            basem = strategy_metrics(baseline_strategy, actual)
-            rows.append(BacktestRow(
-                target.race_id, year, target.starting_grid, target.actual_finish, int(target.actual_finish == 1),
-                " → ".join(actual.sequence) if actual else None,
-                best.strategy.name, round(best.expected_finish, 3), round(best.win_probability, 4), *v2m,
-                round(pole_win_rate(db, era=era, before_year=year), 4), baseline_strategy.name, *basem,
-                ";".join(source), len(competitors),
-            ))
-            print(f"{year} race={target.race_id}: v2={best.strategy.name} P1={best.win_probability:.3f} "
-                  f"E={best.expected_finish:.2f} actual={target.actual_finish} "
-                  f"({rows[-1].actual_sequence}) pit_loss={';'.join(source)}", flush=True)
+            actual = _actual_strategies(db, race["id"])  # post-hoc only
+            era_mode = era_options[0][0]
+            for j, (e, grid, options, source) in enumerate(meta):
+                p = positions[:, j]
+                realised = actual.get(int(e["driver_id"]))
+                predicted = options[0][0] if options else None
+                rate = cfg["slot_rates"].get(grid, (0.0, 0.0))
+                rows.append(DriverRow(
+                    race["id"], year, int(e["driver_id"]), grid, int(e["finish"]), e["status"],
+                    round(float(p.mean()), 3), round(float((p == 1).mean()), 4), round(float((p <= 3).mean()), 4),
+                    round(rate[0], 4), round(rate[1], 4),
+                    realised.name if realised else None,
+                    predicted.name if predicted else None, source, *strategy_metrics(predicted, realised),
+                    era_mode.name, *strategy_metrics(era_mode, realised),
+                ))
+            race_rows = rows[-len(meta):]
+            print(f"{year} race={race['id']}: drivers={len(meta)} finish MAE sim="
+                  f"{mean(abs(r.expected_finish - r.actual_finish) for r in race_rows):.2f} "
+                  f"grid={mean(abs(r.grid - r.actual_finish) for r in race_rows):.2f} "
+                  f"pit_loss={';'.join(sources)}", flush=True)
         except (ValueError, KeyError) as exc:
-            print(f"SKIP race={target.race_id}: {exc}", flush=True)
+            print(f"SKIP race={race['id']}: {exc}", flush=True)
     return rows
 
 
@@ -321,39 +329,45 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--start-year", type=int, default=2024)
     parser.add_argument("--end-year", type=int, default=2025)
-    parser.add_argument("--sims", type=int, default=800)
+    parser.add_argument("--sims", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--overtake-threshold", type=float, default=0.8,
                         help="seconds/lap pace advantage needed to pass (UNVALIDATED default)")
-    parser.add_argument("--objective", choices=("p1", "expected_finish"), default="p1")
+    parser.add_argument("--deg-mode", choices=("pooled", "zero"), default="pooled",
+                        help="pooled: one compound-agnostic wear rate; zero: no wear (sensitivity)")
     parser.add_argument("--csv", default="")
     args = parser.parse_args()
 
     engine = create_engine(os.environ["DATABASE_URL"])
     with engine.connect() as db:
         rows = run_backtest(db, start_year=args.start_year, end_year=args.end_year, sims=args.sims,
-                            seed=args.seed, overtake_threshold=args.overtake_threshold, objective=args.objective)
+                            seed=args.seed, overtake_threshold=args.overtake_threshold, deg_mode=args.deg_mode)
     if not rows:
         print("No races scored.")
         return 1
-    summary = summarise(rows)
-    print(f"\n=== BACKTEST V2 ({summary['races']} races, overtake threshold {args.overtake_threshold}s) ===")
-    for metric in ("finish_mae", "win_brier"):
-        m = summary[metric]
-        base_key = next(k for k in m if k.endswith("baseline"))
-        diff, low, high = m["v2_minus_baseline"]
-        print(f"{metric:22} v2={m['v2']:.3f}  {base_key}={m[base_key]:.3f}  "
-              f"diff={diff:+.3f} 90% CI [{low:+.3f}, {high:+.3f}]")
-    for metric in ("sequence_match", "stop_count_match", "first_stop_error_laps"):
-        m = summary[metric]
-        print(f"{metric:22} v2={m['v2'][0]:.3f}  era_mode_baseline={m['era_mode_baseline'][0]:.3f}  (n={m['v2'][1]})")
-    print("v2 beats a baseline only where the CI lies entirely below zero (lower is better for MAE/Brier/error).")
+    s = summarise(rows)
+    print(f"\n=== BACKTEST V2: {s['drivers']} drivers in {s['races']} races "
+          f"(overtake {args.overtake_threshold}s, deg {args.deg_mode}) ===")
+    print("metric                  model    baseline   model-baseline [90% CI, races resampled]")
+    labels = {
+        "finish_mae": ("simulator", "grid"),
+        "win_brier": ("simulator", "grid-slot rate"),
+        "podium_brier": ("simulator", "grid-slot rate"),
+        "sequence_miss": ("precedent", "era mode"),
+        "stop_count_miss": ("precedent", "era mode"),
+        "first_stop_error_laps": ("precedent", "era mode"),
+    }
+    for metric, (model_name, base_name) in labels.items():
+        model_value, base_value, (d, lo, hi) = s[metric]
+        verdict = "BEATS baseline" if hi < 0 else ("worse" if lo > 0 else "no clear difference")
+        print(f"{metric:22} {model_value:7.3f}  {base_value:8.3f}   {d:+.3f} [{lo:+.3f}, {hi:+.3f}]  "
+              f"{model_name} vs {base_name}: {verdict}")
     if args.csv:
         with open(args.csv, "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(asdict(rows[0]).keys()))
             writer.writeheader()
             writer.writerows(asdict(r) for r in rows)
-        print(f"wrote {len(rows)} races to {args.csv}")
+        print(f"wrote {len(rows)} driver rows to {args.csv}")
     return 0
 
 

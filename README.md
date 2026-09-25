@@ -65,6 +65,22 @@ cd circuit-viz-app && npm install && npm run dev   # 3D circuit visualizer on :5
 None of these are wired into the simulator yet; each must pass its real-data
 checks (`tests/real_db/test_phase2_data.py`) first.
 
+## Strategy stack (production design)
+
+One tool cannot do three jobs; each layer is validated on its own and ships
+only if its race-resampled 90% CI beats a simple baseline. Otherwise the
+product shows the baseline.
+
+| Layer | Job | Inputs | Baseline to beat |
+|---|---|---|---|
+| 1. `race_strategy_precedent_v1.py` | which strategy a car will run | what teams did: track → era, grid band | era's most common strategy |
+| 2. `race_strategy_simulator_v2.py` | finishing position, P(win), P(podium) for every car | qualifying pace (`race_pace_from_quali_v1.py`), precedent strategies, retirements, SC/VSC, pit loss v2 | grid position; grid-slot win/podium rates |
+| 3. optimiser | *optimal* strategy | needs a validated tyre model | **off** — none exists yet |
+
+`race_strategy_backtest_v2.py` scores layers 1-2 for every starter of every dry
+race (walk-forward). The first pole-sitter-only run (optimiser on, no quali
+pace) lost to every baseline, which is why the stack is layered.
+
 ## Tests
 
 Three tiers:

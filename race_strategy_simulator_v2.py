@@ -15,7 +15,9 @@ Fixes the structural problems of v1 (race_strategy_simulator_v1):
   * Reaction rule: a car due to stop within sc_pit_window_laps pits under SC/VSC.
 
 Scope: dry compounds only (wet strategy stays with the conservative baseline).
-Not modelled: DNFs, lapping/blue flags, DRS trains beyond the pass threshold.
+Retirements: each car retires with probability dnf_probability on a uniformly
+random lap and is classified behind all finishers (later retirements ahead).
+Not modelled: lapping/blue flags, DRS trains beyond the pass threshold.
 Every input is explicit so it can be replaced by a validated calibration
 (pit loss: race_strategy_pit_loss_v2; events: race_neutralisations_v1).
 
@@ -42,6 +44,7 @@ from race_strategy_simulator_v1 import (
 COMPOUND_INDEX = {c: i for i, c in enumerate(DRY_COMPOUNDS)}
 GREEN, SC, VSC, RED = 0, 1, 2, 3
 NO_STOP = 10_000
+RETIRED_LAP_SECONDS = 1e5
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ class TrackModel:
     sc_lap_factor: float = 1.40
     vsc_lap_factor: float = 1.35
     sc_restart_gap_seconds: float = 0.6
+    dnf_probability: float = 0.0  # per car per race
 
 
 @dataclass(frozen=True)
@@ -166,6 +170,8 @@ def simulate_race(
     noise = rng.normal(0.0, track.lap_noise_seconds, (sims, n, laps + 1))
     pit_loss = {k: _sample(track.pit_loss[k], rng, (sims, n)) for k in ("green", "sc", "vsc")}
     choice_draw = rng.random((sims, n))
+    retires = rng.random((sims, n)) < track.dnf_probability
+    retire_lap = rng.integers(1, laps + 1, size=(sims, n))
 
     # --- strategies -> (sims, cars, stints) arrays ---
     max_stints = max(len(s.stints) for car in cars for s, _ in car.strategy_options)
@@ -205,6 +211,8 @@ def simulate_race(
         lap_time = np.where(red[:, None], reference_pace, lap_time)
         loss = np.where(status == SC, pit_loss["sc"], np.where(status == VSC, pit_loss["vsc"], pit_loss["green"]))
         lap_time = lap_time + np.where(pitting & ~red[:, None], loss, 0.0)
+        # retired cars drop out of the running order for good
+        lap_time = lap_time + np.where(retires & (retire_lap <= lap), RETIRED_LAP_SECONDS, 0.0)
 
         new_cum = cum + lap_time
         # running order: blocked unless faster than the car ahead by the threshold
