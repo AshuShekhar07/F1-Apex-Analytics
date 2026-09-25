@@ -135,7 +135,7 @@ def test_estimate_is_walk_forward():
 
 
 def test_estimate_ignores_other_conditions_and_eras():
-    observations = [_obs(1, "e", "sc", 12.0, i, i) for i in range(1, 11)]
+    observations = [_obs(1, "e", "sc", 12.0, i, i) for i in range(1, 16)]   # 15 SC stops, 15 races
     observations += [_obs(1, "other", "green", 20.0, i, i) for i in range(1, 11)]
     assert estimate_pit_loss(observations, track_id=1, regulation_era="e") is None
     assert estimate_pit_loss(observations, track_id=1, regulation_era="e", condition="sc").median_seconds == 12.0
@@ -168,3 +168,15 @@ def test_load_observations_from_fixture_db(fixture_db_url):
     engine.dispose()
     assert [(o.race_id, o.pit_lap, o.condition, o.loss_seconds) for o in observations] == [(3, 5, "green", 41.0)]
     assert observations[0].regulation_era == "era2_18inch_groundeffect"
+
+
+def test_neutralised_stops_need_more_evidence_for_a_track_value():
+    # 9 SC stops over 2 races at track 1: enough for green thresholds, not for SC
+    observations = [_obs(1, "e", "sc", 3.0, 1 + i % 2, 1 + i % 2) for i in range(9)]
+    observations += [_obs(2, "e", "sc", 14.0, 3 + i % 3, 3 + i % 3) for i in range(15)]
+    est = estimate_pit_loss(observations, track_id=1, regulation_era="e", condition="sc")
+    assert est.source == "era_fallback" and est.n_stops == 24
+    track2 = estimate_pit_loss(observations, track_id=2, regulation_era="e", condition="sc")
+    assert (track2.source, track2.median_seconds) == ("track_era", 14.0)
+    loose = estimate_pit_loss(observations, track_id=1, regulation_era="e", condition="sc", min_stops=8, min_races=2)
+    assert loose.source == "track_era"

@@ -222,13 +222,20 @@ def estimate_pit_loss(
     regulation_era: str,
     condition: str = "green",
     before_date: date | None = None,
-    min_stops: int = 8,
-    min_races: int = 2,
+    min_stops: int | None = None,
+    min_races: int | None = None,
 ) -> PitLossEstimate | None:
     """Median loss for track x era, falling back to the era-wide median when thin.
 
     before_date enforces walk-forward use: only races strictly before it count.
+    Evidence thresholds default by condition: green 8 stops / 2 races; SC and VSC
+    15 stops / 3 races, because neutralised stops are rare and vary with where the
+    car was when the neutralisation started (Silverstone 2022-25 gave an implausible
+    2.97 s SC loss from 9 stops under the green thresholds).
     """
+    neutralised = condition in ("sc", "vsc")
+    min_stops = min_stops if min_stops is not None else (15 if neutralised else 8)
+    min_races = min_races if min_races is not None else (3 if neutralised else 2)
     pool = [
         o for o in observations
         if o.condition == condition and o.loss_seconds is not None and o.regulation_era == regulation_era
