@@ -99,6 +99,8 @@ def list_targets(db: Any, *, start_year: int, end_year: int) -> tuple[RaceTarget
             actual_finish=int(r["actual_finish"]), dry_confirmed=True,
         )
         for r in rows
+        # no scheduled lap count and no recorded laps: race distance unknown, not scoreable
+        if r["total_laps"] is not None
     )
 
 
