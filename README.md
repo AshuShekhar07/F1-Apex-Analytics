@@ -95,7 +95,8 @@ Predict & Compete, prediction endpoints, circuit visualizer.
 **Blocked:** publishing new season predictions (`simulate_season.py`) is
 fail-closed until a validated pre-qualifying finishing-position model exists.
 
-**Research only:** strategy simulator v1 (not exposed by the API), tyre
+**Research only:** strategy simulators v1 and v2 (neither exposed by the API; v2
+must beat v1 and simple baselines in a walk-forward backtest first), tyre
 degradation models, empirical strategy prior, traffic/defending effect.
 
 **Known open questions (not yet changed):**
