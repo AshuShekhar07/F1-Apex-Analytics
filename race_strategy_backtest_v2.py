@@ -197,8 +197,20 @@ class RaceSetup:
     pit_sources: str
 
 
-THRESHOLD_GRID = (0.3, 0.6, 1.0, 1.5)
-NOISE_SCALE_GRID = (0.25, 0.5, 1.0)
+# Widened after the first calibrated run chose the smallest noise scale (0.25) and
+# the lowest thresholds in both seasons, i.e. the optimum sat on the grid edge.
+THRESHOLD_GRID = (0.1, 0.2, 0.3, 0.45, 0.6, 1.0)
+NOISE_SCALE_GRID = (0.05, 0.1, 0.15, 0.25, 0.5)
+
+
+def on_grid_edge(threshold: float, noise_scale: float) -> list[str]:
+    """Which calibrated parameters landed on the boundary of their search grid."""
+    edges = []
+    if threshold in (THRESHOLD_GRID[0], THRESHOLD_GRID[-1]):
+        edges.append(f"threshold={threshold}")
+    if noise_scale in (NOISE_SCALE_GRID[0], NOISE_SCALE_GRID[-1]):
+        edges.append(f"noise_scale={noise_scale}")
+    return edges
 
 
 def simulate_setup(setup: RaceSetup, *, threshold: float, noise_scale: float, sims: int, seed: int) -> np.ndarray:
@@ -380,9 +392,11 @@ def run_backtest(db: Any, *, start_year: int, end_year: int, sims: int, seed: in
             scale = noise_scale if noise_scale is not None else scale
         else:
             threshold, scale, mae = overtake_threshold, noise_scale, float("nan")
-        chosen[year] = (threshold, scale, mae)
+        chosen[year] = (threshold, scale, float(mae))
+        edges = on_grid_edge(threshold, scale) if overtake_threshold is None or noise_scale is None else []
         print(f"{year}: overtake threshold {threshold}s, noise scale {scale} "
-              f"(chosen on {year - 1}, MAE there {mae:.3f})", flush=True)
+              f"(chosen on {year - 1}, MAE there {mae:.3f})"
+              + (f"  WARNING: on search-grid edge ({', '.join(edges)})" if edges else ""), flush=True)
 
         for index, setup in enumerate(setups[year]):
             positions = simulate_setup(setup, threshold=threshold, noise_scale=scale, sims=sims, seed=seed + index)

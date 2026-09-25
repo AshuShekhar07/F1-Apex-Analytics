@@ -10,6 +10,9 @@ from sqlalchemy.engine import make_url
 
 from race_pace_from_quali_v1 import PaceObservation, clean_race_pace, fit_model, quali_gaps, spearman
 from race_strategy_backtest_v2 import (
+    NOISE_SCALE_GRID,
+    THRESHOLD_GRID,
+    on_grid_edge,
     DriverRow,
     brier,
     grid_slot_rates,
@@ -267,7 +270,7 @@ def test_backtest_scores_every_driver_end_to_end(synthetic_db):
     assert len(rows) == 24                                  # 12 drivers x 2 races, not just pole sitters
     assert {r.race_id for r in rows} == {5, 6}
     threshold, scale, mae = chosen[2024]                    # calibrated on 2023 only
-    assert threshold in (0.3, 0.6, 1.0, 1.5) and scale in (0.25, 0.5, 1.0) and mae == mae
+    assert threshold in THRESHOLD_GRID and scale in NOISE_SCALE_GRID and mae == mae
     by_race = {}
     for r in rows:
         by_race.setdefault(r.race_id, []).append(r)
@@ -288,3 +291,9 @@ def test_fixed_parameters_skip_calibration(synthetic_db):
         _, chosen = run_backtest(db, start_year=2024, end_year=2024, sims=100, seed=1,
                                  overtake_threshold=0.8, noise_scale=0.5, deg_mode="zero")
     assert chosen[2024][:2] == (0.8, 0.5)
+
+
+def test_grid_edge_detection():
+    assert on_grid_edge(THRESHOLD_GRID[0], NOISE_SCALE_GRID[2]) == [f"threshold={THRESHOLD_GRID[0]}"]
+    assert on_grid_edge(THRESHOLD_GRID[2], NOISE_SCALE_GRID[-1]) == [f"noise_scale={NOISE_SCALE_GRID[-1]}"]
+    assert on_grid_edge(THRESHOLD_GRID[2], NOISE_SCALE_GRID[2]) == []
