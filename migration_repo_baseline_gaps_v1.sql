@@ -21,9 +21,16 @@ ALTER TABLE race_results
 ALTER TABLE laps
     ADD COLUMN IF NOT EXISTS position INTEGER;
 
+ALTER TABLE tracks
+    ADD COLUMN IF NOT EXISTS pit_lane_time_loss_seconds NUMERIC(5,2);
+
+ALTER TABLE session_weather
+    ADD COLUMN IF NOT EXISTS rain_onset_lap INTEGER;
+
 -- Derived table rebuilt by extract_race_stints.py (compound-change stints;
 -- same-compound pit visits are intentionally collapsed).
 CREATE TABLE IF NOT EXISTS race_stints (
+    id SERIAL PRIMARY KEY,
     race_id INTEGER REFERENCES races(id),
     race_entry_id INTEGER REFERENCES race_entries(id),
     finishing_position INTEGER,
@@ -60,4 +67,27 @@ CREATE TABLE IF NOT EXISTS driver_team_history_manual (
     team_logo_url VARCHAR(255),
     start_year INTEGER NOT NULL,
     end_year INTEGER NOT NULL
+);
+
+-- Pirelli nominated compounds per race (label SOFT/MEDIUM/HARD -> C-number).
+-- Read by strategy_production_v6. Definition copied from production \d output.
+-- C-numbers are NOT comparable across the 2023 renumbering; see README.
+CREATE TABLE IF NOT EXISTS race_compound_nominations (
+    id SERIAL PRIMARY KEY,
+    race_id INTEGER REFERENCES races(id),
+    label VARCHAR(10) NOT NULL,
+    c_compound VARCHAR(5) NOT NULL,
+    UNIQUE (race_id, label)
+);
+
+-- Output of fit_tire_degradation.py (rejected research approach; kept so the
+-- schema is complete). Column types from production; constraints beyond the
+-- primary key were not inspected.
+CREATE TABLE IF NOT EXISTS tire_degradation_curves (
+    id SERIAL PRIMARY KEY,
+    track_id INTEGER REFERENCES tracks(id),
+    compound VARCHAR(20),
+    baseline_pace_seconds NUMERIC(6,3),
+    degradation_rate_seconds_per_lap NUMERIC(6,4),
+    sample_size INTEGER
 );
