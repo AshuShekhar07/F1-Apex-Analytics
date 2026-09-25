@@ -261,10 +261,13 @@ def synthetic_db():
 
 def test_backtest_scores_every_driver_end_to_end(synthetic_db):
     with synthetic_db.connect() as db:
-        rows = run_backtest(db, start_year=2024, end_year=2024, sims=300, seed=1,
-                            overtake_threshold=0.8, deg_mode="pooled")
+        rows, chosen = run_backtest(db, start_year=2024, end_year=2024, sims=300, seed=1,
+                                    overtake_threshold=None, noise_scale=None, deg_mode="zero",
+                                    calibration_sims=100)
     assert len(rows) == 24                                  # 12 drivers x 2 races, not just pole sitters
     assert {r.race_id for r in rows} == {5, 6}
+    threshold, scale, mae = chosen[2024]                    # calibrated on 2023 only
+    assert threshold in (0.3, 0.6, 1.0, 1.5) and scale in (0.25, 0.5, 1.0) and mae == mae
     by_race = {}
     for r in rows:
         by_race.setdefault(r.race_id, []).append(r)
@@ -273,7 +276,15 @@ def test_backtest_scores_every_driver_end_to_end(synthetic_db):
         slowest = max(race_rows, key=lambda r: r.grid)
         assert fastest.expected_finish < slowest.expected_finish
         assert sum(r.p_win for r in race_rows) == pytest.approx(1.0, abs=1e-3)  # 4-dp rounding
+        assert sorted(r.blend_rank for r in race_rows) == list(range(1, 13))
     assert all(r.precedent_source.startswith("track") for r in rows)
     assert all(r.precedent_strategy.startswith("MEDIUM → HARD") for r in rows)
     s = summarise(rows)
-    assert s["drivers"] == 24 and s["sequence_miss"][0] == 0.0
+    assert s["drivers"] == 24 and s["sequence_miss"][0] == 0.0 and "finish_mae_vs_blend" in s
+
+
+def test_fixed_parameters_skip_calibration(synthetic_db):
+    with synthetic_db.connect() as db:
+        _, chosen = run_backtest(db, start_year=2024, end_year=2024, sims=100, seed=1,
+                                 overtake_threshold=0.8, noise_scale=0.5, deg_mode="zero")
+    assert chosen[2024][:2] == (0.8, 0.5)

@@ -136,7 +136,9 @@ def choose_weight(races: dict[int, list[DriverForm]]) -> float:
 
 # --- database assembly ---------------------------------------------------------
 
-def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int) -> list[DriverForm]:
+def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
+               models: dict | None = None) -> list[DriverForm]:
+    """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time)."""
     by_race_driver = {(o.race_id, o.driver_id): o for o in observations}
     team_history = defaultdict(list)   # (era, team) -> [(date, race_id, residual)]
     races = db.execute(text("""
@@ -168,6 +170,10 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         back_grid = len(entries) + 1
         back_gap = max(gaps.values()) if gaps else 0.03
 
+        if models is not None and model is not None:
+            times = [t for t in best_quali_times(db, race["id"]).values() if t]
+            if times:
+                models[race["id"]] = (model, min(times))
         if model is not None and race["season_year"] >= start_year and len(entries) >= 10:
             for e in entries:
                 obs = by_race_driver.get((race["id"], int(e["driver_id"])))
