@@ -81,6 +81,24 @@ product shows the baseline.
 race (walk-forward). The first pole-sitter-only run (optimiser on, no quali
 pace) lost to every baseline, which is why the stack is layered.
 
+## Race forecasts (production)
+
+Chosen by the walk-forward backtest (dry races 2024-2025, 717 drivers):
+
+| Shown | Method | Measured accuracy |
+|---|---|---|
+| predicted position | grid/pace blend (grid + qualifying pace + recent team race form) | 3.01 places MAE (grid alone 3.07) |
+| P(win), P(podium) | historical rate for the grid slot | Brier 0.028 / 0.061 |
+| strategy | era's most common dry strategy | stop count 70%, sequence 47% |
+| what-if | simulator v2 from the stored snapshot | scenario tool, not a forecast |
+
+```bash
+python race_forecast_v1.py --season 2026 --missing   # after each qualifying; stores forecasts
+```
+
+- `GET /races/{id}/forecast` — stored forecast, strategy alternatives, validation block
+- `POST /races/{id}/what-if` — e.g. `{"safety_car_laps": [20, 21, 22], "strategies": {"1": {"sequence": ["MEDIUM", "HARD"], "stop_laps": [18]}}}`
+
 ## Tests
 
 Three tiers:

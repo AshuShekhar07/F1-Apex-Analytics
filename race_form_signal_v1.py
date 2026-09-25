@@ -78,6 +78,27 @@ def team_form(history: Sequence[tuple[date, int, float]], team_id: int, before: 
     return sum(values) / (len(values) + shrink) if values else 0.0
 
 
+def team_residual_history(observations: Sequence[PaceObservation], *, era: str, before: date) -> dict[int, list]:
+    """team_id -> [(race_date, race_id, residual)] for races before `before`, each residual
+    computed with the pace model fitted on races before THAT race (same as build_rows)."""
+    era_obs = sorted((o for o in observations
+                      if o.regulation_era == era and o.race_date is not None and o.race_date < before),
+                     key=lambda o: (o.race_date, o.race_id))
+    by_race = defaultdict(list)
+    for o in era_obs:
+        by_race[(o.race_date, o.race_id)].append(o)
+    history = defaultdict(list)
+    for (when, race_id), rows in sorted(by_race.items()):
+        try:
+            model = fit_model([o for o in era_obs if o.race_date < when])
+        except ValueError:
+            continue
+        for o in rows:
+            if o.team_id is not None:
+                history[o.team_id].append((when, race_id, o.race_gap - model.race_gap(o.quali_gap)))
+    return history
+
+
 def ranks(scores: Sequence[float]) -> list[int]:
     """1-based ranks, lower score = better; ties broken by input order."""
     order = sorted(range(len(scores)), key=lambda i: (scores[i], i))
