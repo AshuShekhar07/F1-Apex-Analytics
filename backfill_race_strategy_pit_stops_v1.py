@@ -17,6 +17,8 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from fastf1_cache import fastf1_cache_dir
+
 from race_strategy_pit_ingestion_v1 import (
     PitIngestionConfig,
     extract_pit_stops_from_fastf1_session,
@@ -24,7 +26,7 @@ from race_strategy_pit_ingestion_v1 import (
     fastf1_session_loader,
 )
 
-CACHE_DIR = "/home/ashushekhar07/projects/F1-Apex-Analytics/cache"
+CACHE_DIR = fastf1_cache_dir()
 
 
 def main() -> None:

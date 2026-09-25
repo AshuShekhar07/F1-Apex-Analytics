@@ -1,0 +1,28 @@
+# Apex21 backend, data pipeline and research scripts.
+# Install: pip install -r requirements.txt
+
+# API
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.5
+
+# Database
+SQLAlchemy>=2.0,<2.1  # 2.1 switches postgresql:// to psycopg3
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+
+# Data ingestion / analysis
+fastf1>=3.3
+pandas>=2.1
+numpy>=1.26
+requests>=2.31
+matplotlib>=3.8
+
+# Modelling (finishing-position model, season simulation)
+scikit-learn>=1.4
+xgboost>=2.0
+joblib>=1.3
+
+# Tests
+pytest>=8.0
+httpx>=0.27

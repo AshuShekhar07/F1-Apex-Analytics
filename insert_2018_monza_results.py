@@ -4,9 +4,11 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from fastf1_cache import fastf1_cache_dir
+
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
-fastf1.Cache.enable_cache('/home/ashushekhar07/projects/F1-Apex-Analytics/cache')
+fastf1.Cache.enable_cache(fastf1_cache_dir())
 
 with engine.connect() as conn:
     race_id = conn.execute(text("""

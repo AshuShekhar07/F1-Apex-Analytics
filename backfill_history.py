@@ -5,11 +5,12 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from fastf1_cache import fastf1_cache_dir
+
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
 
-# IMPORTANT: use the absolute path you already confirmed works
-CACHE_DIR = '/home/ashushekhar07/projects/F1-Apex-Analytics/cache'
+CACHE_DIR = fastf1_cache_dir()
 fastf1.Cache.enable_cache(CACHE_DIR)
 
 # Map FastF1's real session display names (from the event schedule
