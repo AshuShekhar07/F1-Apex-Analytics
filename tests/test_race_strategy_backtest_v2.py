@@ -168,8 +168,12 @@ def test_summary_reports_model_baseline_and_ci():
 
 # --- end to end on a synthetic multi-season database ----------------------------
 
-def _seed_synthetic_seasons(conn, rng):
-    """SYNTHETIC: 3 seasons x 2 dry races x 12 drivers; driver d is 0.1 s/lap slower than d-1."""
+def _seed_synthetic_seasons(conn, rng, race_bonus=None):
+    """SYNTHETIC: 3 seasons x 2 dry races x 12 drivers; driver d is 0.1 s/lap slower than d-1.
+
+    race_bonus: {team_id: seconds/lap} a team is faster in the race than its qualifying implies.
+    """
+    race_bonus = race_bonus or {}
     for tid in (1, 2):
         conn.execute(text("INSERT INTO tracks (id, name, country, total_race_laps) VALUES (:i, :n, 'X', 30)"),
                      {"i": tid, "n": f"Synthetic {tid}"})
@@ -206,6 +210,7 @@ def _seed_synthetic_seasons(conn, rng):
                 for lap in range(1, 31):
                     age = lap - 1 if lap <= stop else lap - stop - 1
                     t = 90 + 0.12 * (d - 1) + 0.05 * age + rng.normal(0, 0.1) + (5 if lap == 1 else 0)
+                    t -= race_bonus.get((d + 1) // 2, 0.0)
                     t += 18 if lap == stop else (4 if lap == stop + 1 else 0)
                     conn.execute(text("""
                         INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time, tire_compound,

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 from dataclasses import dataclass
+from datetime import date
 from statistics import median
 from typing import Any, Iterable
 
@@ -46,6 +47,8 @@ class PaceObservation:
     race_gap: float
     pole_time: float
     race_reference: float
+    team_id: int | None = None
+    race_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -121,7 +124,7 @@ def best_quali_times(db: Any, race_id: int) -> dict[int, float | None]:
 def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PaceObservation]:
     """Per driver-race quali gap and clean race-pace gap (dry races only)."""
     races = db.execute(text("""
-        SELECT r.id, r.season_year, r.regulation_era, s.id AS session_id
+        SELECT r.id, r.season_year, r.regulation_era, r.race_date, s.id AS session_id
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
@@ -137,11 +140,13 @@ def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PaceOb
         pole = min((t for t in times.values() if t), default=None)
         gaps = quali_gaps(times)
         laps: dict[int, list[tuple[int, float | None]]] = {}
-        for driver_id, lap_number, lap_time in db.execute(text("""
-            SELECT re.driver_id, l.lap_number, l.lap_time
+        teams: dict[int, int] = {}
+        for driver_id, team_id, lap_number, lap_time in db.execute(text("""
+            SELECT re.driver_id, re.team_id, l.lap_number, l.lap_time
             FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
             WHERE l.session_id = :s
         """), {"s": race["session_id"]}):
+            teams[int(driver_id)] = int(team_id)
             laps.setdefault(int(driver_id), []).append((int(lap_number), float(lap_time) if lap_time is not None else None))
         pace = {d: p for d, l in laps.items() if (p := clean_race_pace(l)) is not None}
         if len(pace) < 10 or pole is None:
@@ -152,6 +157,7 @@ def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PaceOb
                 observations.append(PaceObservation(
                     race["id"], race["season_year"], race["regulation_era"], driver_id,
                     gaps[driver_id], p / reference - 1, pole, reference,
+                    teams.get(driver_id), race["race_date"],
                 ))
     return observations
 
