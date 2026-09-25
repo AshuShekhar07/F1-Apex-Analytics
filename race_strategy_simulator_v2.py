@@ -205,14 +205,17 @@ def simulate_race(
         red = status[:, 0] == RED
 
         compound = seq[idx_s, np.arange(n), np.minimum(stint, max_stints - 1)]
-        green_time = base + offset[compound] + deg[idx_s, compound] * age + noise[:, :, lap]
+        # underlying pace (car + tyre) decides passes; lap-to-lap noise only moves times/gaps
+        pace_now = base + offset[compound] + deg[idx_s, compound] * age
+        green_time = pace_now + noise[:, :, lap]
         lap_time = np.where(status == SC, reference_pace * track.sc_lap_factor,
                    np.where(status == VSC, reference_pace * track.vsc_lap_factor, green_time))
         lap_time = np.where(red[:, None], reference_pace, lap_time)
         loss = np.where(status == SC, pit_loss["sc"], np.where(status == VSC, pit_loss["vsc"], pit_loss["green"]))
         lap_time = lap_time + np.where(pitting & ~red[:, None], loss, 0.0)
         # retired cars drop out of the running order for good
-        lap_time = lap_time + np.where(retires & (retire_lap <= lap), RETIRED_LAP_SECONDS, 0.0)
+        retired_now = retires & (retire_lap <= lap)
+        lap_time = lap_time + np.where(retired_now, RETIRED_LAP_SECONDS, 0.0)
 
         new_cum = cum + lap_time
         # running order: blocked unless faster than the car ahead by the threshold
@@ -221,10 +224,13 @@ def simulate_race(
         for k in range(1, n):
             me, ahead = order[:, k], order[:, k - 1]
             mine, theirs = new_cum[np.arange(sims), me], new_cum[np.arange(sims), ahead]
-            advantage = lap_time[np.arange(sims), ahead] - lap_time[np.arange(sims), me]
+            # a pass needs a genuine pace advantage, not a lucky lap: compare underlying pace
+            # (noise excluded; before this, 0.15 s/lap noise let equal cars swap many times a race)
+            advantage = pace_now[np.arange(sims), ahead] - pace_now[np.arange(sims), me]
             # a car pitting past one staying out is not an on-track pass; two cars
             # pitting on the same lap keep their order unless one is clearly faster
-            exempt = (pitting[np.arange(sims), me] ^ pitting[np.arange(sims), ahead]) | ~green_lap
+            exempt = ((pitting[np.arange(sims), me] ^ pitting[np.arange(sims), ahead]) | ~green_lap
+                      | retired_now[np.arange(sims), me] | retired_now[np.arange(sims), ahead])
             blocked = ~exempt & (advantage < track.overtake_threshold_seconds) & (mine < theirs + track.min_following_gap_seconds)
             new_cum[np.arange(sims)[blocked], me[blocked]] = theirs[blocked] + track.min_following_gap_seconds
 

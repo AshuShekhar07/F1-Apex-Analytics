@@ -149,3 +149,12 @@ def test_retirements_are_classified_behind_finishers():
     assert all(sorted(row) == list(range(1, 7)) for row in positions)
     no_dnf = simulate_race(cars, track(), NO_EVENTS, sims=50, seed=5)
     assert (no_dnf == [1, 2, 3, 4, 5, 6]).all()
+
+
+def test_lap_noise_alone_does_not_create_overtakes():
+    """Regression: passes used noisy lap times, so equal cars swapped places at random."""
+    cars = [car(f"C{i}", i + 1) for i in range(10)]
+    positions = simulate_race(cars, track(threshold=0.45, noise=0.3), NO_EVENTS, sims=200, seed=2)
+    assert (positions == list(range(1, 11))).all()          # equal pace: grid order holds
+    faster = [car("slow", 1, pace=90.6), car("fast", 2, pace=90.0)]
+    assert (simulate_race(faster, track(threshold=0.45, noise=0.3), NO_EVENTS, sims=200, seed=2)[:, 1] == 1).all()
