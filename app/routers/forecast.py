@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from race_forecast_v1 import MODEL_VERSION, Scenario, run_what_if
+from race_forecast_v1 import MODEL_VERSION, WHAT_IF_NOISE_SCALE, WHAT_IF_THRESHOLD, Scenario, run_what_if
 
 router = APIRouter(prefix="/races", tags=["forecast"])
 
@@ -75,10 +75,18 @@ def what_if(request: WhatIfRequest, race_id: int = Path(..., ge=1), db: Session 
         results = run_what_if(forecast["inputs"], scenario, sims=request.simulations)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    names = {row["driver_id"]: row for row in db.execute(text("""
+        SELECT d.id AS driver_id, d.name AS driver_name, tm.name AS team_name, tm.color_hex
+        FROM race_entries re JOIN drivers d ON d.id = re.driver_id LEFT JOIN teams tm ON tm.id = re.team_id
+        WHERE re.race_id = :r
+    """), {"r": race_id}).mappings()}
+    results = [{**{k: v for k, v in names.get(r["driver_id"], {}).items() if k != "driver_id"}, **r} for r in results]
     return {
         "race_id": race_id,
         "note": "Scenario comparison from simulator v2. Differences between baseline and scenario are the "
                 "meaningful output; absolute numbers are less reliable than the forecast endpoint.",
         "scenario": request.model_dump(),
+        "simulation_settings": {"overtake_threshold_s_per_lap": WHAT_IF_THRESHOLD,
+                                "race_day_spread_scale": WHAT_IF_NOISE_SCALE},
         "results": sorted(results, key=lambda r: r["scenario"]["expected_position"]),
     }

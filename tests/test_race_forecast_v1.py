@@ -15,6 +15,7 @@ from race_forecast_v1 import (
     Scenario,
     compute_forecast,
     run_what_if,
+    shrunk_slot_rates,
     store_forecast,
     strategy_from_json,
 )
@@ -224,3 +225,21 @@ def test_forecast_endpoint_exposes_data_notes(client, forecast_db):
     with forecast_db.connect() as db:
         stored = db.execute(text("SELECT inputs -> 'data_notes' FROM race_forecasts WHERE race_id = 5")).scalar()
     assert client.get("/races/5/forecast").json()["data_notes"] == stored
+
+
+def test_slot_rates_shrink_thin_era_toward_long_run():
+    all_history = [(3, 1)] * 10 + [(3, 5)] * 90          # long run: 10% wins from P3
+    thin_era = [(3, 4)] * 12                               # new era: 12 starts, no win
+    rates = shrunk_slot_rates(thin_era, all_history, field_size=20)
+    assert 0.03 < rates[3][0] < 0.06                       # not ~0, not the full 10%
+    rich_era = [(3, 4)] * 400
+    assert shrunk_slot_rates(rich_era, all_history, field_size=20)[3][0] < 0.005   # era record dominates
+
+
+def test_what_if_baseline_is_consistent_with_grid_order(client):
+    body = client.post("/races/5/what-if", json={"simulations": 400}).json()
+    by_grid = sorted(body["results"], key=lambda r: r["grid"])
+    assert by_grid[0]["baseline"]["expected_position"] < by_grid[-1]["baseline"]["expected_position"]
+    assert by_grid[0]["baseline"]["expected_position"] < 4        # not scrambled to mid-field
+    assert by_grid[0]["driver_name"].startswith("Driver") and "team_name" in by_grid[0]
+    assert body["simulation_settings"]["race_day_spread_scale"] == 0.25

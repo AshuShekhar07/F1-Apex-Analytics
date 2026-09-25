@@ -39,7 +39,12 @@ from race_strategy_simulator_v2 import GREEN, SC, VSC, CarSpec, EventModel, Trac
 
 MODEL_VERSION = "forecast_v1"
 WHAT_IF_THRESHOLD = 0.45   # s/lap to pass; chosen by walk-forward calibration on 2023 and 2024
-WHAT_IF_NOISE_SCALE = 1.0  # full measured race-day spread: scenarios should show real uncertainty
+# Race-day pace spread multiplier for what-ifs. 1.0 (the full measured spread) made the
+# field far too random (2026 R12 pole sitter: baseline P6.5, 18% win vs 67% in the
+# forecast). 0.25 was the walk-forward-calibrated value with the best win/podium Brier in
+# the all-driver backtest. Applied at replay time, so stored forecasts need no recompute.
+WHAT_IF_NOISE_SCALE = 0.25
+SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 starts of the all-era rate
 
 VALIDATION = {
     "source": "race_strategy_backtest_v2 walk-forward, dry races 2024-2025, 717 drivers in 36 races",
@@ -88,6 +93,27 @@ def _dist_json(d: Distribution) -> dict:
 # --- compute ------------------------------------------------------------------
 
 MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow earlier eras
+
+
+def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = SLOT_SHRINK_STARTS) -> dict:
+    """P(win), P(podium) per grid slot: this era's record pulled toward the all-era rate.
+
+    rate = (era successes + k * all-era rate) / (era starts + k). With little era data
+    (a new regulation era) the long-run rate dominates; as the era fills in, its own
+    record takes over. Avoids e.g. a 0.4% win chance from P3 after 12 races of 2026.
+    """
+    prior = grid_slot_rates(all_history, field_size=field_size)
+    counts = defaultdict(lambda: [0, 0, 0])
+    for grid, finish in era_history:
+        c = counts[grid]
+        c[0] += 1
+        c[1] += int(finish == 1)
+        c[2] += int(finish <= 3)
+    return {
+        slot: ((counts[slot][1] + k * p_win) / (counts[slot][0] + k),
+               (counts[slot][2] + k * p_pod) / (counts[slot][0] + k))
+        for slot, (p_win, p_pod) in prior.items()
+    }
 
 
 def compute_forecast(db: Any, race_id: int) -> dict:
@@ -186,12 +212,16 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         WHERE r.race_date < :d AND (CAST(:era AS TEXT) IS NULL OR r.regulation_era = :era)
           AND rr.starting_grid_position > 0 AND rr.finishing_position IS NOT NULL
     """
-    finishes = db.execute(text(finishes_sql), {"era": era, "d": as_of}).all()
-    if len(finishes) < MIN_ERA_FINISHES:
-        finishes = db.execute(text(finishes_sql), {"era": None, "d": as_of}).all()
+    era_finishes = db.execute(text(finishes_sql), {"era": era, "d": as_of}).all()
+    all_finishes = db.execute(text(finishes_sql), {"era": None, "d": as_of}).all()
+    finishes = era_finishes
+    if len(era_finishes) < MIN_ERA_FINISHES:
+        finishes = all_finishes
         notes.append(f"win/podium rates and retirement rate: fewer than {MIN_ERA_FINISHES} {era} results, "
                      "using all earlier eras")
-    slot_rates = grid_slot_rates([(int(g), int(f)) for g, f, _ in finishes], field_size=len(field))
+    slot_rates = shrunk_slot_rates(
+        [(int(g), int(f)) for g, f, _ in finishes], [(int(g), int(f)) for g, f, _ in all_finishes],
+        field_size=len(field))
 
     all_precedents = load_precedents(db, before_date=as_of)
     options = historical_strategy_options(
@@ -318,7 +348,7 @@ def run_what_if(inputs: dict, scenario: Scenario, *, sims: int = 1000, seed: int
         if not 1 <= lap <= total_laps:
             raise ValueError(f"neutralised laps must be between 1 and {total_laps}")
 
-    scale = float(inputs["noise_scale"])
+    scale = WHAT_IF_NOISE_SCALE   # current calibrated value (stored inputs keep the one used at compute time)
     track = TrackModel(total_laps=total_laps, tyre_deg_per_lap={c: Distribution(0.0) for c in ("SOFT", "MEDIUM", "HARD")},
                        pit_loss={k: _dist(v) for k, v in inputs["pit_loss"].items()},
                        overtake_threshold_seconds=float(inputs["overtake_threshold"]),
