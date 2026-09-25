@@ -49,7 +49,7 @@ def test_2021_abu_dhabi_late_safety_car(db):
 
 
 def test_2021_belgian_gp_red_flag(db):
-    result = _neutralisations_or_skip(db, _race(db, 2021, "%Spa%", "%Belgium%"))
+    result = _neutralisations_or_skip(db, _race(db, 2021, "%Francorchamps%", "%Belgium%"))
     assert result.count("RED_FLAG") >= 1
 
 

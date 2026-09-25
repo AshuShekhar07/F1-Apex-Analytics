@@ -5,16 +5,26 @@ time spent between the pit entry and exit lines. That is not the loss: the car
 would have covered that stretch of track anyway, so v1 overstates the cost, and
 it treats a stop under Safety Car the same as a green-flag stop.
 
-v2 measures, per stop, the standard in-lap + out-lap delta:
+v2 measures, per stop, the in-lap + out-lap delta RELATIVE TO THE FIELD on
+those same laps:
 
-    loss = (in_lap + out_lap) - 2 * reference_lap
+    gap(lap)  = driver lap time - median lap time of non-stopping cars on that lap
+    loss      = gap(in_lap) + gap(out_lap) - 2 * reference_gap
 
-reference_lap = mean of (median clean lap before the stop, median clean lap
+reference_gap = mean of (median clean gap before the stop, median clean gap
 after it), same driver and race, so old-tyre and new-tyre pace are balanced.
 Reference laps never cross the driver's previous or next stop.
-Clean = green/yellow-only track status, not lap 1, not an in/out lap, lap time
-present. Each stop is classified from the in/out laps' FastF1 track status:
-red_flag (excluded: free tyre change), sc, vsc, green, or unknown.
+Clean = green/yellow-only track status, not lap 1, not an in/out lap.
+
+Measuring against the field on the same lap is what makes Safety Car stops
+come out right: under SC every car's lap is slow, so comparing with green-flag
+pace (the first v2 draft) charged the SC's slowness to the stop (62-83 s on
+real data). It also absorbs fuel burn and track evolution.
+
+Each stop is classified from the in/out laps' FastF1 track status: green, sc,
+vsc, red_flag (no loss: free tyre change), unknown (no status stored),
+no_timing (in/out lap time or field median missing), no_reference (too few
+clean laps).
 
 Known limits (documented, not modelled): drive-through / stop-go penalties are
 pit visits too and are not separated; out-lap traffic is included in the loss.
@@ -38,6 +48,7 @@ from sqlalchemy import create_engine, text
 
 REFERENCE_WINDOW = 6       # laps either side of the stop searched for clean pace
 MIN_REFERENCE_LAPS = 2     # required on EACH side
+MIN_FIELD_CARS = 3         # non-stopping cars needed for a lap's field median
 GREEN_CODES = frozenset("12")  # all clear, local yellow
 
 
@@ -58,9 +69,9 @@ class PitLossObservation:
     regulation_era: str
     race_entry_id: int
     pit_lap: int
-    condition: str  # green | sc | vsc | red_flag | unknown | no_reference
+    condition: str  # green | sc | vsc | red_flag | unknown | no_timing | no_reference
     loss_seconds: float | None
-    reference_lap_seconds: float | None
+    reference_gap_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -98,30 +109,64 @@ def _is_clean(lap: LapRecord, stop_laps: set[int]) -> bool:
     )
 
 
-def stop_losses(laps: Iterable[LapRecord], pit_laps: Iterable[int]) -> list[tuple[int, str, float | None, float | None]]:
-    """(pit_lap, condition, loss_seconds, reference_lap_seconds) for one driver's race."""
+def field_medians(laps_by_entry: dict[int, list[LapRecord]], stop_laps_by_entry: dict[int, set[int]]) -> dict[int, float]:
+    """Median lap time per lap number over cars not pitting on that lap."""
+    times: dict[int, list[float]] = {}
+    for entry_id, laps in laps_by_entry.items():
+        stopping = stop_laps_by_entry.get(entry_id, set())
+        for lap in laps:
+            if lap.lap_time is None or lap.pit_in or lap.pit_out or lap.lap_number in stopping:
+                continue
+            times.setdefault(lap.lap_number, []).append(lap.lap_time)
+    return {n: median(v) for n, v in times.items() if len(v) >= MIN_FIELD_CARS}
+
+
+def stop_laps(pit_laps: Iterable[int]) -> set[int]:
+    return {p for pit in pit_laps for p in (int(pit), int(pit) + 1)}
+
+
+def stop_losses(
+    laps: Iterable[LapRecord],
+    pit_laps: Iterable[int],
+    field: dict[int, float],
+) -> list[tuple[int, str, float | None, float | None]]:
+    """(pit_lap, condition, loss_seconds, reference_gap_seconds) for one driver's race."""
     by_number = {lap.lap_number: lap for lap in laps}
     pit_laps = sorted(set(int(p) for p in pit_laps))
-    stop_laps = {p for pit in pit_laps for p in (pit, pit + 1)}
+    excluded = stop_laps(pit_laps)
+
+    def gap(n: int) -> float | None:
+        lap = by_number.get(n)
+        if lap is None or lap.lap_time is None or n not in field:
+            return None
+        return lap.lap_time - field[n]
+
     results = []
     for index, pit in enumerate(pit_laps):
         # reference pace comes only from the stints either side of THIS stop
         window_start = max(pit - REFERENCE_WINDOW, pit_laps[index - 1] + 2 if index > 0 else 1)
         window_end = min(pit + 2 + REFERENCE_WINDOW, pit_laps[index + 1] if index + 1 < len(pit_laps) else pit + 2 + REFERENCE_WINDOW)
         in_lap, out_lap = by_number.get(pit), by_number.get(pit + 1)
-        if in_lap is None or out_lap is None or in_lap.lap_time is None or out_lap.lap_time is None:
-            results.append((pit, "no_reference", None, None))
+        if in_lap is None or out_lap is None:
+            results.append((pit, "no_timing", None, None))
             continue
         condition = classify_condition(in_lap.track_status, out_lap.track_status)
-        before = [by_number[n].lap_time for n in range(window_start, pit)
-                  if n in by_number and _is_clean(by_number[n], stop_laps)]
-        after = [by_number[n].lap_time for n in range(pit + 2, window_end)
-                 if n in by_number and _is_clean(by_number[n], stop_laps)]
+        if condition in ("unknown", "red_flag"):
+            results.append((pit, condition, None, None))
+            continue
+        gap_in, gap_out = gap(pit), gap(pit + 1)
+        if gap_in is None or gap_out is None:
+            results.append((pit, "no_timing", None, None))
+            continue
+        before = [g for n in range(window_start, pit)
+                  if n in by_number and _is_clean(by_number[n], excluded) and (g := gap(n)) is not None]
+        after = [g for n in range(pit + 2, window_end)
+                 if n in by_number and _is_clean(by_number[n], excluded) and (g := gap(n)) is not None]
         if len(before) < MIN_REFERENCE_LAPS or len(after) < MIN_REFERENCE_LAPS:
-            results.append((pit, "no_reference" if condition != "red_flag" else condition, None, None))
+            results.append((pit, "no_reference", None, None))
             continue
         reference = (median(before) + median(after)) / 2
-        loss = in_lap.lap_time + out_lap.lap_time - 2 * reference
+        loss = gap_in + gap_out - 2 * reference
         results.append((pit, condition, round(loss, 3), round(reference, 3)))
     return results
 
@@ -155,8 +200,9 @@ def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PitLos
         """), {"r": race["id"]}):
             pits_by_entry.setdefault(row.race_entry_id, set()).add(int(row.pit_lap))
 
+        field = field_medians(laps_by_entry, {e: stop_laps(p) for e, p in pits_by_entry.items()})
         for entry_id, pit_laps in pits_by_entry.items():
-            for pit, condition, loss, reference in stop_losses(laps_by_entry.get(entry_id, []), pit_laps):
+            for pit, condition, loss, reference in stop_losses(laps_by_entry.get(entry_id, []), pit_laps, field):
                 observations.append(PitLossObservation(
                     race["id"], race["race_date"], race["track_id"], race["regulation_era"],
                     entry_id, pit, condition, loss, reference,
@@ -209,7 +255,7 @@ def summarise(observations: list[PitLossObservation], pit_lane_medians: dict[tup
         subset = [o for o in observations if (o.track_id, o.regulation_era) == (track_id, era)]
         row["stops_total"] = len(subset)
         row["unknown_status"] = sum(o.condition == "unknown" for o in subset)
-        row["no_reference"] = sum(o.condition == "no_reference" for o in subset)
+        row["no_reference"] = sum(o.condition in ("no_reference", "no_timing") for o in subset)
         row["pit_lane_time_median_v1"] = pit_lane_medians.get((track_id, era))
         rows.append(row)
     return rows

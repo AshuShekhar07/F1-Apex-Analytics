@@ -175,6 +175,24 @@ def db_session_rows(conn, start_year: int, end_year: int, session_types: tuple[s
     return [dict(row) for row in rows]
 
 
+def lap_metadata_coverage(conn, session_id: int) -> float:
+    """Share of the session's laps that already carry FastF1 lap metadata."""
+    row = conn.execute(text("""
+        SELECT COUNT(*) AS total, COUNT(lap_start_time_seconds) AS enriched
+        FROM laps WHERE session_id = :s
+    """), {"s": session_id}).mappings().one()
+    return (row["enriched"] / row["total"]) if row["total"] else 0.0
+
+
+def has_status_intervals(conn, session_id: int) -> bool:
+    return bool(conn.execute(text(
+        "SELECT EXISTS (SELECT 1 FROM session_track_status_intervals WHERE session_id = :s)"
+    ), {"s": session_id}).scalar())
+
+
+LAP_METADATA_DONE_SHARE = 0.95  # some laps legitimately lack FastF1 timing
+
+
 def entry_map(conn, race_id: int) -> dict[int, int]:
     rows = conn.execute(
         text(
@@ -216,6 +234,13 @@ def backfill_lap_metadata(engine, *, start_year: int, end_year: int, session_typ
         db_type = str(item["session_type"])
         session_id = int(item["session_id"])
         race_id = int(item["race_id"])
+
+        with engine.connect() as conn:
+            share = lap_metadata_coverage(conn, session_id)
+        if share >= LAP_METADATA_DONE_SHARE:
+            print(f"  [skip] {year} R{rnd} {db_type}: lap metadata already {share:.0%}", flush=True)
+            sessions_done += 1
+            continue
 
         try:
             session = api_call(fastf1.get_session, year, rnd, SESSION_LOAD_NAMES[db_type])
@@ -685,6 +710,12 @@ def backfill_race_events(engine, *, start_year: int, end_year: int) -> dict[str,
         year = int(item["season_year"])
         rnd = int(item["round_number"])
         session_id = int(item["session_id"])
+
+        with engine.connect() as conn:
+            if has_status_intervals(conn, session_id):
+                print(f"  [skip] {year} R{rnd}: status intervals already stored", flush=True)
+                races_done += 1
+                continue
 
         try:
             session = api_call(fastf1.get_session, year, rnd, "Race")
