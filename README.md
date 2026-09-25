@@ -39,11 +39,12 @@ python schema_migrations.py      # applies every file in SCHEMA_FILES to DATABAS
 
 Then populate it with `backfill_history.py` followed by the enrichment backfills.
 
-Check that the live database and the repo DDL agree (read-only against
-`DATABASE_URL`; needs a server where you can create a throwaway database):
+Check that the live database and the repo DDL agree. Needs no extra
+privileges: the repo DDL is applied to a scratch schema inside one transaction
+that is rolled back, so nothing in the database changes:
 
 ```bash
-python audit_schema_drift_v1.py --reference-server-url postgresql://USER@localhost:5432/postgres
+python audit_schema_drift_v1.py
 ```
 
 ## Run
