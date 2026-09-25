@@ -71,7 +71,7 @@ def build_reference_in_rolled_back_schema(engine) -> dict:
 
 def diff_columns(live: dict, repo: dict) -> dict[str, list]:
     return {
-        "live_only": sorted(k for k in live if k not in repo),
+        "live_only": sorted((k, live[k]) for k in live if k not in repo),
         "repo_only": sorted(k for k in repo if k not in live),
         "type_diff": sorted(
             (k, live[k], repo[k]) for k in live.keys() & repo.keys() if live[k] != repo[k]

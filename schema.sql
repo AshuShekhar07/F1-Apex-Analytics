@@ -49,11 +49,11 @@ CREATE TABLE laps (
     session_id INTEGER REFERENCES sessions(id),
     race_entry_id INTEGER REFERENCES race_entries(id),
     lap_number INTEGER NOT NULL,
-    lap_time NUMERIC(6,3),
-    sector_1_time NUMERIC(6,3),
-    sector_2_time NUMERIC(6,3),
-    sector_3_time NUMERIC(6,3),
-    tire_compound VARCHAR(10),
+    lap_time NUMERIC(8,3),
+    sector_1_time NUMERIC(8,3),
+    sector_2_time NUMERIC(8,3),
+    sector_3_time NUMERIC(8,3),
+    tire_compound VARCHAR(20),
     is_valid BOOLEAN DEFAULT TRUE
 );
 

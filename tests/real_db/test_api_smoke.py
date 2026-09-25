@@ -95,5 +95,5 @@ def test_predict_and_compete_invalid_season():
 
 
 def test_predict_and_compete_invalid_round():
-    response = client.get("/predict-and-compete/2026/24")
+    response = client.get("/predict-and-compete/2026/31")
     assert response.status_code == 422
