@@ -127,8 +127,14 @@ def precedent_options(
     return [], "none"
 
 
-def load_precedents(db: Any, *, before_year: int) -> list[PrecedentRecord]:
-    """Realised dry-race strategies of cars covering >= 90% of the race distance."""
+def load_precedents(db: Any, *, before_year: int | None = None, before_date: Any = None) -> list[PrecedentRecord]:
+    """Realised dry-race strategies of cars covering >= 90% of the race distance.
+
+    Cutoff: seasons before `before_year` (backtests), or races before `before_date`
+    (forecasts -- earlier rounds of the same season count, which matters in a new era).
+    """
+    if (before_year is None) == (before_date is None):
+        raise ValueError("give exactly one of before_year or before_date")
     rows = db.execute(text("""
         SELECT rs.race_id, rs.race_entry_id, rs.stint_number, UPPER(rs.compound) AS compound, rs.end_lap,
                MAX(rs.end_lap) OVER (PARTITION BY rs.race_id) AS race_laps,
@@ -138,9 +144,11 @@ def load_precedents(db: Any, *, before_year: int) -> list[PrecedentRecord]:
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
         LEFT JOIN race_results rr ON rr.session_id = s.id AND rr.race_entry_id = rs.race_entry_id
-        WHERE r.season_year < :year AND r.regulation_era IS NOT NULL
+        WHERE (CAST(:year AS INTEGER) IS NULL OR r.season_year < :year)
+          AND (CAST(:before AS DATE) IS NULL OR r.race_date < :before)
+          AND r.regulation_era IS NOT NULL
         ORDER BY rs.race_id, rs.race_entry_id, rs.stint_number
-    """), {"year": before_year}).mappings().all()
+    """), {"year": before_year, "before": before_date}).mappings().all()
     by_car: dict[tuple[int, int], list[dict]] = defaultdict(list)
     for row in rows:
         by_car[(row["race_id"], row["race_entry_id"])].append(row)

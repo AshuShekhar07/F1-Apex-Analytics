@@ -87,12 +87,21 @@ def _dist_json(d: Distribution) -> dict:
 
 # --- compute ------------------------------------------------------------------
 
+MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow earlier eras
+
+
 def compute_forecast(db: Any, race_id: int) -> dict:
+    """Forecast from races strictly before the race date.
+
+    In a new regulation era some evidence does not exist yet; each fallback used is
+    recorded in `data_notes` (stored and returned by the API) instead of hidden.
+    """
     from race_strategy_calibration_v1 import calibrate_event_hazards
     from race_strategy_data_adapter_v1 import load_event_observations
     from race_strategy_pit_calibration_v1 import calibrate_total_pit_lane_from_db
     from race_strategy_pit_loss_v2 import estimate_pit_loss, load_observations as load_pit_losses
 
+    notes: list[str] = []
     race = db.execute(text("""
         SELECT r.id, r.season_year, r.round_number, r.race_date, r.track_id, r.regulation_era,
                COALESCE(t.total_race_laps, (
@@ -108,7 +117,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         raise ForecastError("race has no era, date or known distance")
     era, season, as_of, total_laps = race["regulation_era"], race["season_year"], race["race_date"], int(race["total_laps"])
 
-    # grid: official starting grid once the race has results, else qualifying order
+    # grid: official starting slot where the race has one, else qualifying position
     field = db.execute(text("""
         SELECT re.driver_id, re.team_id, q.final_position, rr.starting_grid_position
         FROM qualifying_results q
@@ -118,28 +127,41 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         LEFT JOIN race_results rr ON rr.session_id = sr.id AND rr.race_entry_id = re.id
         WHERE sq.race_id = :r AND re.role = 'race_driver'
     """), {"r": race_id}).mappings().all()
-    if len(field) < 10:
-        raise ForecastError("qualifying results not available yet")
-    has_start = all(f["starting_grid_position"] is not None for f in field)
+    times = best_quali_times(db, race_id)
+    if len(field) < 10 or not any(times.values()):
+        raise ForecastError("qualifying results or lap times not available yet")
     back = len(field) + 1
-    grid = {
-        int(f["driver_id"]): (int(f["starting_grid_position"]) if has_start and f["starting_grid_position"] > 0
-                              else back if has_start else int(f["final_position"] or back))
-        for f in field
-    }
+    grid, from_start = {}, 0
+    for f in field:
+        start = f["starting_grid_position"]
+        if start is not None:
+            grid[int(f["driver_id"])] = int(start) if start > 0 else back     # 0 = pit-lane start
+            from_start += 1
+        else:
+            grid[int(f["driver_id"])] = int(f["final_position"] or back)
+    grid_source = ("starting_grid" if from_start == len(field)
+                   else "qualifying" if from_start == 0 else "mixed")
+    if grid_source == "mixed":
+        notes.append(f"grid: official slot for {from_start}/{len(field)} drivers, qualifying position for the rest")
 
     # pace = qualifying-implied gap + recent team form, all from races before as_of
     observations = [o for o in load_observations(db, start_year=2018, end_year=season)
                     if o.race_date is not None and o.race_date < as_of]
     try:
         model = fit_model([o for o in observations if o.regulation_era == era])
-    except ValueError as exc:
-        raise ForecastError(f"not enough race history in this era: {exc}") from exc
-    times = best_quali_times(db, race_id)
+    except ValueError:
+        earlier = [o for o in observations if o.regulation_era != era]
+        if not earlier:
+            raise ForecastError("no race-pace history at all")
+        previous_era = max(earlier, key=lambda o: o.race_date).regulation_era
+        model = fit_model([o for o in earlier if o.regulation_era == previous_era])
+        notes.append(f"pace model: too few {era} races yet, using {previous_era} relation")
     gaps = quali_gaps(times)
     pole = min(t for t in times.values() if t)
     back_gap = max(gaps.values()) if gaps else 0.03
     history = team_residual_history(observations, era=era, before=as_of)
+    if not history:
+        notes.append("team race form: no earlier races in this era, form = 0 for every team")
     rows = []
     for f in sorted(field, key=lambda f: (grid[int(f["driver_id"])], f["driver_id"])):
         d, team = int(f["driver_id"]), int(f["team_id"])
@@ -152,22 +174,37 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         if r.season_year == season - 1:
             prev_by_race[r.race_id].append(r)
     weight = choose_weight(prev_by_race) if prev_by_race else 0.5
+    if not prev_by_race:
+        notes.append("blend weight: no previous-season races scored, using 0.5")
     predicted = predictions(rows, weight)["blend"]
 
-    finishes = db.execute(text("""
+    finishes_sql = """
         SELECT rr.starting_grid_position, rr.finishing_position, rr.status
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
         JOIN races r ON r.id = s.race_id
-        WHERE r.regulation_era = :era AND r.race_date < :d
+        WHERE r.race_date < :d AND (CAST(:era AS TEXT) IS NULL OR r.regulation_era = :era)
           AND rr.starting_grid_position > 0 AND rr.finishing_position IS NOT NULL
-    """), {"era": era, "d": as_of}).all()
+    """
+    finishes = db.execute(text(finishes_sql), {"era": era, "d": as_of}).all()
+    if len(finishes) < MIN_ERA_FINISHES:
+        finishes = db.execute(text(finishes_sql), {"era": None, "d": as_of}).all()
+        notes.append(f"win/podium rates and retirement rate: fewer than {MIN_ERA_FINISHES} {era} results, "
+                     "using all earlier eras")
     slot_rates = grid_slot_rates([(int(g), int(f)) for g, f, _ in finishes], field_size=len(field))
 
-    precedents = [p for p in load_precedents(db, before_year=season) if p.regulation_era == era]
-    options = historical_strategy_options((p.strategy for p in precedents), total_laps, top_k=4)
+    all_precedents = load_precedents(db, before_date=as_of)
+    options = historical_strategy_options(
+        (p.strategy for p in all_precedents if p.regulation_era == era), total_laps, top_k=4)
     if not options:
-        raise ForecastError("no historical dry strategies in this era")
+        earlier_eras = [p for p in all_precedents if p.regulation_era != era]
+        if earlier_eras:
+            last_era = max(earlier_eras, key=lambda p: p.season_year).regulation_era
+            options = historical_strategy_options(
+                (p.strategy for p in earlier_eras if p.regulation_era == last_era), total_laps, top_k=4)
+            notes.append(f"strategy: no dry {era} races yet, using {last_era} strategies")
+    if not options:
+        raise ForecastError("no historical dry strategies")
     total_weight = sum(w for _, w in options)
     strategy_payload = {
         "most_common": strategy_to_json(options[0][0]),
@@ -180,17 +217,38 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     reference_lap = pole * model.race_to_pole_ratio
     pit_observations = load_pit_losses(db, start_year=2018, end_year=season)
     losses = {}
+    earlier_eras = sorted({o.regulation_era for o in pit_observations
+                           if o.regulation_era != era and o.race_date < as_of},
+                          key=lambda e: max(o.race_date for o in pit_observations if o.regulation_era == e),
+                          reverse=True)
     for condition in ("green", "sc", "vsc"):
-        est = estimate_pit_loss(pit_observations, track_id=race["track_id"], regulation_era=era,
-                                condition=condition, before_date=as_of)
-        if est is not None:
-            losses[condition] = Distribution(est.median_seconds, est.robust_std_seconds, 5.0, 60.0)
+        for scope in (era, *earlier_eras[:1]):
+            est = estimate_pit_loss(pit_observations, track_id=race["track_id"], regulation_era=scope,
+                                    condition=condition, before_date=as_of)
+            if est is not None:
+                losses[condition] = Distribution(est.median_seconds, est.robust_std_seconds, 5.0, 60.0)
+                if scope != era:
+                    notes.append(f"pit loss ({condition}): no {era} evidence yet, using {scope}")
+                break
     if "green" not in losses:
-        losses["green"] = calibrate_total_pit_lane_from_db(db, start_year=2018, end_year=season - 1,
-                                                           era=era).total_pit_lane_seconds
+        for scope in (era, None):
+            try:
+                losses["green"] = calibrate_total_pit_lane_from_db(
+                    db, start_year=2018, end_year=season - 1, era=scope).total_pit_lane_seconds
+                notes.append(f"pit loss: v1 pit-lane time ({scope or 'all eras'})")
+                break
+            except ValueError:
+                continue
+        else:
+            raise ForecastError("no pit-stop history")
     for condition in ("sc", "vsc"):
-        losses.setdefault(condition, losses["green"])
+        if condition not in losses:
+            losses[condition] = losses["green"]
+            notes.append(f"pit loss under {condition.upper()}: no evidence, no discount applied")
     event_obs, _ = load_event_observations(db, era=era, start_year=2018, end_year=season - 1)
+    if not event_obs:
+        event_obs, _ = load_event_observations(db, era=None, start_year=2018, end_year=season - 1)
+        notes.append("Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras")
     hazards, _ = calibrate_event_hazards(event_obs)
     dnf = (sum(s in DNF_STATUSES for *_, s in finishes) + 1) / (len(finishes) + 2)
 
@@ -205,7 +263,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             "team_form": round(r.form, 5),
         })
     return {
-        "race_id": race_id, "as_of_date": as_of, "grid_source": "starting_grid" if has_start else "qualifying",
+        "race_id": race_id, "as_of_date": as_of, "grid_source": grid_source,
         "drivers": drivers, "strategy": strategy_payload,
         "inputs": {
             "total_laps": total_laps, "blend_weight": weight, "drivers": drivers,
@@ -213,6 +271,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             "pit_loss": {k: _dist_json(v) for k, v in losses.items()},
             "hazards": {k: float(v) for k, v in hazards.items()}, "dnf_probability": dnf,
             "overtake_threshold": WHAT_IF_THRESHOLD, "noise_scale": WHAT_IF_NOISE_SCALE,
+            "data_notes": notes,
         },
     }
 
@@ -330,11 +389,16 @@ def main() -> int:
                 forecast = compute_forecast(db, race_id)
                 forecast_id = store_forecast(db, forecast)
                 leader = min(forecast["drivers"], key=lambda d: d["predicted_position"])
+                notes = forecast["inputs"]["data_notes"]
                 print(f"race {race_id}: stored forecast {forecast_id} ({forecast['grid_source']}), "
-                      f"predicted winner driver {leader['driver_id']}")
+                      f"predicted winner driver {leader['driver_id']}"
+                      + (f"  notes: {'; '.join(notes)}" if notes else ""))
             except ForecastError as exc:
                 failures += 1
                 print(f"race {race_id}: SKIP {exc}")
+            except Exception as exc:  # one bad race must not stop the batch
+                failures += 1
+                print(f"race {race_id}: ERROR {type(exc).__name__}: {exc}")
     return 1 if failures and len(race_ids) == 1 else 0
 
 

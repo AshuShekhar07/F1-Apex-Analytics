@@ -56,6 +56,7 @@ def get_forecast(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
         "computed_at": forecast["computed_at"],
         "drivers": [{**dict(d), "p_win": float(d["p_win"]), "p_podium": float(d["p_podium"])} for d in drivers],
         "strategy_alternatives": inputs.get("strategy_options", []),
+        "data_notes": inputs.get("data_notes", []),
         "validation": forecast["validation"],
     }
 

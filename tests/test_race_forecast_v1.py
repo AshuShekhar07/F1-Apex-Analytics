@@ -65,6 +65,24 @@ def forecast_db():
                     INSERT INTO qualifying_results (session_id, race_entry_id, q1_time, final_position)
                     VALUES (:s, :e, :t, :p)
                 """), {"s": q, "e": entry, "t": 80 + 0.1 * d, "p": 13 - d})   # reversed: slowest on pole
+            # race 9: first race of a NEW regulation era, qualifying only
+            conn.execute(text("""
+                INSERT INTO races (id, track_id, season_year, round_number, race_date, regulation_era)
+                VALUES (9, 2, 2025, 1, make_date(2025, 3, 1), 'new'),
+                       (10, 1, 2024, 10, make_date(2024, 11, 3), 'e')
+            """))
+            for race_id, with_times in ((9, True), (10, False)):
+                q = conn.execute(text("INSERT INTO sessions (race_id, session_type, start_time) VALUES (:r, 'Q', now()) RETURNING id"),
+                                 {"r": race_id}).scalar()
+                for d in range(1, 13):
+                    entry = conn.execute(text("""
+                        INSERT INTO race_entries (race_id, driver_id, team_id, role, car_number)
+                        VALUES (:r, :d, :t, 'race_driver', :d) RETURNING id
+                    """), {"r": race_id, "d": d, "t": (d + 1) // 2}).scalar()
+                    conn.execute(text("""
+                        INSERT INTO qualifying_results (session_id, race_entry_id, q1_time, final_position)
+                        VALUES (:s, :e, :t, :p)
+                    """), {"s": q, "e": entry, "t": (80 + 0.1 * d) if with_times else None, "p": d})
         with engine.begin() as conn:
             for race_id in (5, 7):
                 store_forecast(conn, compute_forecast(conn, race_id))
@@ -170,3 +188,39 @@ def test_run_what_if_is_reproducible(forecast_db):
     a = run_what_if(inputs, Scenario(safety_car_laps=(5, 6)), sims=200, seed=3)
     b = run_what_if(inputs, Scenario(safety_car_laps=(5, 6)), sims=200, seed=3)
     assert a == b
+
+
+def test_new_regulation_era_uses_recorded_fallbacks(forecast_db):
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 9)
+    notes = " | ".join(forecast["inputs"]["data_notes"])
+    assert "pace model: too few new races yet, using e relation" in notes
+    assert "strategy: no dry new races yet, using e strategies" in notes
+    assert "using all earlier eras" in notes and "using all eras" in notes
+    assert "pit loss (green): no new evidence yet, using e" in notes
+    assert forecast["strategy"]["most_common"]["sequence"] == ["MEDIUM", "HARD"]
+
+
+def test_qualifying_rows_without_times_are_refused(forecast_db):
+    with forecast_db.connect() as db:
+        with pytest.raises(ForecastError, match="lap times"):
+            compute_forecast(db, 10)
+
+
+def test_partial_official_grid_is_mixed(forecast_db):
+    with forecast_db.connect() as db:
+        trans = db.begin()
+        db.execute(text("""
+            UPDATE race_results SET starting_grid_position = NULL
+            WHERE race_entry_id = (SELECT id FROM race_entries WHERE race_id = 5 AND driver_id = 12)
+        """))
+        forecast = compute_forecast(db, 5)
+        trans.rollback()
+    assert forecast["grid_source"] == "mixed"
+    assert any("official slot for 11/12" in n for n in forecast["inputs"]["data_notes"])
+
+
+def test_forecast_endpoint_exposes_data_notes(client, forecast_db):
+    with forecast_db.connect() as db:
+        stored = db.execute(text("SELECT inputs -> 'data_notes' FROM race_forecasts WHERE race_id = 5")).scalar()
+    assert client.get("/races/5/forecast").json()["data_notes"] == stored
