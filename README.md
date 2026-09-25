@@ -54,6 +54,17 @@ uvicorn app.main:app --reload          # API on :8000, docs at /docs (run from r
 cd circuit-viz-app && npm install && npm run dev   # 3D circuit visualizer on :5173
 ```
 
+## Strategy data layer (Phase 2, read-only audits)
+
+| Module | What it produces |
+|---|---|
+| `race_neutralisations_v1.py` | SC / VSC / red-flag windows per race from stored track-status intervals, mapped to the race leader's laps; flags `races.safety_car_periods` counts that disagree |
+| `race_strategy_pit_loss_v2.py` | Time lost per stop (in-lap + out-lap vs clean pace), split green / SC / VSC, per track and era with era fallback and a walk-forward date cutoff |
+| `pirelli_compounds_v1.py` | Validation of `race_compound_nominations`; season-scoped compound identity (no cross-season C-number equivalence is assumed) |
+
+None of these are wired into the simulator yet; each must pass its real-data
+checks (`tests/real_db/test_phase2_data.py`) first.
+
 ## Tests
 
 Three tiers:

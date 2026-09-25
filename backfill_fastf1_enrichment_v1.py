@@ -18,13 +18,14 @@ import argparse
 import hashlib
 import os
 import time
-from pathlib import Path
 from typing import Any
 
 import fastf1
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+
+from fastf1_cache import fastf1_cache_dir
 
 
 API_CALL_COUNT = 0
@@ -1078,12 +1079,7 @@ def main() -> int:
     if not database_url:
         raise SystemExit("DATABASE_URL is not set")
 
-    if args.cache_dir:
-        fastf1.Cache.enable_cache(args.cache_dir)
-    else:
-        default_cache = Path.cwd() / "cache"
-        default_cache.mkdir(parents=True, exist_ok=True)
-        fastf1.Cache.enable_cache(str(default_cache))
+    fastf1.Cache.enable_cache(args.cache_dir or fastf1_cache_dir())
 
     engine = create_engine(database_url)
 
