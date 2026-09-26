@@ -140,3 +140,8 @@ degradation models, empirical strategy prior, traffic/defending effect.
 - "Track record" / `delta_to_track_record` is the fastest valid race lap in the
   database since 2018, not the official lap record, and ignores layout changes.
 - `/strategy/predict` serves `strategy_service_v7` (optional `grid` and `start_compound` query params); the old v6 answer is at `/strategy/predict-v6` (deprecated).
+
+## Frontend
+
+`frontend/` is the web app (React + TypeScript + Vite): season overview, race page with forecast vs
+result, tyre strategy and the what-if simulator. See `frontend/README.md` to run it.

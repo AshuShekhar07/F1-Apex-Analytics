@@ -55,6 +55,7 @@ def get_forecast(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
         "grid_source": forecast["grid_source"],
         "computed_at": forecast["computed_at"],
         "drivers": [{**dict(d), "p_win": float(d["p_win"]), "p_podium": float(d["p_podium"])} for d in drivers],
+        "total_laps": inputs.get("total_laps"),
         "strategy_alternatives": inputs.get("strategy_options", []),
         # method used, plus optional weather / wet / model_optimal blocks (race_forecast_v1 switches)
         "strategy_extras": inputs.get("strategy_extras", {"method": "era_mode"}),

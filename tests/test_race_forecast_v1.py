@@ -309,3 +309,11 @@ def test_slot_rates_never_increase_down_the_grid():
     pods = [rates[s][1] for s in sorted(rates)]
     wins = [rates[s][0] for s in sorted(rates)]
     assert all(a >= b for a, b in zip(pods, pods[1:])) and all(a >= b for a, b in zip(wins, wins[1:]))
+
+
+def test_race_list_shows_winner_and_predicted_winner(client):
+    races = {r["id"]: r for r in client.get("/races?season=2024").json()}
+    assert races[5]["winner_name"].startswith("Driver") and races[5]["has_forecast"] is True
+    assert races[5]["predicted_winner_name"].startswith("Driver")
+    assert races[7]["winner_name"] is None and races[7]["has_forecast"] is True     # upcoming, forecast only
+    assert races[8]["has_forecast"] is False and races[8]["predicted_winner_name"] is None
