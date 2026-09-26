@@ -7,6 +7,10 @@ import { useAsync } from '../hooks'
 
 export const SEASONS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018]
 
+function isPast(iso: string) {
+  return new Date(`${iso}T23:59:59`) < new Date()
+}
+
 function formatDate(iso: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
@@ -52,8 +56,10 @@ export function SeasonPage() {
                   <span className="label forecast">Forecast</span>
                   <DriverName name={r.predicted_winner_name} color={r.predicted_winner_color_hex} />
                 </>
+              ) : isPast(r.race_date) ? (
+                <span className="small pending">Race run: results not loaded yet</span>
               ) : (
-                <span className="muted small">No result or forecast yet</span>
+                <span className="muted small">Upcoming: forecast after qualifying</span>
               )}
             </div>
           </Link>

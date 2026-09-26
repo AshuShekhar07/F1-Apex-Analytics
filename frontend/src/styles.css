@@ -70,6 +70,7 @@ section { background: var(--panel); border: 1px solid var(--border); border-radi
 .race-card-bottom { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
 .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .label.forecast { color: var(--warn); }
+.pending { color: var(--warn); }
 
 .driver { display: inline-flex; align-items: center; gap: 8px; }
 .team-stripe { width: 4px; height: 1.2em; border-radius: 2px; display: inline-block; flex-shrink: 0; }
