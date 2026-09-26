@@ -27,7 +27,7 @@ export function ForecastTable({ forecast, results }: { forecast: Forecast; resul
               <th>Grid</th>
               <th>Win</th>
               <th>Podium</th>
-              {finished && <th title="Actual finishing position">Actual</th>}
+              {finished && <th title="Actual finishing position; (+n) = n places worse than predicted, (−n) = better">Actual</th>}
             </tr>
           </thead>
           <tbody>

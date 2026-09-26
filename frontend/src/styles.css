@@ -73,7 +73,11 @@ section { background: var(--panel); border: 1px solid var(--border); border-radi
 .pending { color: var(--warn); }
 
 .driver { display: inline-flex; align-items: center; gap: 8px; }
-.team-stripe { width: 4px; height: 1.2em; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+.team-stripe {
+  width: 4px; height: 1.2em; border-radius: 2px; display: inline-block; flex-shrink: 0;
+  /* thin outline keeps very dark (or very light) team colours visible on either theme */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent);
+}
 .team-name { display: block; line-height: 1.1; }
 
 .badge { font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); }
