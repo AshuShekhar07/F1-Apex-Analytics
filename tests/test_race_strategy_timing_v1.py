@@ -1,0 +1,105 @@
+from datetime import date
+
+from race_strategy_timing_v1 import (
+    CarStrategy,
+    LapTyre,
+    Stint,
+    predict_strategy,
+    stints_from_laps,
+)
+
+
+def _laps(spec):
+    """spec: list of (compound, tyre_life, pit_out) per lap starting at lap 1."""
+    return [LapTyre(i + 1, c, t, p) for i, (c, t, p) in enumerate(spec)]
+
+
+def test_same_compound_stop_is_a_stop():
+    spec = ([("MEDIUM", i + 1, False) for i in range(10)]
+            + [("HARD", 1, True)] + [("HARD", i + 2, False) for i in range(9)]
+            + [("HARD", 1, True)] + [("HARD", i + 2, False) for i in range(9)])
+    assert stints_from_laps(_laps(spec)) == [Stint("MEDIUM", 1, 10), Stint("HARD", 11, 20), Stint("HARD", 21, 30)]
+
+
+def test_mislabelled_lap_is_not_a_stop_and_red_flag_change_is():
+    spec = [("MEDIUM", i + 1, False) for i in range(10)]
+    spec[4] = ("SOFT", 5, False)                               # glitch: one lap labelled SOFT
+    assert stints_from_laps(_laps(spec)) == [Stint("MEDIUM", 1, 10)]
+    red = [("MEDIUM", i + 1, False) for i in range(6)] + [("HARD", 1, False), ("HARD", 2, False)]
+    assert stints_from_laps(_laps(red)) == [Stint("MEDIUM", 1, 6), Stint("HARD", 7, 8)]
+
+
+def test_compound_change_used_only_without_tyre_life_and_lap1_pit_out_ignored():
+    spec = [("SOFT", None, True)] + [("SOFT", None, False)] * 4 + [("HARD", None, False)] * 5
+    assert stints_from_laps(_laps(spec)) == [Stint("SOFT", 1, 5), Stint("HARD", 6, 10)]
+    unknown = [("MEDIUM", 1, False), (None, 2, False), ("MEDIUM", 3, False)]
+    assert stints_from_laps(_laps(unknown)) == [Stint("MEDIUM", 1, 3)]
+
+
+def _car(track, grid, stints, laps=50, era="e", wet=False, year=2023):
+    return CarStrategy(1, date(year, 5, 1), year, track, era, grid, wet, laps,
+                       tuple(Stint(c, a, b) for c, a, b in stints))
+
+
+MH = [("MEDIUM", 1, 20), ("HARD", 21, 50)]
+SMH = [("SOFT", 1, 12), ("MEDIUM", 13, 30), ("HARD", 31, 50)]
+HM = [("HARD", 1, 32), ("MEDIUM", 33, 50)]
+
+
+def test_prediction_uses_track_and_grid_band_then_start_compound():
+    history = ([_car(1, 3, MH) for _ in range(20)] + [_car(1, 15, HM) for _ in range(16)]
+               + [_car(2, 3, SMH) for _ in range(40)])
+    front = predict_strategy(history, track_id=1, regulation_era="e", grid=2, total_laps=50)
+    assert front.strategy.sequence == ("MEDIUM", "HARD") and front.strategy.stop_laps == (20,)
+    assert front.source.startswith("track_band")
+    back = predict_strategy(history, track_id=1, regulation_era="e", grid=16, total_laps=50)
+    assert back.strategy.sequence == ("HARD", "MEDIUM") and back.strategy.stop_laps == (32,)
+    started_soft = predict_strategy(history, track_id=1, regulation_era="e", grid=2, total_laps=50,
+                                    start_compound="soft")
+    assert started_soft.strategy.sequence == ("SOFT", "MEDIUM", "HARD")
+    assert started_soft.source.endswith("start=SOFT")
+    assert abs(sum(w for _, w in front.alternatives) - 1.0) < 1e-9
+
+
+def test_wet_history_is_separate():
+    wet = [_car(1, 3, [("INTERMEDIATE", 1, 25), ("MEDIUM", 26, 50)], wet=True) for _ in range(20)]
+    dry = [_car(1, 3, MH) for _ in range(20)]
+    assert predict_strategy(wet + dry, track_id=1, regulation_era="e", grid=3, total_laps=50,
+                            wet=True).strategy.sequence == ("INTERMEDIATE", "MEDIUM")
+    assert predict_strategy(wet + dry, track_id=1, regulation_era="e", grid=3,
+                            total_laps=50).strategy.sequence == ("MEDIUM", "HARD")
+
+
+def test_no_history_gives_none():
+    assert predict_strategy([], track_id=1, regulation_era="e", grid=1, total_laps=50).strategy is None
+
+
+# --- prediction backtest -------------------------------------------------------
+
+from race_strategy_prediction_backtest_v1 import run, score, summarise  # noqa: E402
+from race_strategy_precedent_v1 import build_strategy  # noqa: E402
+from test_race_strategy_backtest_v2 import synthetic_db  # noqa: E402,F401  (fixture)
+
+
+def test_score_counts_hits_and_first_stop_error():
+    actual = _car(1, 3, [("MEDIUM", 1, 20), ("HARD", 21, 50)])
+    exact = score(1, "m", build_strategy(("MEDIUM", "HARD"), [20], 50), actual)
+    assert (exact.sequence_hit, exact.stop_count_hit, exact.first_stop_error, exact.first_stop_within_3) == (1, 1, 0, 1)
+    late = score(1, "m", build_strategy(("MEDIUM", "HARD", "HARD"), [25, 40], 50), actual)
+    assert (late.sequence_hit, late.stop_count_hit, late.first_stop_error, late.first_stop_within_3) == (0, 0, 5, 0)
+    missing = score(1, "m", None, actual)
+    assert (missing.sequence_hit, missing.first_stop_error) == (0, None)
+
+
+def test_prediction_backtest_end_to_end(synthetic_db):
+    with synthetic_db.connect() as db:
+        scores = run(db, start_year=2024, end_year=2024, wet=False)
+    methods = {s.method for s in scores}
+    assert methods == {"A production", "B era mode (real stints)", "C hierarchy", "D pre-start (known start tyre)"}
+    assert len([s for s in scores if s.method == "A production"]) == 24     # every classified car
+    # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
+    assert all(s.sequence_hit == 1 for s in scores)
+    rows = summarise(scores)
+    assert {r[0] for r in rows} == {"sequence_hit", "stop_count_hit", "first_stop_error", "first_stop_within_3"}
+    baseline = [r for r in rows if r[1] == "A production"]
+    assert len(baseline) == 4 and all(r[3] is None for r in baseline)
