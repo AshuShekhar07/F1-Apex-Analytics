@@ -39,9 +39,18 @@ def test_strategy_valid():
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
-    assert "primary_strategy" in data
-    assert "confidence_pct" in data
+    assert data["status"] == "ok" and data["model_version"] == "strategy_v7"
+    assert data["track_name"] == "Silverstone"
+    assert len(data["primary_strategy"]["sequence"]) >= 2
+
+
+def test_strategy_v6_legacy_path():
+    response = client.get(
+        "/strategy/predict-v6?track_id=10&race_date=2024-07-07"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "primary_strategy" in data and "confidence_pct" in data
 
 
 def test_driver_season_valid():

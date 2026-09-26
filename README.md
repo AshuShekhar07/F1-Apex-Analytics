@@ -18,7 +18,8 @@ until it beats simple baselines out of sample.
 | `backfill_*.py`, `fix_*.py` | FastF1 ingestion and one-off data repairs |
 | `race_status.py` | Canonical race-result status taxonomy (classified / DNF / DNS …) |
 | `finishing_position_contract.py` | Leakage-safe feature contract for the finishing-position model |
-| `strategy_production_v6.py` | Strategy model currently served by `/strategy/predict` |
+| `strategy_service_v7.py` | Strategy model served by `/strategy/predict` (real stints, track/grid-band precedent, pre-start stage, rain switch) |
+| `strategy_production_v6.py` | Legacy strategy model, still served at the deprecated `/strategy/predict-v6` for comparison |
 | `race_strategy_*.py`, `audit_*.py` | Strategy simulator v1 and research audits (not production) |
 | `circuit-viz-app/` | React + Three.js 3D circuit visualizer and its Python pipeline |
 | `tests/` | Unit tests, fixture-DB API contract tests, opt-in real-data tests |
@@ -138,4 +139,4 @@ degradation models, empirical strategy prior, traffic/defending effect.
   position, so retirements count as positions lost.
 - "Track record" / `delta_to_track_record` is the fastest valid race lap in the
   database since 2018, not the official lap record, and ignores layout changes.
-- `/strategy/predict` serves `strategy_production_v6`, not the v1 simulator.
+- `/strategy/predict` serves `strategy_service_v7` (optional `grid` and `start_compound` query params); the old v6 answer is at `/strategy/predict-v6` (deprecated).
