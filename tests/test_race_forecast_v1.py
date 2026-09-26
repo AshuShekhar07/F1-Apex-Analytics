@@ -233,7 +233,8 @@ def test_slot_rates_shrink_thin_era_toward_long_run():
     rates = shrunk_slot_rates(thin_era, all_history, field_size=20)
     assert 0.03 < rates[3][0] < 0.06                       # not ~0, not the full 10%
     rich_era = [(3, 4)] * 400
-    assert shrunk_slot_rates(rich_era, all_history, field_size=20)[3][0] < 0.005   # era record dominates
+    rich = shrunk_slot_rates(rich_era, all_history, field_size=20)[3][0]
+    assert rich < 0.5 * rates[3][0]                        # era record dominates
 
 
 def test_what_if_baseline_is_consistent_with_grid_order(client):
@@ -295,3 +296,16 @@ def test_optimiser_switch_without_tyre_data_is_a_note(forecast_db, monkeypatch):
         forecast = compute_forecast(db, 7)
     assert "model_optimal" not in forecast["inputs"]["strategy_extras"]     # synthetic laps carry no tyre life
     assert any("model-optimal strategy" in n for n in forecast["inputs"]["data_notes"])
+
+
+def test_slot_rates_never_increase_down_the_grid():
+    from race_forecast_v1 import non_increasing, shrunk_slot_rates
+    assert non_increasing([0.5, 0.3, 0.4, 0.1], [1, 1, 1, 1]) == pytest.approx([0.5, 0.35, 0.35, 0.1])
+    assert non_increasing([0.2, 0.6], [3, 1]) == pytest.approx([0.3, 0.3])
+    # era luck: P4 reached the podium every time, P3 never
+    era = [(3, 10)] * 12 + [(4, 2)] * 12 + [(1, 1)] * 12 + [(2, 2)] * 12
+    all_eras = [(g, g) for g in range(1, 21)] * 20
+    rates = shrunk_slot_rates(era, all_eras, field_size=20)
+    pods = [rates[s][1] for s in sorted(rates)]
+    wins = [rates[s][0] for s in sorted(rates)]
+    assert all(a >= b for a, b in zip(pods, pods[1:])) and all(a >= b for a, b in zip(wins, wins[1:]))

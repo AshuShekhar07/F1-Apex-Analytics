@@ -119,6 +119,7 @@ def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = S
     rate = (era successes + k * all-era rate) / (era starts + k). With little era data
     (a new regulation era) the long-run rate dominates; as the era fills in, its own
     record takes over. Avoids e.g. a 0.4% win chance from P3 after 12 races of 2026.
+    Rates are then made non-increasing down the grid (weighted by evidence per slot).
     """
     prior = grid_slot_rates(all_history, field_size=field_size)
     counts = defaultdict(lambda: [0, 0, 0])
@@ -127,11 +128,23 @@ def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = S
         c[0] += 1
         c[1] += int(finish == 1)
         c[2] += int(finish <= 3)
-    return {
-        slot: ((counts[slot][1] + k * p_win) / (counts[slot][0] + k),
-               (counts[slot][2] + k * p_pod) / (counts[slot][0] + k))
-        for slot, (p_win, p_pod) in prior.items()
-    }
+    slots = sorted(prior)
+    weights = [counts[s][0] + k for s in slots]
+    wins = non_increasing([(counts[s][1] + k * prior[s][0]) / (counts[s][0] + k) for s in slots], weights)
+    pods = non_increasing([(counts[s][2] + k * prior[s][1]) / (counts[s][0] + k) for s in slots], weights)
+    return {s: (w, p) for s, w, p in zip(slots, wins, pods)}
+
+
+def non_increasing(values: Sequence[float], weights: Sequence[float]) -> list[float]:
+    """Weighted isotonic fit (pool adjacent violators): a worse grid slot never gets a
+    higher rate. With ~12 races of a new era, P4 could otherwise out-podium P3 by luck."""
+    blocks: list[list[float]] = []            # [weighted mean, weight, count]
+    for v, w in zip(values, weights):
+        blocks.append([v, w, 1])
+        while len(blocks) > 1 and blocks[-2][0] < blocks[-1][0]:
+            (v2, w2, n2), (v1, w1, n1) = blocks.pop(), blocks.pop()
+            blocks.append([(v1 * w1 + v2 * w2) / (w1 + w2), w1 + w2, n1 + n2])
+    return [v for v, _, n in blocks for _ in range(n)]
 
 
 def _today():
