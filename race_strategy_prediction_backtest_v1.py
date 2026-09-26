@@ -23,18 +23,17 @@ from __future__ import annotations
 
 import argparse
 import os
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
-from statistics import mean, median
 from typing import Any, Sequence
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
 from race_strategy_backtest_v2 import race_clustered_ci
-from race_strategy_precedent_v1 import build_strategy, historical_strategy_options, load_precedents
+from race_strategy_precedent_v1 import historical_strategy_options, load_precedents
 from race_strategy_simulator_v1 import Strategy
-from race_strategy_timing_v1 import CarStrategy, is_legal_dry, load_car_strategies, predict_strategy
+from race_strategy_timing_v1 import CarStrategy, load_car_strategies, predict_era_mode, predict_strategy
 
 
 @dataclass(frozen=True)
@@ -57,14 +56,9 @@ def score(race_id: int, method: str, predicted: Strategy | None, actual: CarStra
                  None if error is None else int(error <= 3))
 
 
-def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int, wet: bool) -> Strategy | None:
-    pool = [h for h in history if h.regulation_era == era and h.wet == wet and (wet or is_legal_dry(h.sequence))]
-    if not pool:
-        return None
-    sequence, _ = Counter(h.sequence for h in pool).most_common(1)[0]
-    rows = [h for h in pool if h.sequence == sequence]
-    stops = [round(median(h.stop_fractions[i] for h in rows) * total_laps) for i in range(len(sequence) - 1)]
-    return build_strategy(sequence, stops, total_laps)
+def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int) -> Strategy | None:
+    """Method B -- exactly what strategy_service_v7 serves before the start tyre is known."""
+    return predict_era_mode(history, regulation_era=era, total_laps=total_laps).strategy
 
 
 def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
@@ -90,7 +84,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                 dry_hierarchy[key] = predict_strategy(history, track_id=track, regulation_era=era,
                                                       grid=car.grid, total_laps=total_laps).strategy
             scores.append(score(race_id, "A production", production, car))
-            scores.append(score(race_id, "B era mode (real stints)", era_mode_real(history, era, total_laps, False), car))
+            scores.append(score(race_id, "B era mode (real stints)", era_mode_real(history, era, total_laps), car))
             scores.append(score(race_id, "C hierarchy", dry_hierarchy[key], car))
             scores.append(score(race_id, "D pre-start (known start tyre)",
                                 predict_strategy(history, track_id=track, regulation_era=era, grid=car.grid,

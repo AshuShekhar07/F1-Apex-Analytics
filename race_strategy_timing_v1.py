@@ -184,6 +184,26 @@ def predict_strategy(
     return StrategyPrediction(alternatives[0][0] if alternatives else None, source, tuple(alternatives))
 
 
+def predict_era_mode(history: Sequence[CarStrategy], *, regulation_era: str, total_laps: int,
+                     top_k: int = 4) -> StrategyPrediction:
+    """The era's most common real-stint dry sequences, stop laps = era median fractions.
+
+    Walk-forward 2024-25 (670 cars): as good as any richer method at stop count and first
+    stop, and better than the track/grid-band hierarchy at the full sequence (0.307 vs 0.217).
+    """
+    pool = _pool_levels(history, track_id=-1, era=regulation_era, grid=None, start_compound=None, wet=False)[-1][1]
+    if not pool:
+        return StrategyPrediction(None, "none", ())
+    alternatives = []
+    for sequence, count in Counter(h.sequence for h in pool).most_common(top_k):
+        rows = [h for h in pool if h.sequence == sequence]
+        stops = [round(median(h.stop_fractions[i] for h in rows) * total_laps) for i in range(len(sequence) - 1)]
+        strategy = build_strategy(sequence, stops, total_laps)
+        if strategy is not None:
+            alternatives.append((strategy, count / len(pool)))
+    return StrategyPrediction(alternatives[0][0] if alternatives else None, f"era(n={len(pool)})", tuple(alternatives))
+
+
 # --- database ------------------------------------------------------------------
 
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,

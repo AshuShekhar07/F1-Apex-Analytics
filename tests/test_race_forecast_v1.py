@@ -266,7 +266,7 @@ def test_hierarchy_switch_gives_each_driver_a_strategy(forecast_db, monkeypatch)
     assert all(d["strategy"]["source"].startswith("track") for d in forecast["drivers"])
 
 
-def test_rain_forecast_adds_weather_but_no_invented_wet_strategy(forecast_db, monkeypatch):
+def test_rain_forecast_adds_weather_and_a_warning_not_a_wet_strategy(forecast_db, monkeypatch):
     from datetime import date
 
     import race_forecast_v1
@@ -278,8 +278,8 @@ def test_rain_forecast_adds_weather_but_no_invented_wet_strategy(forecast_db, mo
         forecast = compute_forecast(db, 7)
     extras = forecast["inputs"]["strategy_extras"]
     assert extras["weather"]["wet_strategy_trigger"] is True
-    assert "wet" not in extras                        # synthetic history has no wet races
-    assert any("no wet races" in n for n in forecast["inputs"]["data_notes"])
+    assert "wet" not in extras                        # wet precedent failed its backtest
+    assert any("low confidence" in n for n in forecast["inputs"]["data_notes"])
 
     monkeypatch.setattr(race_forecast_v1, "_race_conditions", lambda t, d: {"status": "error", "message": "offline"})
     with forecast_db.connect() as db:

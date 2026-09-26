@@ -49,12 +49,14 @@ SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 s
 # Research switches. Each is flipped BY HAND only after its walk-forward backtest passes;
 # nothing is promoted automatically.
 #   STRATEGY_METHOD   "era_mode": one era-wide most-common strategy for every driver (validated)
-#                     "hierarchy": per-driver track/grid-band precedent with real stints
-#                     (race_strategy_prediction_backtest_v1, method C)
-#   OPTIMISER_ENABLED tyre model v3 optimiser shown as an extra block
-#                     (race_tyre_model_backtest_v3 must print VERDICT: ENABLE)
-#   WET_SWITCH        for upcoming races, a near-term rain forecast adds a wet-precedent block
-#                     (race_strategy_prediction_backtest_v1 --wet, method W)
+#                     "hierarchy": per-driver track/grid-band precedent with real stints.
+#                     2024-25 backtest: WORSE at the full sequence (0.217 vs 0.307) -> off.
+#   OPTIMISER_ENABLED tyre model v3 optimiser shown as an extra block. 2024-25: the wear model
+#                     beats a flat model (gate 1 PASS) but the optimiser's picks do not match
+#                     what teams run (sequence 0.055, gate 2 FAIL) -> off.
+#   WET_SWITCH        for upcoming races, report the rain forecast and warn when rain is
+#                     expected. No wet strategy is shown: the wet precedent (method W) did not
+#                     beat the baseline in 2022-25 wet races (sequence accuracy 0.015).
 STRATEGY_METHOD = "era_mode"
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
@@ -65,8 +67,11 @@ VALIDATION = {
                            "grid_only_mean_abs_error_places": 3.071},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.028},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.061},
-    "strategy": {"method": "era's most common dry strategy", "stop_count_accuracy": 0.703,
-                 "sequence_accuracy": 0.468, "first_stop_mean_abs_error_laps": 9.9},
+    "strategy": {"method": "era's most common dry strategy",
+                 "truth": "real stints (same-compound stops count); race_strategy_prediction_backtest_v1, "
+                          "dry races 2024-2025, 670 cars in 37 races",
+                 "stop_count_accuracy": 0.472, "sequence_accuracy": 0.307,
+                 "first_stop_mean_abs_error_laps": 9.28, "first_stop_within_3_laps": 0.211},
     "what_if": {"method": "simulator v2", "note": "scenario tool; did not beat the blend at forecasting"},
 }
 
@@ -151,8 +156,7 @@ def extra_strategy_blocks(db: Any, race: dict, total_laps: int, rows: Sequence, 
 
     as_of, era, track = race["race_date"], race["regulation_era"], race["track_id"]
     per_driver: dict[int, dict] = {}
-    need_history = STRATEGY_METHOD == "hierarchy" or WET_SWITCH
-    history = load_car_strategies(db, before_date=as_of) if need_history else []
+    history = load_car_strategies(db, before_date=as_of) if STRATEGY_METHOD == "hierarchy" else []
 
     if STRATEGY_METHOD == "hierarchy":
         payload["method"] = "hierarchy"
@@ -189,18 +193,9 @@ def extra_strategy_blocks(db: Any, race: dict, total_laps: int, rows: Sequence, 
             payload["weather"] = {k: weather.get(k) for k in (
                 "tier", "rain_expected", "rain_onset_lap", "wet_strategy_trigger", "target_track_temp")}
             if weather.get("wet_strategy_trigger"):
-                wet = predict_strategy(history, track_id=track, regulation_era=era, grid=None,
-                                       total_laps=total_laps, wet=True)
-                if wet.strategy is None:
-                    notes.append("weather: rain forecast but no wet races in this era to learn from")
-                else:
-                    payload["wet"] = {
-                        "source": wet.source,
-                        "most_common": strategy_to_json(wet.strategy),
-                        "alternatives": [strategy_to_json(s, round(w, 3)) for s, w in wet.alternatives],
-                    }
-                    notes.append("weather: rain forecast during the race; wet-race precedent added. "
-                                 "Positions and what-ifs still assume a dry race")
+                notes.append("weather: rain forecast during the race. Strategies in wet races are not "
+                             "predictable from history (best backtest sequence accuracy 8.5%); the dry "
+                             "strategy, positions and what-ifs are low confidence")
     return per_driver
 
 

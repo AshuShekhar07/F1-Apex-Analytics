@@ -53,7 +53,6 @@ class StrategyPredictionV7(V7Prediction):
     grid: Optional[int] = None
     start_compound: Optional[str] = None
     weather: Optional[V7Weather] = None
-    wet_strategy: Optional[V7Prediction] = None
     validation: dict
     data_notes: list[str]
 
@@ -165,12 +164,18 @@ router = APIRouter(
 def predict_strategy(
     track_id: int = Query(..., ge=1, description="Database track ID"),
     race_date: date = Query(..., description="Race date in YYYY-MM-DD format"),
-    grid: Optional[int] = Query(None, ge=1, le=30, description="Grid slot, once qualifying is known"),
+    grid: Optional[int] = Query(None, ge=1, le=30,
+                                description="Grid slot; used with start_compound (pre-start stage)"),
     start_compound: Optional[Literal["SOFT", "MEDIUM", "HARD", "soft", "medium", "hard"]] = Query(
         None, description="Declared starting tyre (pre-start stage)"),
     db: Session = Depends(get_db),
 ):
-    """Most likely strategy + alternatives from real stints before race_date (strategy_service_v7)."""
+    """Most likely strategy + alternatives from real stints before race_date (strategy_service_v7).
+
+    Before the start tyre is known this is the era's most common strategy (the track /
+    grid-band variant was worse in the walk-forward backtest); with start_compound, history
+    is filtered to strategies that started on it.
+    """
     try:
         return strategy_service_v7.predict(db, track_id, race_date, grid=grid, start_compound=start_compound)
     except strategy_service_v7.StrategyNotFound as exc:
