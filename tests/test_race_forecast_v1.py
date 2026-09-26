@@ -243,3 +243,55 @@ def test_what_if_baseline_is_consistent_with_grid_order(client):
     assert by_grid[0]["baseline"]["expected_position"] < 4        # not scrambled to mid-field
     assert by_grid[0]["driver_name"].startswith("Driver") and "team_name" in by_grid[0]
     assert body["simulation_settings"]["race_day_spread_scale"] == 0.25
+
+
+def test_what_if_reports_median_and_most_likely_position(client):
+    body = client.post("/races/5/what-if", json={"simulations": 200}).json()
+    base = body["results"][0]["baseline"]
+    assert {"median_position", "most_likely_position"} <= set(base)
+    assert 1 <= base["median_position"] <= 12 and 1 <= base["most_likely_position"] <= 12
+
+
+def test_forecast_endpoint_reports_strategy_method(client):
+    assert client.get("/races/7/forecast").json()["strategy_extras"]["method"] == "era_mode"
+
+
+def test_hierarchy_switch_gives_each_driver_a_strategy(forecast_db, monkeypatch):
+    import race_forecast_v1
+    monkeypatch.setattr(race_forecast_v1, "STRATEGY_METHOD", "hierarchy")
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    assert forecast["inputs"]["strategy_extras"]["method"] == "hierarchy"
+    assert all(d["strategy"]["sequence"] == ["MEDIUM", "HARD"] for d in forecast["drivers"])
+    assert all(d["strategy"]["source"].startswith("track") for d in forecast["drivers"])
+
+
+def test_rain_forecast_adds_weather_but_no_invented_wet_strategy(forecast_db, monkeypatch):
+    from datetime import date
+
+    import race_forecast_v1
+    monkeypatch.setattr(race_forecast_v1, "_today", lambda: date(2024, 10, 18))
+    monkeypatch.setattr(race_forecast_v1, "_race_conditions", lambda t, d: {
+        "status": "ok", "tier": "forecast", "rain_expected": True, "rain_onset_lap": 12,
+        "wet_strategy_trigger": True, "target_track_temp": 24.0})
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    extras = forecast["inputs"]["strategy_extras"]
+    assert extras["weather"]["wet_strategy_trigger"] is True
+    assert "wet" not in extras                        # synthetic history has no wet races
+    assert any("no wet races" in n for n in forecast["inputs"]["data_notes"])
+
+    monkeypatch.setattr(race_forecast_v1, "_race_conditions", lambda t, d: {"status": "error", "message": "offline"})
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    assert "weather" not in forecast["inputs"]["strategy_extras"]
+    assert any("weather: unavailable (offline)" in n for n in forecast["inputs"]["data_notes"])
+
+
+def test_optimiser_switch_without_tyre_data_is_a_note(forecast_db, monkeypatch):
+    import race_forecast_v1
+    monkeypatch.setattr(race_forecast_v1, "OPTIMISER_ENABLED", True)
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    assert "model_optimal" not in forecast["inputs"]["strategy_extras"]     # synthetic laps carry no tyre life
+    assert any("model-optimal strategy" in n for n in forecast["inputs"]["data_notes"])

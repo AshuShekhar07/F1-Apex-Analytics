@@ -46,6 +46,19 @@ WHAT_IF_THRESHOLD = 0.45   # s/lap to pass; chosen by walk-forward calibration o
 WHAT_IF_NOISE_SCALE = 0.25
 SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 starts of the all-era rate
 
+# Research switches. Each is flipped BY HAND only after its walk-forward backtest passes;
+# nothing is promoted automatically.
+#   STRATEGY_METHOD   "era_mode": one era-wide most-common strategy for every driver (validated)
+#                     "hierarchy": per-driver track/grid-band precedent with real stints
+#                     (race_strategy_prediction_backtest_v1, method C)
+#   OPTIMISER_ENABLED tyre model v3 optimiser shown as an extra block
+#                     (race_tyre_model_backtest_v3 must print VERDICT: ENABLE)
+#   WET_SWITCH        for upcoming races, a near-term rain forecast adds a wet-precedent block
+#                     (race_strategy_prediction_backtest_v1 --wet, method W)
+STRATEGY_METHOD = "era_mode"
+OPTIMISER_ENABLED = False
+WET_SWITCH = True
+
 VALIDATION = {
     "source": "race_strategy_backtest_v2 walk-forward, dry races 2024-2025, 717 drivers in 36 races",
     "predicted_position": {"method": "grid/pace blend", "mean_abs_error_places": 3.009,
@@ -114,6 +127,81 @@ def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = S
                (counts[slot][2] + k * p_pod) / (counts[slot][0] + k))
         for slot, (p_win, p_pod) in prior.items()
     }
+
+
+def _today():
+    from datetime import date
+    return date.today()
+
+
+def _race_conditions(track_id: int, race_date) -> dict:
+    """Weather for an upcoming race (fetch_race_forecast needs DATABASE_URL and network)."""
+    from fetch_race_forecast import predict_race_conditions
+    return predict_race_conditions(track_id, race_date)
+
+
+def extra_strategy_blocks(db: Any, race: dict, total_laps: int, rows: Sequence, payload: dict,
+                          notes: list[str]) -> dict[int, dict]:
+    """Per-driver strategies, optimiser and wet blocks, each behind its research switch.
+
+    Mutates `payload` (the forecast's strategy block) and returns {driver_id: strategy}
+    when STRATEGY_METHOD is "hierarchy"; otherwise every driver shares `most_common`.
+    """
+    from race_strategy_timing_v1 import load_car_strategies, predict_strategy
+
+    as_of, era, track = race["race_date"], race["regulation_era"], race["track_id"]
+    per_driver: dict[int, dict] = {}
+    need_history = STRATEGY_METHOD == "hierarchy" or WET_SWITCH
+    history = load_car_strategies(db, before_date=as_of) if need_history else []
+
+    if STRATEGY_METHOD == "hierarchy":
+        payload["method"] = "hierarchy"
+        for r in rows:
+            p = predict_strategy(history, track_id=track, regulation_era=era, grid=r.grid, total_laps=total_laps)
+            if p.strategy is not None:
+                per_driver[r.driver_id] = {**strategy_to_json(p.strategy), "source": p.source}
+
+    if OPTIMISER_ENABLED:
+        from race_strategy_pit_loss_v2 import estimate_pit_loss, load_observations as load_pit_losses
+        from race_tyre_model_v3 import fit_for_race, load_tyre_observations, optimise
+
+        model = fit_for_race(load_tyre_observations(db, end_year=race["season_year"]),
+                             track_id=track, regulation_era=era, before_date=as_of)
+        loss = estimate_pit_loss(load_pit_losses(db, start_year=2018, end_year=race["season_year"]),
+                                 track_id=track, regulation_era=era, before_date=as_of)
+        if model is None or loss is None:
+            notes.append("model-optimal strategy: not enough tyre or pit-loss evidence")
+        else:
+            payload["model_optimal"] = {
+                "source": model.source, "pit_loss_seconds": loss.median_seconds,
+                "options": [{**strategy_to_json(s), "seconds_slower_than_best": gap}
+                            for s, gap in optimise(model, total_laps=total_laps, pit_loss=loss.median_seconds)],
+            }
+
+    if WET_SWITCH and as_of >= _today():
+        try:
+            weather = _race_conditions(track, as_of)
+        except Exception as exc:                      # network, API or missing coordinates
+            weather = {"status": "error", "message": str(exc)}
+        if weather.get("status") != "ok":
+            notes.append(f"weather: unavailable ({weather.get('message', 'unknown error')}); dry strategy only")
+        else:
+            payload["weather"] = {k: weather.get(k) for k in (
+                "tier", "rain_expected", "rain_onset_lap", "wet_strategy_trigger", "target_track_temp")}
+            if weather.get("wet_strategy_trigger"):
+                wet = predict_strategy(history, track_id=track, regulation_era=era, grid=None,
+                                       total_laps=total_laps, wet=True)
+                if wet.strategy is None:
+                    notes.append("weather: rain forecast but no wet races in this era to learn from")
+                else:
+                    payload["wet"] = {
+                        "source": wet.source,
+                        "most_common": strategy_to_json(wet.strategy),
+                        "alternatives": [strategy_to_json(s, round(w, 3)) for s, w in wet.alternatives],
+                    }
+                    notes.append("weather: rain forecast during the race; wet-race precedent added. "
+                                 "Positions and what-ifs still assume a dry race")
+    return per_driver
 
 
 def compute_forecast(db: Any, race_id: int) -> dict:
@@ -237,9 +325,11 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         raise ForecastError("no historical dry strategies")
     total_weight = sum(w for _, w in options)
     strategy_payload = {
+        "method": "era_mode",
         "most_common": strategy_to_json(options[0][0]),
         "alternatives": [strategy_to_json(s, round(w / total_weight, 3)) for s, w in options],
     }
+    driver_strategies = extra_strategy_blocks(db, race, total_laps, rows, strategy_payload, notes)
 
     # simulator snapshot for what-if scenarios
     spread_rows = [r for r in previous if r.residual is not None]
@@ -292,12 +382,15 @@ def compute_forecast(db: Any, race_id: int) -> dict:
                                             reference_lap * 0.95, reference_lap * 1.10)),
             "team_form": round(r.form, 5),
         })
+        if r.driver_id in driver_strategies:
+            drivers[-1]["strategy"] = driver_strategies[r.driver_id]
     return {
         "race_id": race_id, "as_of_date": as_of, "grid_source": grid_source,
         "drivers": drivers, "strategy": strategy_payload,
         "inputs": {
             "total_laps": total_laps, "blend_weight": weight, "drivers": drivers,
             "strategy_options": [strategy_to_json(s, w) for s, w in options],
+            "strategy_extras": {k: v for k, v in strategy_payload.items() if k not in ("most_common", "alternatives")},
             "pit_loss": {k: _dist_json(v) for k, v in losses.items()},
             "hazards": {k: float(v) for k, v in hazards.items()}, "dnf_probability": dnf,
             "overtake_threshold": WHAT_IF_THRESHOLD, "noise_scale": WHAT_IF_NOISE_SCALE,
@@ -322,7 +415,7 @@ def store_forecast(db: Any, forecast: dict) -> int:
             INSERT INTO race_forecast_drivers (forecast_id, driver_id, grid, predicted_position, p_win, p_podium, strategy)
             VALUES (:f, :d, :g, :p, :w, :pod, CAST(:s AS JSONB))
         """), {"f": forecast_id, "d": d["driver_id"], "g": d["grid"], "p": d["predicted_position"],
-               "w": d["p_win"], "pod": d["p_podium"], "s": json.dumps(forecast["strategy"]["most_common"])})
+               "w": d["p_win"], "pod": d["p_podium"], "s": json.dumps(d.get("strategy") or forecast["strategy"]["most_common"])})
     return forecast_id
 
 
@@ -333,6 +426,15 @@ class Scenario:
     safety_car_laps: tuple[int, ...] = ()
     vsc_laps: tuple[int, ...] = ()
     strategies: tuple[tuple[int, dict], ...] = ()   # (driver_id, {"sequence": [...], "stop_laps": [...]})
+
+
+def _position_summary(positions: np.ndarray) -> dict:
+    counts = np.bincount(positions.astype(int))
+    return {"expected_position": round(float(positions.mean()), 2),
+            "median_position": int(np.median(positions)),
+            "most_likely_position": int(counts.argmax()),
+            "p_win": round(float((positions == 1).mean()), 4),
+            "p_podium": round(float((positions <= 3).mean()), 4)}
 
 
 def run_what_if(inputs: dict, scenario: Scenario, *, sims: int = 1000, seed: int = 7) -> list[dict]:
@@ -379,10 +481,8 @@ def run_what_if(inputs: dict, scenario: Scenario, *, sims: int = 1000, seed: int
         b, w = base[:, j], what_if[:, j]
         result.append({
             "driver_id": d["driver_id"], "grid": d["grid"],
-            "baseline": {"expected_position": round(float(b.mean()), 2), "p_win": round(float((b == 1).mean()), 4),
-                         "p_podium": round(float((b <= 3).mean()), 4)},
-            "scenario": {"expected_position": round(float(w.mean()), 2), "p_win": round(float((w == 1).mean()), 4),
-                         "p_podium": round(float((w <= 3).mean()), 4)},
+            "baseline": _position_summary(b),
+            "scenario": _position_summary(w),
             "expected_position_change": round(float(w.mean() - b.mean()), 2),
         })
     return result
