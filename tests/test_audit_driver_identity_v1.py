@@ -15,3 +15,12 @@ def test_compare_flags_old_number_owner_conflict_and_missing():
 def test_compare_plain_mismatch():
     [c] = compare(185, [(1, 3, "Daniel Ricciardo")], {3: "Max Verstappen"})
     assert c.status == "mismatch" and c.fastf1_driver == "Max Verstappen" and c.entry_id == 1
+
+
+def test_name_variant_is_not_a_mismatch():
+    [c] = compare(150, [(1, 12, "Kimi Antonelli")], {12: "Andrea Kimi Antonelli"})
+    assert c.status == "variant"
+    [c] = compare(185, [(1, 41, "Isack Hadjar")], {41: "Arvid Lindblad"})
+    assert c.status == "mismatch"
+    [c] = compare(1, [(1, 47, "Mick Schumacher")], {47: "Michael Schumacher"})
+    assert c.status == "mismatch"          # different first name, same surname: not the same person

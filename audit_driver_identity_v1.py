@@ -9,11 +9,15 @@ else qualifying) give car number -> full name. Each DB entry is compared by car
 number:
 
   ok        DB driver name == FastF1 name
+  variant   same person, different spelling ("Kimi Antonelli" / "Andrea Kimi Antonelli":
+            same surname, one name's words contained in the other's) -> never changed
   mismatch  different name -> fix: point the entry at the correct driver
             (existing drivers row by exact name; created only with --apply)
   conflict  the correct driver already has another entry in that race -> reported,
             never changed automatically
   missing   a FastF1 car number with no DB entry -> reported only
+  unknown_number  a DB entry whose number is not in the race/quali results -- normally a
+            practice-only driver (FP1 rookie or reserve); reported, never changed
 
 Dry run by default; --apply writes the fixes in one transaction per race. Only
 race_entries.driver_id changes, so laps/results stay on the same entry. Stored
@@ -49,6 +53,14 @@ def _norm(name: str | None) -> str:
     return " ".join((name or "").split()).casefold()
 
 
+def same_person(a: str | None, b: str | None) -> bool:
+    ta, tb = _norm(a).split(), _norm(b).split()
+    if not ta or not tb or ta[-1] != tb[-1]:
+        return False
+    short, long_ = sorted((ta, tb), key=len)
+    return set(short) <= set(long_)
+
+
 def compare(race_id: int, db_entries: Iterable[tuple[int, int, str]], official: dict[int, str]) -> list[EntryCheck]:
     """db_entries: (entry_id, car_number, driver name); official: car number -> FastF1 full name."""
     db_entries = list(db_entries)
@@ -60,6 +72,8 @@ def compare(race_id: int, db_entries: Iterable[tuple[int, int, str]], official: 
             status = "unknown_number"
         elif _norm(truth) == _norm(name):
             status = "ok"
+        elif same_person(truth, name):
+            status = "variant"
         elif _norm(truth) in names_in_race:
             status = "conflict"
         else:
@@ -139,7 +153,15 @@ def main() -> int:
             ORDER BY race_date
         """), {"a": args.start_year, "b": args.end_year, "r": args.race_id}).mappings().all()
 
-    totals = {"ok": 0, "mismatch": 0, "conflict": 0, "missing": 0, "unknown_number": 0}
+    with engine.connect() as db:
+        duplicates = db.execute(text("""
+            SELECT lower(regexp_replace(trim(name), '\\s+', ' ', 'g')) AS key, array_agg(id ORDER BY id), array_agg(name ORDER BY id)
+            FROM drivers GROUP BY 1 HAVING count(*) > 1
+        """)).all()
+    for _, ids, names in duplicates:
+        print(f"WARNING: duplicate drivers rows {ids} for {names[0]!r} -- entries may be split across them")
+
+    totals = {"ok": 0, "variant": 0, "mismatch": 0, "conflict": 0, "missing": 0, "unknown_number": 0}
     fixed_races = []
     for race in races:
         try:
