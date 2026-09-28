@@ -29,7 +29,16 @@ import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-from race_form_signal_v1 import DriverForm, build_rows, choose_weight, predictions, team_form, team_residual_history
+from race_form_signal_v1 import (
+    DriverForm,
+    build_rows,
+    car_quali_gaps,
+    choose_weight,
+    predictions,
+    team_form,
+    team_residual_history,
+    with_car_pace,
+)
 from race_pace_from_quali_v1 import best_quali_times, fit_model, load_observations, quali_gaps
 from race_status import DNF_STATUSES
 from race_strategy_backtest_v2 import grid_slot_rates
@@ -58,15 +67,22 @@ SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 s
 #                     expected. No wet strategy is shown: the wet precedent (method W) did not
 #                     beat the baseline in 2022-25 wet races (sequence accuracy 0.015).
 STRATEGY_METHOD = "era_mode"
+# Pace used by the blend. "car_pace": a driver whose qualifying lap was missing or >0.3%
+# slower than the teammate's gets the teammate's pace + 0.3% (race_form_signal_v1).
+# prediction_scoreboard_v1 2019-2026, 160 races: finishers off by 10+ places 2.6% -> 1.8%
+# (CI excludes 0), worse nowhere. "own_lap" is the previous method.
+PACE_METHOD = "car_pace"
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
 
 VALIDATION = {
-    "source": "race_strategy_backtest_v2 walk-forward, dry races 2024-2025, 717 drivers in 36 races",
-    "predicted_position": {"method": "grid/pace blend", "mean_abs_error_places": 3.009,
-                           "grid_only_mean_abs_error_places": 3.071},
-    "p_win": {"method": "historical rate for grid slot", "brier_score": 0.028},
-    "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.061},
+    "source": "prediction_scoreboard_v1 walk-forward, all races 2019-2026, 3215 drivers in 160 races",
+    "predicted_position": {"method": "grid/pace blend with car pace", "mean_abs_error_places": 3.314,
+                           "grid_only_mean_abs_error_places": 3.461,
+                           "finishers_mean_abs_error_places": 2.741, "finishers_off_by_10_or_more": 0.018,
+                           "winner_correct": 0.556, "podium_overlap": 0.688, "top10_overlap": 0.772},
+    "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
+    "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
                  "truth": "real stints (same-compound stops count); race_strategy_prediction_backtest_v1, "
                           "dry races 2024-2025, 670 cars in 37 races",
@@ -111,6 +127,11 @@ def _dist_json(d: Distribution) -> dict:
 # --- compute ------------------------------------------------------------------
 
 MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow earlier eras
+
+
+def production_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """The pace variant the production blend uses (PACE_METHOD); the scoreboard scores this."""
+    return with_car_pace(rows) if PACE_METHOD == "car_pace" else list(rows)
 
 
 def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = SLOT_SHRINK_STARTS) -> dict:
@@ -241,10 +262,11 @@ def compute_forecast(db: Any, race_id: int) -> dict:
 
     # grid: official starting slot where the race has one, else qualifying position
     field = db.execute(text("""
-        SELECT re.driver_id, re.team_id, q.final_position, rr.starting_grid_position
+        SELECT re.driver_id, re.team_id, q.final_position, rr.starting_grid_position, dr.name AS driver_name
         FROM qualifying_results q
         JOIN sessions sq ON sq.id = q.session_id AND sq.session_type = 'Q'
         JOIN race_entries re ON re.id = q.race_entry_id
+        JOIN drivers dr ON dr.id = re.driver_id
         LEFT JOIN sessions sr ON sr.race_id = sq.race_id AND sr.session_type = 'R'
         LEFT JOIN race_results rr ON rr.session_id = sr.id AND rr.race_entry_id = re.id
         WHERE sq.race_id = :r AND re.role = 'race_driver'
@@ -284,18 +306,26 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     history = team_residual_history(observations, era=era, before=as_of)
     if not history:
         notes.append("team race form: no earlier races in this era, form = 0 for every team")
+    own_gaps = {int(f["driver_id"]): gaps.get(int(f["driver_id"]), back_gap) for f in field}
+    pace_gaps = (car_quali_gaps(own_gaps, {int(f["driver_id"]): int(f["team_id"]) for f in field})
+                 if PACE_METHOD == "car_pace" else own_gaps)
+    names = {int(f["driver_id"]): f["driver_name"] for f in field}
+    for d in sorted(pace_gaps):
+        if pace_gaps[d] < own_gaps[d]:
+            notes.append(f"car pace: {names[d]}'s qualifying lap was missing or well off the teammate's; "
+                         "using the teammate's pace + 0.3%")
     rows = []
     for f in sorted(field, key=lambda f: (grid[int(f["driver_id"])], f["driver_id"])):
         d, team = int(f["driver_id"]), int(f["team_id"])
-        rows.append(DriverForm(race_id, season, d, grid[d], 0, True, model.race_gap(gaps.get(d, back_gap)),
-                               team_form(history.get(team, []), team, as_of), None))
+        rows.append(DriverForm(race_id, season, d, grid[d], 0, True, model.race_gap(pace_gaps[d]),
+                               team_form(history.get(team, []), team, as_of), None, team))
 
     previous = build_rows(db, observations, start_year=season - 1, end_year=season - 1)
     prev_by_race = defaultdict(list)
     for r in previous:
         if r.season_year == season - 1:
             prev_by_race[r.race_id].append(r)
-    weight = choose_weight(prev_by_race) if prev_by_race else 0.5
+    weight = choose_weight({k: production_pace(v) for k, v in prev_by_race.items()}) if prev_by_race else 0.5
     if not prev_by_race:
         notes.append("blend weight: no previous-season races scored, using 0.5")
     predicted = predictions(rows, weight)["blend"]

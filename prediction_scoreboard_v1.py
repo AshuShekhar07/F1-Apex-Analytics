@@ -6,11 +6,11 @@ here is tuned on the races it scores.
 
 Models (per race, only data strictly before the race date):
   grid      finish in grid order; win/podium = shrunk grid-slot rates (baseline)
-  blend     production: grid rank + w * (quali-implied pace + team form rank - grid rank),
-            w chosen on the previous season; win/podium = grid-slot rates
-  blend_car CANDIDATE: blend, but a driver whose qualifying lap was more than 0.3% slower
-            than the teammate's (or missing) gets the teammate's pace + 0.3% -- a fast car
-            starting out of position after a quali mistake, failure or penalty
+  blend     production (race_forecast_v1.production_pace): grid rank + w * (pace + team form
+            rank - grid rank), w chosen on the previous season; pace = car pace (a driver whose
+            qualifying lap was missing or >0.3% slower than the teammate's gets the teammate's
+            pace + 0.3%); win/podium = grid-slot rates
+  CANDIDATES  experimental pace variants, each scored against the production blend
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
             record, incl. the new-era fallbacks the blend rows cannot rebuild)
 
@@ -51,7 +51,6 @@ from race_form_signal_v1 import (
     predictions,
     race_clustered,
     ranks,
-    with_car_pace,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -207,9 +206,8 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 
 
 # candidate pace variants: name -> transform applied to a race's rows before the blend
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
-    "blend_car": with_car_pace,
-}
+# (blend_car was promoted to production on 2026-09-28: bad misses 2.6% -> 1.8%, worse nowhere)
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {}
 
 
 def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *, start_year: int) -> list[DriverScore]:
@@ -220,7 +218,9 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
     by_season = defaultdict(lambda: defaultdict(list))
     for r in rows:
         by_season[r.season_year][r.race_id].append(r)
-    variants = {"blend": list, **CANDIDATES}
+    from race_forecast_v1 import production_pace
+
+    variants = {"blend": production_pace, **CANDIDATES}
     out: list[DriverScore] = []
     for season in sorted(by_season):
         if season < start_year:

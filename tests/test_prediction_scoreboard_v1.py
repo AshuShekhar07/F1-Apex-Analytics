@@ -62,10 +62,8 @@ def test_scoreboard_end_to_end(synthetic_db):
         rows = build_rows(db, load_observations(db, start_year=2018, end_year=2024), start_year=2023,
                           end_year=2024, include_wet=True)
         scores = model_scores(rows, meta, rates, start_year=2024)
-    assert {s.model for s in scores} == {"grid", "blend", "blend_car"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 3 * 24
-    # every synthetic driver has a representative lap close to the teammate: car pace changes nothing
-    assert summarise(scores, "blend_car")["mae"] == summarise(scores, "blend")["mae"]
+    assert {s.model for s in scores} == {"grid", "blend"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 2 * 24
     grid = summarise(scores, "grid")
     # synthetic: driver d is slower than d-1 and qualifies in that order, so grid order ~ finish order
     assert grid["rank_corr"][0] > 0.8
