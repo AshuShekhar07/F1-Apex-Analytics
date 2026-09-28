@@ -158,18 +158,22 @@ def choose_weight(races: dict[int, list[DriverForm]]) -> float:
 # --- database assembly ---------------------------------------------------------
 
 def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
-               models: dict | None = None) -> list[DriverForm]:
-    """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time)."""
+               models: dict | None = None, include_wet: bool = False) -> list[DriverForm]:
+    """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time).
+
+    Dry races only unless include_wet. Wet races are then scored too, but never feed
+    team form, so dry-race rows are identical with or without include_wet.
+    """
     by_race_driver = {(o.race_id, o.driver_id): o for o in observations}
     team_history = defaultdict(list)   # (era, team) -> [(date, race_id, residual)]
     races = db.execute(text("""
-        SELECT r.id, r.season_year, r.regulation_era, r.race_date
+        SELECT r.id, r.season_year, r.regulation_era, r.race_date, sw.rainfall AS wet
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
-        JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
+        JOIN session_weather sw ON sw.session_id = s.id AND (sw.rainfall = FALSE OR :wet)
         WHERE r.season_year BETWEEN 2018 AND :b AND r.regulation_era IS NOT NULL
         ORDER BY r.race_date, r.id
-    """), {"b": end_year}).mappings().all()
+    """), {"b": end_year, "wet": include_wet}).mappings().all()
 
     rows: list[DriverForm] = []
     for race in races:
@@ -208,7 +212,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     (obs.race_gap - implied) if obs else None,
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
-        if model is not None:
+        if model is not None and not race["wet"]:
             for e in entries:
                 obs = by_race_driver.get((race["id"], int(e["driver_id"])))
                 if obs is not None:
