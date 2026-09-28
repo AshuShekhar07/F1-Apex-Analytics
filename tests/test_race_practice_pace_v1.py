@@ -5,6 +5,16 @@ from race_practice_pace_v1 import MIN_RUN_LAPS, load_practice_gaps, long_run_lap
 from test_race_strategy_backtest_v2 import synthetic_db  # noqa: F401  (fixture)
 
 
+def test_heavy_fuel_runs_8_percent_off_the_quali_lap_count_and_traffic_laps_are_trimmed():
+    laps = ([(1, 110.0, "SOFT"), (2, 88.0, "SOFT"), (3, 115.0, "SOFT")]      # quali sim
+            + [(n, 95.0, "MEDIUM") for n in range(4, 10)]                      # 8% off the quali lap
+            + [(10, 95.3, "MEDIUM"), (11, 96.5, "MEDIUM")])                    # +1.6%: within 2%, kept
+    runs = long_run_laps(laps)
+    assert len(runs["MEDIUM"]) == 8
+    trimmed = long_run_laps([(n, 95.0, "HARD") for n in range(1, 7)] + [(7, 97.5, "HARD")])
+    assert len(trimmed["HARD"]) == 6                                          # +2.6%: traffic, dropped
+
+
 def test_long_runs_keep_consecutive_race_trim_laps_only():
     laps = ([(1, 95.0, "SOFT"), (2, 88.0, "SOFT"), (3, 99.0, "SOFT")]          # out, quali sim, in
             + [(4, 100.0, None)]                                              # slow out-lap

@@ -6,7 +6,10 @@ fuel and worn tyres, which is what the race rewards. For each weekend:
   session   FP2 (race-simulation session on a normal weekend), else FP1 (sprint
             weekends have only one practice); skipped if that session was wet
   long run  >= MIN_RUN_LAPS consecutive laps each within RUN_LAP_FACTOR of the
-            driver's fastest lap -- single-lap quali runs and in/out laps drop out
+            driver's fastest lap (out/in/cool-down laps are 20%+ slower and break runs),
+            then laps more than RUN_TRIM over the run's median (traffic, mistakes) dropped
+            v1 used 7%: heavy-fuel runs are often 6-9% off a low-fuel quali lap, so only
+            ~36% of drivers had a long run although every weekend has practice laps
   pace      median long-run lap per compound; a driver's gap on a compound is to the
             best median on it (compounds need >= MIN_DRIVERS drivers); the gaps are
             averaged over the compounds a driver ran and re-based so the best is 0
@@ -23,7 +26,8 @@ from typing import Any, Iterable
 
 from sqlalchemy import text
 
-RUN_LAP_FACTOR = 1.07
+RUN_LAP_FACTOR = 1.10
+RUN_TRIM = 1.02
 MIN_RUN_LAPS = 5
 MIN_DRIVERS = 4
 MAX_PRACTICE_GAP = 0.05      # beyond this the run is not representative (traffic, damage)
@@ -47,8 +51,12 @@ def long_run_laps(laps: Iterable[tuple[int, float | None, str | None]]) -> dict[
             runs.append([lap])
     out: dict[str, list[float]] = defaultdict(list)
     for run in runs:
-        if len(run) >= MIN_RUN_LAPS:
-            for _, t, c in run:
+        if len(run) < MIN_RUN_LAPS:
+            continue
+        centre = median(t for _, t, _ in run)
+        kept = [(t, c) for _, t, c in run if t <= centre * RUN_TRIM]
+        if len(kept) >= MIN_RUN_LAPS:
+            for t, c in kept:
                 out[c].append(t)
     return dict(out)
 
