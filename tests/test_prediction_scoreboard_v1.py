@@ -82,21 +82,21 @@ def test_scoreboard_end_to_end(synthetic_db):
     assert all(slot[g][0] >= slot[g + 1][0] for g in range(1, 12))   # production's monotone rule
 
 
-def test_car_pace_compares_teammates_within_the_same_session():
+def test_car_pace_fires_only_on_real_anomalies_within_the_same_session():
     from race_form_signal_v1 import TEAMMATE_MARGIN, car_quali_gaps, off_teammate_pace
 
-    # the v1 bug: a Q1 exit 0.2% off the teammate IN Q1 is normal, even if the teammate's
-    # Q3 lap is 1% faster -- judge on Q1 laps, not best laps
+    # normal teammate gaps (0.2-0.6%) never fire, even a Q1 exit vs the teammate's Q3 lap
     assert not off_teammate_pace((80.16, None, None), (80.0, 79.6, 79.2))
-    assert off_teammate_pace((80.5, None, None), (80.0, 79.6, 79.2))           # 0.6% off in Q1
-    assert not off_teammate_pace((80.0, 79.7, 79.3), (80.0, 79.6, 79.2))       # Q3 vs Q3: 0.13%
+    assert not off_teammate_pace((80.5, None, None), (80.0, 79.6, 79.2))       # 0.6% in Q1: normal
+    assert off_teammate_pace((81.2, None, None), (80.0, 79.6, 79.2))           # 1.5% in Q1: anomaly
+    assert not off_teammate_pace((80.0, 79.7, 79.3), (80.0, 79.6, 79.2))       # Q3 vs Q3
     assert off_teammate_pace((None, None, None), (80.0, None, None))           # no time at all
     assert not off_teammate_pace((None, None, None), (None, None, None))
 
     teams = {1: 10, 2: 10, 3: 20, 4: 20, 5: 30}
-    gaps = {1: 0.000, 2: 0.012, 3: 0.010, 4: 0.020, 5: 0.030}
-    sessions = {1: (80.0, 79.6, 79.2), 2: (80.5, None, None),      # 2: genuinely off in Q1
-                3: (80.8, 80.0, None), 4: (80.9, None, None),      # 4: Q1 exit, 0.12% off in Q1 -> kept
+    gaps = {1: 0.000, 2: 0.020, 3: 0.010, 4: 0.020, 5: 0.030}
+    sessions = {1: (80.0, 79.6, 79.2), 2: (81.2, None, None),      # 2: 1.5% off in Q1 -> car pace
+                3: (80.8, 80.0, None), 4: (81.2, None, None),      # 4: 0.5% off in Q1 -> kept
                 5: (82.0, None, None)}                              # no teammate
     car = car_quali_gaps(gaps, teams, sessions)
     assert car[1] == 0.0 and car[2] == TEAMMATE_MARGIN

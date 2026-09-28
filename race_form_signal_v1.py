@@ -52,12 +52,16 @@ from race_status import is_classified
 
 FORM_RACES = 5
 SHRINK = 2.0
-# Car pace: a driver more than this far behind the teammate IN THE SAME QUALIFYING
-# SESSION -- or with no time at all while the teammate set one -- is treated as not
-# showing the car's pace (mistake, failure, skipped session for a penalty). Fixed a
-# priori (a typical intra-team gap is ~0.1-0.3%), not tuned on scored races.
-# v1 compared best laps across sessions (a Q1 exit vs the teammate's Q3 lap) and fired
-# for 5-9 drivers a race; it made the 2025-26 live record worse and was rolled back.
+# Car pace: a driver whose qualifying did not show the car's pace (crash, failure,
+# aborted lap, skipped session for a penalty) is given the teammate's pace instead.
+#   ANOMALY_MARGIN  "did not show the pace" = slower than the teammate by more than this in
+#                   their last common session, or no time at all while the teammate set one.
+#                   1.0% is far outside normal teammate gaps (~0.1-0.5%), so the rule is rare.
+#   TEAMMATE_MARGIN pace penalty on the replacement: teammate's gap + a typical teammate gap.
+# History: v1 compared best laps across sessions; v2 used 0.3% as the anomaly line, which is
+# a NORMAL teammate gap, so both fired for ~27% of drivers. The margins are chosen from the
+# rule's firing rate (should be rare), not from scoreboard accuracy.
+ANOMALY_MARGIN = 0.01
 TEAMMATE_MARGIN = 0.003
 BLEND_WEIGHTS = tuple(round(w, 1) for w in np.arange(0.0, 1.01, 0.1))
 
@@ -125,7 +129,7 @@ def ranks(scores: Sequence[float]) -> list[int]:
 
 
 def off_teammate_pace(own: Sequence[float | None], mate: Sequence[float | None],
-                      margin: float = TEAMMATE_MARGIN) -> bool:
+                      margin: float = ANOMALY_MARGIN) -> bool:
     """True if this driver's qualifying did not show the car's pace.
 
     own / mate: (Q1, Q2, Q3) times. Compared in the LAST session in which both set a

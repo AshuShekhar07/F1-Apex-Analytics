@@ -10,7 +10,7 @@ Models (per race, only data strictly before the race date):
             + team form rank - grid rank), w chosen on the previous season; win/podium =
             grid-slot rates
   candidates  experiments, each scored against the production blend:
-    blend_car  car pace v2: a driver off the teammate's pace by >0.3% in their last common
+    blend_car  car pace v3: a driver >1% off the teammate's pace in their last common
                qualifying session (or with no time) gets the teammate's pace + 0.3%
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
             predicted retirements no better than a flat rate and made MAE worse
@@ -27,7 +27,7 @@ Metrics (race-weighted means, 90% CI resampling whole races):
   brier_win/podium    mean squared error of the probabilities (0 = perfect)
 Plus: breakdowns by era, wet/dry, grid group; probability calibration; worst misses.
 
-    python prediction_scoreboard_v1.py --start-year 2019 --end-year 2026
+    python prediction_scoreboard_v1.py                      # 2018-2026 (2018 from its 3rd race)
     python prediction_scoreboard_v1.py --stored --start-year 2025 --end-year 2026
     python prediction_scoreboard_v1.py --save scoreboard_baseline.json
     python prediction_scoreboard_v1.py --compare scoreboard_baseline.json   # regression gate
@@ -455,7 +455,8 @@ def reliability_signal(used: dict, scores: Sequence[DriverScore]) -> tuple[float
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--start-year", type=int, default=2019)
+    parser.add_argument("--start-year", type=int, default=2018,
+                        help="2018 is scored from the first race with enough earlier 2018 races to fit")
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--stored", action="store_true", help="also score the stored forecasts (live record)")
     parser.add_argument("--reliability", action="store_true", help="also run the rejected blend_dnf experiment")
