@@ -6,16 +6,15 @@ here is tuned on the races it scores.
 
 Models (per race, only data strictly before the race date):
   grid      finish in grid order; win/podium = shrunk grid-slot rates (baseline)
-  blend     production (race_forecast_v1.production_pace): grid rank + w * (quali-implied pace
-            + team form rank - grid rank), w chosen on the previous season, pace = car pace v3
-            (a driver >1% off the teammate in their last common qualifying session, or with no
-            time, gets the teammate's pace + 0.3%); win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend:
-    blend_practice  production pace + beta * practice surprise (long-run pace minus quali-implied
-                    pace, centred per race; FP2, or FP1 on sprint weekends), beta fitted on
-                    earlier seasons only. (A 50/50 average was tried first: real signal, r=+0.32,
-                    but no ranking gain -- practice and race gaps are on different scales.)
+  blend     production (race_forecast_v1.production_transform): grid rank + w * (pace + team
+            form rank - grid rank), w chosen on the previous season; pace = quali-implied pace
+            with car pace v3 (a driver >1% off the teammate in their last common qualifying
+            session, or with no time, gets the teammate's pace + 0.3%) and the practice
+            correction (+ beta * long-run surprise, beta fitted on earlier seasons);
+            win/podium = grid-slot rates
+  candidates  experiments, each scored against the production blend (none open)
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
+            practice correction (2026-09-28): 10+ place misses 2.1% -> 1.8%, worse nowhere
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
             predicted retirements no better than a flat rate and made MAE worse
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
@@ -57,10 +56,8 @@ from race_form_signal_v1 import (
     choose_weight,
     predictions,
     form_signal,
-    practice_beta,
     race_clustered,
     ranks,
-    with_practice_correction,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -220,16 +217,8 @@ Transform = Callable[[Sequence[DriverForm]], list[DriverForm]]
 FITTED_BETAS: dict[int, float] = {}
 
 
-def _practice_candidate(history: Sequence[DriverForm], season: int) -> Transform:
-    from race_forecast_v1 import production_pace
-    beta = FITTED_BETAS.setdefault(season, practice_beta(production_pace(history)))
-    return lambda rows: with_practice_correction(production_pace(rows), beta)
-
-
 # candidates: name -> factory(rows of seasons before `season`, season) -> pace transform
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
-    "blend_practice": _practice_candidate,
-}
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {}
 
 
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
@@ -245,7 +234,7 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
     by_season = defaultdict(lambda: defaultdict(list))
     for r in rows:
         by_season[r.season_year][r.race_id].append(r)
-    from race_forecast_v1 import production_pace
+    from race_forecast_v1 import production_transform
 
     all_rows = list(rows)
     out: list[DriverScore] = []
@@ -254,7 +243,9 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
             continue
         previous = by_season.get(season - 1)
         history = [r for r in all_rows if r.season_year < season]
-        variants = {"blend": production_pace,
+        production = production_transform(history)
+        FITTED_BETAS[season] = production.beta
+        variants = {"blend": production,
                     **{name: factory(history, season) for name, factory in CANDIDATES.items()}}
         weights = {name: choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5
                    for name, transform in variants.items()}
@@ -537,7 +528,7 @@ def main() -> int:
     print("  practice laps in the database (races with FP1/FP2 laps / raced, share of laps with a compound): "
           + ", ".join(f"{y}: {fp}/{n} {share or 0:.0%}" for y, n, fp, share in practice_data))
     if FITTED_BETAS:
-        print("  blend_practice beta per season (fitted on earlier seasons): "
+        print("  production practice beta per season (fitted on earlier seasons): "
               + ", ".join(f"{k}: {v:.2f}" for k, v in sorted(FITTED_BETAS.items())))
     print("  coverage by season: " + ", ".join(
         f"{y}: {sum(r.practice_gap is not None for r in scored if r.season_year == y) / max(1, sum(r.season_year == y for r in scored)):.0%}"

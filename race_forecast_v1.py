@@ -35,9 +35,11 @@ from race_form_signal_v1 import (
     car_quali_gaps,
     choose_weight,
     predictions,
+    practice_beta,
     team_form,
     team_residual_history,
     with_car_pace,
+    with_practice_correction,
 )
 from race_pace_from_quali_v1 import best_quali_times, fit_model, load_observations, quali_gaps, quali_session_times
 from race_status import DNF_STATUSES
@@ -74,15 +76,21 @@ STRATEGY_METHOD = "era_mode"
 # 2.5% -> 2.1% (CI excludes 0), worse nowhere. Kept only if the recomputed 2025-26 stored
 # forecasts also pass --compare (v1 was rolled back for failing exactly that check).
 PACE_METHOD = "car_pace"
+# Practice long-run pace (race_practice_pace_v1): pace += beta * practice surprise (long-run
+# pace minus quali-implied pace, centred per race), beta fitted on all earlier seasons.
+# Scoreboard 2018-2026: signal r=+0.35 (CI above 0), 10+ place misses 2.1% -> 1.8% (CI
+# excludes 0), worse nowhere. "none" switches it off. Kept only if the recomputed 2025-26
+# stored forecasts also pass --compare.
+PRACTICE_METHOD = "correction"
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
 
 VALIDATION = {
     "source": "prediction_scoreboard_v1 walk-forward, all races 2018-2026, 3555 drivers in 177 races",
-    "predicted_position": {"method": "grid/pace blend with car pace", "mean_abs_error_places": 3.361,
-                           "grid_only_mean_abs_error_places": 3.487,
-                           "finishers_mean_abs_error_places": 2.765, "finishers_off_by_10_or_more": 0.021,
-                           "winner_correct": 0.565, "podium_overlap": 0.693, "top10_overlap": 0.770},
+    "predicted_position": {"method": "grid/pace blend with car pace and practice long-run pace",
+                           "mean_abs_error_places": 3.344, "grid_only_mean_abs_error_places": 3.487,
+                           "finishers_mean_abs_error_places": 2.746, "finishers_off_by_10_or_more": 0.018,
+                           "winner_correct": 0.554, "podium_overlap": 0.691, "top10_overlap": 0.772},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
@@ -132,8 +140,36 @@ MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow ear
 
 
 def production_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
-    """The pace variant the production blend uses (PACE_METHOD); the scoreboard scores this."""
+    """Car-pace step of production (PACE_METHOD)."""
     return with_car_pace(rows) if PACE_METHOD == "car_pace" else list(rows)
+
+
+def production_transform(history: Sequence[DriverForm]):
+    """The full production pace rule given rows of all earlier seasons: car pace, then the
+    practice correction with beta fitted on `history`. The scoreboard scores exactly this.
+    Returns a function rows -> rows with attribute `beta`."""
+    beta = practice_beta(production_pace(history)) if PRACTICE_METHOD == "correction" else 0.0
+
+    def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
+        paced = production_pace(rows)
+        return with_practice_correction(paced, beta) if beta > 0 else paced
+    transform.beta = beta
+    return transform
+
+
+_HISTORY_CACHE: dict[tuple[str, int], list[DriverForm]] = {}
+
+
+def history_rows(db: Any, observations, season: int) -> list[DriverForm]:
+    """Form rows for every race of seasons before `season` (with practice pace), cached per
+    database and season because a --season batch forecasts many races of one season."""
+    key = (str(db.engine.url), season)
+    if key not in _HISTORY_CACHE:
+        _HISTORY_CACHE[key] = [r for r in build_rows(db, observations, start_year=2018, end_year=season - 1,
+                                                     include_wet=True,
+                                                     with_practice=PRACTICE_METHOD == "correction")
+                               if r.season_year < season]
+    return _HISTORY_CACHE[key]
 
 
 def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = SLOT_SHRINK_STARTS) -> dict:
@@ -317,18 +353,29 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         if pace_gaps[d] < own_gaps[d]:
             notes.append(f"car pace: {names[d]}'s qualifying lap was missing or well off the teammate's; "
                          "using the teammate's pace + 0.3%")
+    practice = {}
+    if PRACTICE_METHOD == "correction":
+        from race_practice_pace_v1 import load_practice_gaps
+        practice, practice_session = load_practice_gaps(db, race_id)
     rows = []
     for f in sorted(field, key=lambda f: (grid[int(f["driver_id"])], f["driver_id"])):
         d, team = int(f["driver_id"]), int(f["team_id"])
         rows.append(DriverForm(race_id, season, d, grid[d], 0, True, model.race_gap(pace_gaps[d]),
-                               team_form(history.get(team, []), team, as_of), None, team))
+                               team_form(history.get(team, []), team, as_of), None, team, None, practice.get(d)))
 
-    previous = build_rows(db, observations, start_year=season - 1, end_year=season - 1)
+    past_rows = history_rows(db, observations, season)
+    transform = production_transform(past_rows)
+    rows = transform(rows)                     # car pace is already in; this adds the practice correction
+    if PRACTICE_METHOD == "correction":
+        with_long_run = sum(r.practice_gap is not None for r in rows)
+        notes.append(f"practice: long-run pace for {with_long_run}/{len(rows)} drivers"
+                     + (f" ({practice_session})" if practice else "") + f", correction beta {transform.beta:.2f}"
+                     if with_long_run else "practice: no usable long runs (wet or no practice), qualifying pace only")
     prev_by_race = defaultdict(list)
-    for r in previous:
+    for r in past_rows:
         if r.season_year == season - 1:
             prev_by_race[r.race_id].append(r)
-    weight = choose_weight({k: production_pace(v) for k, v in prev_by_race.items()}) if prev_by_race else 0.5
+    weight = choose_weight({k: transform(v) for k, v in prev_by_race.items()}) if prev_by_race else 0.5
     if not prev_by_race:
         notes.append("blend weight: no previous-season races scored, using 0.5")
     predicted = predictions(rows, weight)["blend"]
@@ -373,7 +420,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     driver_strategies = extra_strategy_blocks(db, race, total_laps, rows, strategy_payload, notes)
 
     # simulator snapshot for what-if scenarios
-    spread_rows = [r for r in previous if r.residual is not None]
+    spread_rows = [r for rs in prev_by_race.values() for r in rs if r.residual is not None]
     spread = float(np.std([r.residual - r.form for r in spread_rows])) if len(spread_rows) >= 30 else model.residual_std
     reference_lap = pole * model.race_to_pole_ratio
     pit_observations = load_pit_losses(db, start_year=2018, end_year=season)

@@ -66,10 +66,8 @@ def test_scoreboard_end_to_end(synthetic_db):
 
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
-    assert {s.model for s in scores} == {"grid", "blend", "blend_practice", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 4 * 24
-    # synthetic weekends have no practice sessions: the candidate equals production
-    assert summarise(scores, "blend_practice")["mae"] == summarise(scores, "blend")["mae"]
+    assert {s.model for s in scores} == {"grid", "blend", "blend_dnf"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 3 * 24
     # synthetic: every car finishes, so every team has the same rate and the order is unchanged
     assert summarise(scores, "blend_dnf")["mae"] == summarise(scores, "blend")["mae"]
     assert len({round(p, 9) for p in used.values()}) <= 2

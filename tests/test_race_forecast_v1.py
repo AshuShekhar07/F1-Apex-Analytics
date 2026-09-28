@@ -317,3 +317,10 @@ def test_race_list_shows_winner_and_predicted_winner(client):
     assert races[5]["predicted_winner_name"].startswith("Driver")
     assert races[7]["winner_name"] is None and races[7]["has_forecast"] is True     # upcoming, forecast only
     assert races[8]["has_forecast"] is False and races[8]["predicted_winner_name"] is None
+
+
+def test_practice_correction_is_reported_even_without_practice_data(forecast_db):
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    notes = forecast["inputs"]["data_notes"]
+    assert any(n.startswith("practice: no usable long runs") for n in notes)   # synthetic: no FP sessions
