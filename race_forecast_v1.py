@@ -39,7 +39,7 @@ from race_form_signal_v1 import (
     team_residual_history,
     with_car_pace,
 )
-from race_pace_from_quali_v1 import best_quali_times, fit_model, load_observations, quali_gaps
+from race_pace_from_quali_v1 import best_quali_times, fit_model, load_observations, quali_gaps, quali_session_times
 from race_status import DNF_STATUSES
 from race_strategy_backtest_v2 import grid_slot_rates
 from race_strategy_precedent_v1 import build_strategy, historical_strategy_options, load_precedents
@@ -67,20 +67,22 @@ SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 s
 #                     expected. No wet strategy is shown: the wet precedent (method W) did not
 #                     beat the baseline in 2022-25 wet races (sequence accuracy 0.015).
 STRATEGY_METHOD = "era_mode"
-# Pace used by the blend. "car_pace": a driver whose qualifying lap was missing or >0.3%
-# slower than the teammate's gets the teammate's pace + 0.3% (race_form_signal_v1).
-# prediction_scoreboard_v1 2019-2026, 160 races: finishers off by 10+ places 2.6% -> 1.8%
-# (CI excludes 0), worse nowhere. "own_lap" is the previous method.
-PACE_METHOD = "car_pace"
+# Pace used by the blend: "own_lap" (validated) or "car_pace" (candidate: a driver off the
+# teammate's pace in their last common qualifying session gets the teammate's pace + 0.3%,
+# race_form_signal_v1). car_pace v1 was promoted then ROLLED BACK on 2026-09-28: it
+# compared best laps across sessions, fired for 5-9 drivers a race and made the 2025-26
+# live record worse (MAE 3.41 -> 3.52). v2 compares within a session; it is a scoreboard
+# candidate until it passes the gate, including on the stored live forecasts.
+PACE_METHOD = "own_lap"
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
 
 VALIDATION = {
     "source": "prediction_scoreboard_v1 walk-forward, all races 2019-2026, 3215 drivers in 160 races",
-    "predicted_position": {"method": "grid/pace blend with car pace", "mean_abs_error_places": 3.314,
+    "predicted_position": {"method": "grid/pace blend", "mean_abs_error_places": 3.319,
                            "grid_only_mean_abs_error_places": 3.461,
-                           "finishers_mean_abs_error_places": 2.741, "finishers_off_by_10_or_more": 0.018,
-                           "winner_correct": 0.556, "podium_overlap": 0.688, "top10_overlap": 0.772},
+                           "finishers_mean_abs_error_places": 2.749, "finishers_off_by_10_or_more": 0.026,
+                           "winner_correct": 0.569, "podium_overlap": 0.694, "top10_overlap": 0.772},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
@@ -307,7 +309,8 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     if not history:
         notes.append("team race form: no earlier races in this era, form = 0 for every team")
     own_gaps = {int(f["driver_id"]): gaps.get(int(f["driver_id"]), back_gap) for f in field}
-    pace_gaps = (car_quali_gaps(own_gaps, {int(f["driver_id"]): int(f["team_id"]) for f in field})
+    pace_gaps = (car_quali_gaps(own_gaps, {int(f["driver_id"]): int(f["team_id"]) for f in field},
+                                quali_session_times(db, race_id))
                  if PACE_METHOD == "car_pace" else own_gaps)
     names = {int(f["driver_id"]): f["driver_name"] for f in field}
     for d in sorted(pace_gaps):

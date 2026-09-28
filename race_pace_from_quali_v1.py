@@ -121,6 +121,18 @@ def best_quali_times(db: Any, race_id: int) -> dict[int, float | None]:
     return {int(d): (float(b) if b is not None else None) for d, b in rows}
 
 
+def quali_session_times(db: Any, race_id: int) -> dict[int, tuple[float | None, float | None, float | None]]:
+    """driver -> (Q1, Q2, Q3) times; None where the driver set no time in that session."""
+    rows = db.execute(text("""
+        SELECT re.driver_id, q.q1_time, q.q2_time, q.q3_time
+        FROM qualifying_results q
+        JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+        JOIN race_entries re ON re.id = q.race_entry_id
+        WHERE s.race_id = :r
+    """), {"r": race_id}).all()
+    return {int(d): tuple(float(t) if t is not None and float(t) > 0 else None for t in ts) for d, *ts in rows}
+
+
 def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PaceObservation]:
     """Per driver-race quali gap and clean race-pace gap (dry races only)."""
     races = db.execute(text("""

@@ -40,15 +40,24 @@ import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-from race_pace_from_quali_v1 import PaceObservation, best_quali_times, fit_model, load_observations, quali_gaps
+from race_pace_from_quali_v1 import (
+    PaceObservation,
+    best_quali_times,
+    fit_model,
+    load_observations,
+    quali_gaps,
+    quali_session_times,
+)
 from race_status import is_classified
 
 FORM_RACES = 5
 SHRINK = 2.0
-# Car pace: a driver more than this far (share of pole time) behind the teammate in
-# qualifying -- or with no representative time -- is treated as not showing the car's
-# pace (quali mistake, failure, skipped session for a penalty). Fixed a priori (a
-# typical intra-team gap is ~0.1-0.3%), not tuned on scored races.
+# Car pace: a driver more than this far behind the teammate IN THE SAME QUALIFYING
+# SESSION -- or with no time at all while the teammate set one -- is treated as not
+# showing the car's pace (mistake, failure, skipped session for a penalty). Fixed a
+# priori (a typical intra-team gap is ~0.1-0.3%), not tuned on scored races.
+# v1 compared best laps across sessions (a Q1 exit vs the teammate's Q3 lap) and fired
+# for 5-9 drivers a race; it made the 2025-26 live record worse and was rolled back.
 TEAMMATE_MARGIN = 0.003
 BLEND_WEIGHTS = tuple(round(w, 1) for w in np.arange(0.0, 1.01, 0.1))
 
@@ -115,17 +124,35 @@ def ranks(scores: Sequence[float]) -> list[int]:
     return out
 
 
-def car_quali_gaps(gaps: dict[int, float], teams: dict[int, int]) -> dict[int, float]:
-    """Own quali gap, unless the teammate's gap + TEAMMATE_MARGIN is smaller (the car is
-    faster than this driver's lap showed). Drivers without a teammate keep their own gap."""
+def off_teammate_pace(own: Sequence[float | None], mate: Sequence[float | None],
+                      margin: float = TEAMMATE_MARGIN) -> bool:
+    """True if this driver's qualifying did not show the car's pace.
+
+    own / mate: (Q1, Q2, Q3) times. Compared in the LAST session in which both set a
+    time, so a Q1 exit is judged on Q1 laps, never against the teammate's Q3 lap.
+    No common session: off only if the driver has no time at all and the mate has one.
+    """
+    for mine, theirs in zip(reversed(tuple(own)), reversed(tuple(mate))):
+        if mine is not None and theirs is not None:
+            return mine > theirs * (1 + margin)
+    return all(t is None for t in own) and any(t is not None for t in mate)
+
+
+def car_quali_gaps(gaps: dict[int, float], teams: dict[int, int],
+                   sessions: dict[int, Sequence[float | None]]) -> dict[int, float]:
+    """Own quali gap, or the teammate's gap + TEAMMATE_MARGIN when this driver's lap was
+    off the teammate's in their last common session (see off_teammate_pace)."""
     by_team = defaultdict(list)
     for driver, team in teams.items():
         if driver in gaps:
             by_team[team].append(driver)
+    none = (None, None, None)
     out = {}
     for driver, gap in gaps.items():
-        mates = [gaps[d] for d in by_team.get(teams.get(driver), []) if d != driver]
-        out[driver] = min([gap] + [m + TEAMMATE_MARGIN for m in mates])
+        mates = [d for d in by_team.get(teams.get(driver), []) if d != driver]
+        replaced = [gaps[m] + TEAMMATE_MARGIN for m in mates
+                    if off_teammate_pace(sessions.get(driver, none), sessions.get(m, none))]
+        out[driver] = min([gap] + replaced)
     return out
 
 
@@ -222,7 +249,8 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         back_grid = len(entries) + 1
         back_gap = max(gaps.values()) if gaps else 0.03
         own_gaps = {int(e["driver_id"]): gaps.get(int(e["driver_id"]), back_gap) for e in entries}
-        car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries})
+        car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries},
+                                  quali_session_times(db, race["id"]))
 
         if models is not None and model is not None:
             times = [t for t in best_quali_times(db, race["id"]).values() if t]

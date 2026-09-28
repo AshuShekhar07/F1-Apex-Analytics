@@ -6,13 +6,14 @@ here is tuned on the races it scores.
 
 Models (per race, only data strictly before the race date):
   grid      finish in grid order; win/podium = shrunk grid-slot rates (baseline)
-  blend     production (race_forecast_v1.production_pace): grid rank + w * (pace + team form
-            rank - grid rank), w chosen on the previous season; pace = car pace (a driver whose
-            qualifying lap was missing or >0.3% slower than the teammate's gets the teammate's
-            pace + 0.3%); win/podium = grid-slot rates
+  blend     production (race_forecast_v1.production_pace): grid rank + w * (quali-implied pace
+            + team form rank - grid rank), w chosen on the previous season; win/podium =
+            grid-slot rates
   candidates  experiments, each scored against the production blend:
-    blend_dnf  blend re-ranked by expected finish, with each team's recent non-finish rate
-               (race_reliability_v1); retirements are classified behind every finisher
+    blend_car  car pace v2: a driver off the teammate's pace by >0.3% in their last common
+               qualifying session (or with no time) gets the teammate's pace + 0.3%
+  rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
+            predicted retirements no better than a flat rate and made MAE worse
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
             record, incl. the new-era fallbacks the blend rows cannot rebuild)
 
@@ -53,6 +54,7 @@ from race_form_signal_v1 import (
     predictions,
     race_clustered,
     ranks,
+    with_car_pace,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -208,8 +210,9 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 
 
 # candidate pace variants: name -> transform applied to a race's rows before the blend
-# (blend_car was promoted to production on 2026-09-28: bad misses 2.6% -> 1.8%, worse nowhere)
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {}
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
+    "blend_car": with_car_pace,
+}
 
 
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
@@ -455,6 +458,7 @@ def main() -> int:
     parser.add_argument("--start-year", type=int, default=2019)
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--stored", action="store_true", help="also score the stored forecasts (live record)")
+    parser.add_argument("--reliability", action="store_true", help="also run the rejected blend_dnf experiment")
     parser.add_argument("--save", help="write the headline summary to this JSON file")
     parser.add_argument("--compare", help="fail (exit 1) if worse than this saved summary")
     args = parser.parse_args()
@@ -470,7 +474,7 @@ def main() -> int:
         from race_reliability_v1 import load_starts
 
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
-        adjusters = {"blend_dnf": adjust_dnf}
+        adjusters = {"blend_dnf": adjust_dnf} if args.reliability else {}
         scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters)
         models = ["grid", "blend", *CANDIDATES, *adjusters]
         if args.stored:
@@ -481,10 +485,15 @@ def main() -> int:
 
     print(f"PREDICTION SCOREBOARD {args.start_year}-{args.end_year}")
     summary = report(scores, meta, names, models)
-    brier, d, lo, hi, n = reliability_signal(used_p, scores)
-    print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")
-    print(f"  Brier team p_dnf {brier:.4f}; minus flat rate {d:+.5f} [{lo:+.5f}, {hi:+.5f}]  n={n}  "
-          f"{'REAL signal' if hi < 0 else 'WORSE than a flat rate' if lo > 0 else 'no clear signal'}")
+    scored = [r for r in rows if r.season_year >= args.start_year]
+    fired = sum(r.car_gap is not None and r.car_gap < r.implied_gap - 1e-12 for r in scored)
+    print(f"\n=== CAR PACE RULE: replaced the driver's own lap for {fired} of {len(scored)} drivers "
+          f"({fired / max(1, len(scored)):.1%}); it should be rare ===")
+    if args.reliability:
+        brier, d, lo, hi, n = reliability_signal(used_p, scores)
+        print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")
+        print(f"  Brier team p_dnf {brier:.4f}; minus flat rate {d:+.5f} [{lo:+.5f}, {hi:+.5f}]  n={n}  "
+              f"{'REAL signal' if hi < 0 else 'WORSE than a flat rate' if lo > 0 else 'no clear signal'}")
     if args.save:
         with open(args.save, "w") as f:
             json.dump({"range": [args.start_year, args.end_year], "models": summary}, f, indent=2)
