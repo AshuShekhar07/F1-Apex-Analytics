@@ -61,7 +61,8 @@ def run_loaders(season: int, *, from_step: int = 1) -> bool:
             continue
         print(f"\n[{i}/{len(steps)}] {label}: python {' '.join(cmd)}", flush=True)
         started = time.time()
-        code = subprocess.call([sys.executable, *cmd])
+        # -u: unbuffered, so a log file shows each loader's progress as it happens
+        code = subprocess.call([sys.executable, "-u", *cmd])
         print(f"[{i}/{len(steps)}] {'done' if code == 0 else f'FAILED (exit {code})'} in {time.time() - started:.0f}s",
               flush=True)
         if code != 0:
