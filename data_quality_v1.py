@@ -47,6 +47,8 @@ def evaluate(facts: dict) -> RaceCheck:
         c.stage = "raced"
     elif facts["quali_entries"] > 0:
         c.stage = "qualified"
+        if facts["race_date_passed"]:
+            c.fails.append("race date has passed but no race results are loaded (interrupted load?)")
     elif facts["race_date_passed"]:
         c.stage = "not loaded"
         c.fails.append("race date has passed but no qualifying or results are loaded"

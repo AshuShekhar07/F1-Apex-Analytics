@@ -22,13 +22,15 @@ def test_clean_raced_weekend_passes():
 
 def test_stages_and_blocking_failures():
     assert evaluate(_facts(results=0, quali_entries=0, race_date_passed=False)).stage == "scheduled"
-    upcoming = evaluate(_facts(results=0))
+    upcoming = evaluate(_facts(results=0, race_date_passed=False))
     assert upcoming.stage == "qualified" and upcoming.ok
+    interrupted = evaluate(_facts(results=0, race_date_passed=True))
+    assert interrupted.stage == "qualified" and not interrupted.ok
     bad = evaluate(_facts(identity_mismatches=["#3 DB: Daniel Ricciardo FastF1: Max Verstappen"],
                           regulation_era=None, grid_known=10, duplicate_car_numbers=[3]))
     assert not bad.ok and len(bad.fails) == 4
     assert any("Ricciardo" in f for f in bad.fails)
-    assert not evaluate(_facts(results=0, race_distance_known=False)).ok     # new track, no distance
+    assert not evaluate(_facts(results=0, race_distance_known=False, race_date_passed=False)).ok  # new track
 
 
 def test_warnings_do_not_block():
