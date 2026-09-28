@@ -50,7 +50,8 @@ class EntryCheck:
 
 
 def _norm(name: str | None) -> str:
-    return " ".join((name or "").split()).casefold()
+    from driver_names import normalise_name
+    return normalise_name(name)          # accents, case and spacing ignored
 
 
 def same_person(a: str | None, b: str | None) -> bool:
@@ -125,7 +126,8 @@ def apply_fixes(db: Any, checks: Iterable[EntryCheck]) -> int:
     for c in checks:
         if c.status != "mismatch":
             continue
-        driver_id = db.execute(text("SELECT id FROM drivers WHERE name = :n"), {"n": c.fastf1_driver}).scalar()
+        from driver_names import find_driver_id
+        driver_id = find_driver_id(db, c.fastf1_driver)
         if driver_id is None:
             driver_id = db.execute(text(
                 "INSERT INTO drivers (name, permanent_number) VALUES (:n, :num) RETURNING id"

@@ -127,3 +127,51 @@ def test_repair_finds_only_sessions_with_drivers_missing_laps(synthetic_db):
             assert list(missing_entries(db, session, 5).values()) == [entry]
         finally:
             tx.rollback()
+
+
+def test_name_normalisation_ignores_accents_case_and_spaces():
+    from driver_names import normalise_name
+
+    assert normalise_name("Sergio Pérez") == normalise_name("sergio  perez")
+    assert normalise_name("Nico Hülkenberg") == normalise_name("Nico Hulkenberg")
+    assert normalise_name("Kimi Räikkönen") == "kimi raikkonen"
+    assert normalise_name("Mick Schumacher") != normalise_name("Michael Schumacher")
+
+
+def test_merge_duplicate_driver_moves_everything_without_duplicating(synthetic_db):
+    from driver_names import find_driver_id
+    from merge_duplicate_drivers_v1 import duplicate_groups, merge_driver
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            db.execute(text("INSERT INTO drivers (id, name) VALUES (100, 'Drivér 3')"))
+            assert find_driver_id(db, "DRIVER 3") == 3                       # accent-insensitive lookup
+            assert duplicate_groups(db) == [[(3, "Driver 3"), (100, "Drivér 3")]]
+            # the duplicate has (a) an FP2-only entry in race 5, where Driver 3 raced, and
+            # (b) the only entry in a new race 60
+            fp2 = db.execute(text("INSERT INTO sessions (race_id, session_type, start_time) "
+                                  "VALUES (5, 'FP2', now()) RETURNING id")).scalar()
+            dup_entry = db.execute(text("""INSERT INTO race_entries (race_id, driver_id, team_id, car_number)
+                                           VALUES (5, 100, 2, 3) RETURNING id""")).scalar()
+            db.execute(text("INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time) "
+                            "VALUES (:s, :e, 1, 90.0)"), {"s": fp2, "e": dup_entry})
+            db.execute(text("""INSERT INTO races (id, track_id, season_year, round_number, race_date, regulation_era)
+                               VALUES (60, 1, 2024, 12, make_date(2024, 12, 20), 'e')"""))
+            only_entry = db.execute(text("""INSERT INTO race_entries (race_id, driver_id, team_id, car_number)
+                                            VALUES (60, 100, 2, 3) RETURNING id""")).scalar()
+            race_laps_before = db.execute(text("""SELECT COUNT(*) FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+                                                   WHERE re.driver_id = 3""")).scalar()
+            log = []
+            merge_driver(db, 100, 3, log)
+            assert db.execute(text("SELECT COUNT(*) FROM drivers WHERE id = 100")).scalar() == 0
+            keep_entry = db.execute(text("SELECT id FROM race_entries WHERE race_id = 5 AND driver_id = 3")).scalar()
+            assert db.execute(text("SELECT race_entry_id FROM laps WHERE session_id = :s"), {"s": fp2}).scalar() == keep_entry
+            assert db.execute(text("SELECT driver_id FROM race_entries WHERE id = :e"), {"e": only_entry}).scalar() == 3
+            assert db.execute(text("SELECT COUNT(*) FROM race_entries WHERE id = :e"), {"e": dup_entry}).scalar() == 0
+            after = db.execute(text("""SELECT COUNT(*) FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+                                        WHERE re.driver_id = 3""")).scalar()
+            assert after == race_laps_before + 1                            # the FP2 lap, nothing duplicated
+            assert duplicate_groups(db) == []
+        finally:
+            tx.rollback()

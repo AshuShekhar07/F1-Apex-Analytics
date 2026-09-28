@@ -5,6 +5,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from driver_names import find_driver_id
+
 from fastf1_cache import fastf1_cache_dir
 
 load_dotenv()
@@ -117,7 +119,7 @@ def get_or_create_driver(conn, name, number):
         # a shared placeholder. Return None so the caller skips this driver
         # instead of silently merging them with someone else.
         return None
-    did = conn.execute(text("SELECT id FROM drivers WHERE name = :name"), {"name": name}).scalar()
+    did = find_driver_id(conn, name)   # accent-insensitive: "Sergio Pérez" is "Sergio Perez"
     if not did:
         did = conn.execute(text("INSERT INTO drivers (name, permanent_number) VALUES (:n, :num) RETURNING id"),
                             {"n": name, "num": number}).scalar()

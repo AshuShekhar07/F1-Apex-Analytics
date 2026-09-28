@@ -13,6 +13,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from driver_names import canonical_driver_name
 from fastf1_cache import fastf1_cache_dir
 
 load_dotenv()
@@ -108,7 +109,7 @@ with engine.connect() as conn:
                   AND d.name = :name
             """), {
                 "gs": gap_seconds, "gd": gap_display,
-                "sid": session_id, "name": res_row['FullName']
+                "sid": session_id, "name": canonical_driver_name(conn, res_row['FullName'])
             })
             updated += result.rowcount
 

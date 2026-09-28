@@ -15,6 +15,7 @@ Safety:
 
     python fix_missing_quali_times_v1.py                    # report every race with rows but no times
     python fix_missing_quali_times_v1.py --race-id 155 --race-id 156 --apply
+    python fix_missing_quali_times_v1.py --race-id 11          # also races missing only some times
 """
 
 from __future__ import annotations
@@ -98,6 +99,18 @@ def apply_updates(conn, session_id: int, updates: list[dict]) -> int:
     return changed
 
 
+TARGET_SQL = """
+    SELECT r.id, r.season_year, r.round_number, t.name AS track_name,
+           COUNT(q.id) AS rows, COUNT(COALESCE(q.q1_time, q.q2_time, q.q3_time)) AS timed
+    FROM races r
+    JOIN tracks t ON t.id = r.track_id
+    JOIN sessions s ON s.race_id = r.id AND s.session_type = 'Q'
+    JOIN qualifying_results q ON q.session_id = s.id
+    WHERE r.id = ANY(:ids)
+    GROUP BY r.id, t.name
+"""
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -111,7 +124,12 @@ def main() -> int:
     print(f"races with qualifying rows but no times: {len(missing)}")
     for m in missing:
         print(f"  race {m['id']}: {m['season_year']} R{m['round_number']} {m['track_name']} ({m['rows']} rows)")
-    targets = [m for m in missing if m["id"] in args.race_id] if args.race_id else []
+    targets = []
+    if args.race_id:
+        # any race given by id, including ones missing only SOME times (2018 Hockenheim:
+        # 13/20); apply_updates only fills NULL columns, so complete rows are untouched
+        with engine.connect() as conn:
+            targets = [dict(m) for m in conn.execute(text(TARGET_SQL), {"ids": args.race_id}).mappings()]
     if not targets:
         print("Pass --race-id for the races to repair (and --apply to write).")
         return 0

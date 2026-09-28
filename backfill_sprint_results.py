@@ -4,6 +4,8 @@ import fastf1
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from driver_names import canonical_driver_name
+
 engine = create_engine(os.environ["DATABASE_URL"])
 
 with engine.connect() as conn:
@@ -50,7 +52,7 @@ with engine.connect() as conn:
                     SELECT re.id FROM race_entries re
                     JOIN drivers d ON d.id = re.driver_id
                     WHERE re.race_id = :rid AND d.name = :name
-                """), {"rid": s["race_id"], "name": name}).scalar()
+                """), {"rid": s["race_id"], "name": canonical_driver_name(conn, name)}).scalar()
 
                 if entry_id is None:
                     print(f"    WARNING: no existing race_entry for {name} in race {s['race_id']}, skipping")
