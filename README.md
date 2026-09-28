@@ -145,3 +145,16 @@ degradation models, empirical strategy prior, traffic/defending effect.
 
 `frontend/` is the web app (React + TypeScript + Vite): season overview, race page with forecast vs
 result, tyre strategy and the what-if simulator. See `frontend/README.md` to run it.
+
+## Forecasts in the terminal
+
+```bash
+python show_forecast.py --race 185                       # or --season 2026 --round 12
+python show_forecast.py --race 185 --sc 20-23            # what-if: Safety Car laps 20-23
+python show_forecast.py --race 185 --strategy "Norris:MEDIUM-HARD@18" --vsc 40
+python show_forecast.py --race 186 --compute             # build a missing forecast first
+```
+
+Shows the stored forecast (predicted order, grid, win/podium chances), the actual result
+and error once the race is run, the era's tyre strategies, data notes and tested accuracy.
+Model changes are judged with `prediction_scoreboard_v1.py` (see its docstring).
