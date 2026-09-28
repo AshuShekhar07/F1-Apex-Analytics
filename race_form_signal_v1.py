@@ -80,6 +80,7 @@ class DriverForm:
     team_id: int | None = None
     car_gap: float | None = None   # race gap implied by min(own quali gap, teammate gap + TEAMMATE_MARGIN)
     practice_gap: float | None = None  # practice long-run gap (race_practice_pace_v1), if loaded
+    quali_wet: bool = False            # rain in qualifying (session_weather), if known
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -159,6 +160,13 @@ def car_quali_gaps(gaps: dict[int, float], teams: dict[int, int],
                     if off_teammate_pace(sessions.get(driver, none), sessions.get(m, none))]
         out[driver] = min([gap] + replaced)
     return out
+
+
+def with_car_pace_dry_quali(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """Car pace, except in wet qualifying: there teammate gaps are dominated by track
+    conditions and timing, not by who got the most out of the car."""
+    from dataclasses import replace
+    return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None and not r.quali_wet else r for r in rows]
 
 
 def with_car_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
@@ -296,6 +304,10 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries},
                                   quali_session_times(db, race["id"]))
         practice = {}
+        quali_wet = bool(db.execute(text("""
+            SELECT sw.rainfall FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = 'Q'
+        """), {"r": race["id"]}).scalar())
         if with_practice and race["season_year"] >= start_year:
             from race_practice_pace_v1 import load_practice_gaps
             practice, _ = load_practice_gaps(db, race["id"])
@@ -316,7 +328,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     team_form(team_history[(era, int(e["team_id"]))], int(e["team_id"]), when),
                     (obs.race_gap - implied) if obs else None,
                     int(e["team_id"]), model.race_gap(car_gaps[int(e["driver_id"])]),
-                    practice.get(int(e["driver_id"])),
+                    practice.get(int(e["driver_id"])), quali_wet,
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:

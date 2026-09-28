@@ -66,8 +66,10 @@ def test_scoreboard_end_to_end(synthetic_db):
 
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
-    assert {s.model for s in scores} == {"grid", "blend", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 3 * 24
+    assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_dnf"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 4 * 24
+    # synthetic qualifying is dry: the wet-qualifying guard changes nothing
+    assert summarise(scores, "blend_wetq")["mae"] == summarise(scores, "blend")["mae"]
     # synthetic: every car finishes, so every team has the same rate and the order is unchanged
     assert summarise(scores, "blend_dnf")["mae"] == summarise(scores, "blend")["mae"]
     assert len({round(p, 9) for p in used.values()}) <= 2
@@ -133,3 +135,11 @@ def test_rank_probabilities_learn_from_earlier_races_only():
     assert probs[(40, 1)].p_win > 0.75                          # 39 earlier wins from predicted P1
     assert all(probs[(40, d)].p_win >= probs[(40, d + 1)].p_win for d in range(1, 10))
     assert all(s.predicted == s.finish for s in probs.values())  # the order itself is unchanged
+
+
+def test_wet_qualifying_guard_keeps_own_lap_only_in_the_rain():
+    from race_form_signal_v1 import DriverForm, with_car_pace_dry_quali
+
+    dry = DriverForm(1, 2024, 1, 5, 5, True, 0.02, 0.0, None, 10, 0.01, None, False)
+    wet = DriverForm(2, 2024, 1, 5, 5, True, 0.02, 0.0, None, 10, 0.01, None, True)
+    assert [r.implied_gap for r in with_car_pace_dry_quali([dry, wet])] == [0.01, 0.02]

@@ -13,13 +13,12 @@ Models (per race, only data strictly before the race date):
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
   candidates  experiments, each scored against the production blend:
-    blend_prob  same order as blend; win/podium chances = how often the model's own predicted
-                P1, P2, ... won / reached the podium in earlier races, shrunk toward the grid-slot
-                rate (10 starts) and made non-increasing down the order
+    blend_wetq  production, but the car-pace rule is skipped when qualifying was wet
+                (teammate gaps in the rain reflect conditions and timing, not the car)
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
             practice correction (2026-09-28): 10+ place misses 2.1% -> 1.8%, worse nowhere
-  rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
-            predicted retirements no better than a flat rate and made MAE worse
+  rejected: blend_dnf (team reliability, --reliability): no better than a flat rate, MAE worse
+            blend_prob (win/podium from predicted position, --prob): Brier no clear gain
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
             record, incl. the new-era fallbacks the blend rows cannot rebuild)
 
@@ -221,7 +220,22 @@ FITTED_BETAS: dict[int, float] = {}
 
 
 # candidates: name -> factory(rows of seasons before `season`, season) -> pace transform
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {}
+def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
+    """Production, but the car-pace rule is skipped when qualifying was wet."""
+    from race_forecast_v1 import PRACTICE_METHOD
+    from race_form_signal_v1 import practice_beta, with_car_pace_dry_quali, with_practice_correction
+
+    beta = practice_beta(with_car_pace_dry_quali(history)) if PRACTICE_METHOD == "correction" else 0.0
+
+    def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
+        paced = with_car_pace_dry_quali(rows)
+        return with_practice_correction(paced, beta) if beta > 0 else paced
+    return transform
+
+
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
+    "blend_wetq": _wet_quali_guard,
+}
 
 
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
@@ -512,6 +526,7 @@ def main() -> int:
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--stored", action="store_true", help="also score the stored forecasts (live record)")
     parser.add_argument("--reliability", action="store_true", help="also run the rejected blend_dnf experiment")
+    parser.add_argument("--prob", action="store_true", help="also run the rejected blend_prob experiment")
     parser.add_argument("--save", help="write the headline summary to this JSON file")
     parser.add_argument("--compare", help="fail (exit 1) if worse than this saved summary")
     args = parser.parse_args()
@@ -530,8 +545,11 @@ def main() -> int:
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
         adjusters = {"blend_dnf": adjust_dnf} if args.reliability else {}
         scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters)
-        scores += rank_probability_scores(scores, meta, rates)
-        models = ["grid", "blend", *CANDIDATES, "blend_prob", *adjusters]
+        prob_models = []
+        if args.prob:
+            scores += rank_probability_scores(scores, meta, rates)
+            prob_models = ["blend_prob"]
+        models = ["grid", "blend", *CANDIDATES, *prob_models, *adjusters]
         if args.stored:
             scores += [s for s in stored_scores(db, meta, load_truth(db))
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
@@ -558,6 +576,10 @@ def main() -> int:
     fired = sum(r.car_gap is not None and r.car_gap < r.implied_gap - 1e-12 for r in scored)
     print(f"\n=== CAR PACE RULE: replaced the driver's own lap for {fired} of {len(scored)} drivers "
           f"({fired / max(1, len(scored)):.1%}); it should be rare ===")
+    wet_q = [r for r in scored if r.quali_wet]
+    fired_wet = sum(r.car_gap is not None and r.car_gap < r.implied_gap - 1e-12 for r in wet_q)
+    print(f"  in wet qualifying: {fired_wet} of {len(wet_q)} drivers ({fired_wet / max(1, len(wet_q)):.1%}) "
+          f"across {len({r.race_id for r in wet_q})} races -- blend_wetq skips these")
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
           f"({len(with_fp) / max(1, len(scored)):.0%}) ===")
