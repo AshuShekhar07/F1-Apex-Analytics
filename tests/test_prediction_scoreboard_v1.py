@@ -101,3 +101,21 @@ def test_car_pace_fires_only_on_real_anomalies_within_the_same_session():
     car = car_quali_gaps(gaps, teams, sessions)
     assert car[1] == 0.0 and car[2] == TEAMMATE_MARGIN
     assert car[3] == 0.010 and car[4] == 0.020 and car[5] == 0.030
+
+
+def test_practice_correction_is_fitted_on_history_and_centred_per_race():
+    from race_form_signal_v1 import DriverForm, practice_beta, with_practice_correction
+
+    def row(race, d, implied, practice, residual):
+        return DriverForm(race, 2023, d, d, d, True, implied, 0.0, residual, None, None, practice)
+
+    # history: a driver 1% faster in long runs than quali implies is ~0.5% faster in the race
+    history = [row(r, d, 0.001 * d, 0.001 * d + (0.01 if d == 1 else 0.0) * (-1),
+                   -0.005 if d == 1 else 0.0) for r in range(1, 6) for d in range(1, 7)]
+    beta = practice_beta(history)
+    assert 0.3 < beta < 0.7
+    target = [row(9, d, 0.001 * d, (0.001 * d - 0.01) if d == 3 else 0.001 * d, None) for d in range(1, 7)]
+    adjusted = {r.driver_id: r.implied_gap for r in with_practice_correction(target, beta)}
+    assert adjusted[3] < 0.003 - 0.003                        # moved ahead by ~beta * 1%
+    assert all(adjusted[d] == 0.001 * d for d in (1, 2, 4, 5, 6))
+    assert practice_beta([]) == 0.0

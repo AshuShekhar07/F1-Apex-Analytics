@@ -167,15 +167,42 @@ def with_car_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
     return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None else r for r in rows]
 
 
-PRACTICE_SHARE = 0.5   # fixed a priori: equal say for qualifying-implied and long-run pace
+def _practice_surprise(rows: Sequence[DriverForm]) -> dict[int, float]:
+    """driver -> (long-run gap - quali-implied gap), centred within the race over drivers
+    with a long run, so practice and race-gap scales need not match."""
+    xs = {r.driver_id: r.practice_gap - r.implied_gap for r in rows if r.practice_gap is not None}
+    if len(xs) < 4:
+        return {}
+    centre = float(np.median(list(xs.values())))
+    return {d: x - centre for d, x in xs.items()}
 
 
-def with_practice_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
-    """Pace = (1 - PRACTICE_SHARE) * current pace + PRACTICE_SHARE * practice long-run gap,
-    for drivers with a long run; others keep their current pace."""
+def practice_beta(history: Sequence[DriverForm]) -> float:
+    """How much of the practice surprise shows up in the race, fitted on earlier races only:
+    least squares (no intercept) of the race-centred race-vs-quali residual on the
+    race-centred practice surprise; clipped to [0, 1]."""
+    by_race = defaultdict(list)
+    for r in history:
+        by_race[r.race_id].append(r)
+    num = den = 0.0
+    for rows in by_race.values():
+        xs = _practice_surprise(rows)
+        ys = {r.driver_id: r.residual for r in rows if r.driver_id in xs and r.residual is not None}
+        if len(ys) < 4:
+            continue
+        y_centre = float(np.median(list(ys.values())))
+        for d, y in ys.items():
+            num += xs[d] * (y - y_centre)
+            den += xs[d] ** 2
+    return float(np.clip(num / den, 0.0, 1.0)) if den > 0 else 0.0
+
+
+def with_practice_correction(rows: Sequence[DriverForm], beta: float) -> list[DriverForm]:
+    """Pace += beta * practice surprise for drivers with a long run; others unchanged."""
     from dataclasses import replace
-    return [replace(r, implied_gap=(1 - PRACTICE_SHARE) * r.implied_gap + PRACTICE_SHARE * r.practice_gap)
-            if r.practice_gap is not None else r for r in rows]
+    xs = _practice_surprise(rows)
+    return [replace(r, implied_gap=r.implied_gap + beta * xs[r.driver_id]) if r.driver_id in xs else r
+            for r in rows]
 
 
 def predictions(rows: Sequence[DriverForm], weight: float) -> dict[str, list[int]]:

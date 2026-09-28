@@ -11,8 +11,10 @@ Models (per race, only data strictly before the race date):
             (a driver >1% off the teammate in their last common qualifying session, or with no
             time, gets the teammate's pace + 0.3%); win/podium = grid-slot rates
   candidates  experiments, each scored against the production blend:
-    blend_practice  production pace averaged 50/50 with practice long-run pace (FP2, or FP1
-                    on sprint weekends; race_practice_pace_v1) where a driver has a long run
+    blend_practice  production pace + beta * practice surprise (long-run pace minus quali-implied
+                    pace, centred per race; FP2, or FP1 on sprint weekends), beta fitted on
+                    earlier seasons only. (A 50/50 average was tried first: real signal, r=+0.32,
+                    but no ranking gain -- practice and race gaps are on different scales.)
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
             predicted retirements no better than a flat rate and made MAE worse
@@ -55,9 +57,10 @@ from race_form_signal_v1 import (
     choose_weight,
     predictions,
     form_signal,
+    practice_beta,
     race_clustered,
     ranks,
-    with_practice_pace,
+    with_practice_correction,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -213,12 +216,18 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 
 
 # candidate pace variants: name -> transform applied to a race's rows before the blend
-def _practice_candidate(rows: Sequence[DriverForm]) -> list[DriverForm]:
+Transform = Callable[[Sequence[DriverForm]], list[DriverForm]]
+FITTED_BETAS: dict[int, float] = {}
+
+
+def _practice_candidate(history: Sequence[DriverForm], season: int) -> Transform:
     from race_forecast_v1 import production_pace
-    return with_practice_pace(production_pace(rows))
+    beta = FITTED_BETAS.setdefault(season, practice_beta(production_pace(history)))
+    return lambda rows: with_practice_correction(production_pace(rows), beta)
 
 
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
+# candidates: name -> factory(rows of seasons before `season`, season) -> pace transform
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_practice": _practice_candidate,
 }
 
@@ -238,12 +247,15 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
         by_season[r.season_year][r.race_id].append(r)
     from race_forecast_v1 import production_pace
 
-    variants = {"blend": production_pace, **CANDIDATES}
+    all_rows = list(rows)
     out: list[DriverScore] = []
     for season in sorted(by_season):
         if season < start_year:
             continue
         previous = by_season.get(season - 1)
+        history = [r for r in all_rows if r.season_year < season]
+        variants = {"blend": production_pace,
+                    **{name: factory(history, season) for name, factory in CANDIDATES.items()}}
         weights = {name: choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5
                    for name, transform in variants.items()}
         for race_id, race_rows in by_season[season].items():
@@ -492,6 +504,20 @@ def main() -> int:
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
             models.append("stored")
         names = driver_names(db)
+        practice_data = db.execute(text("""
+            SELECT r.season_year, COUNT(DISTINCT r.id) AS races,
+                   COUNT(DISTINCT CASE WHEN s.session_type IN ('FP1', 'FP2') THEN r.id END) AS with_fp_laps,
+                   AVG(CASE WHEN s.session_type IN ('FP1', 'FP2')
+                            THEN (l.tire_compound IS NOT NULL)::int END) AS compound_share
+            FROM races r
+            LEFT JOIN sessions s ON s.race_id = r.id AND s.session_type IN ('FP1', 'FP2')
+            LEFT JOIN laps l ON l.session_id = s.id
+            WHERE r.season_year BETWEEN :a AND :b
+              AND EXISTS (SELECT 1 FROM sessions sr JOIN race_results rr ON rr.session_id = sr.id
+                          WHERE sr.race_id = r.id AND sr.session_type = 'R')
+              AND (l.id IS NOT NULL OR s.id IS NULL)
+            GROUP BY r.season_year ORDER BY 1
+        """), {"a": args.start_year, "b": args.end_year}).all()
 
     print(f"PREDICTION SCOREBOARD {args.start_year}-{args.end_year}")
     summary = report(scores, meta, names, models)
@@ -508,6 +534,14 @@ def main() -> int:
     print(f"  signal: corr(long-run pace vs quali-implied pace, race pace vs quali-implied pace) = {sig:+.3f} "
           f"[{lo:+.3f}, {hi:+.3f}] n={n}  "
           f"{'REAL extra information' if lo > 0 else 'no clear extra information'}")
+    print("  practice laps in the database (races with FP1/FP2 laps / raced, share of laps with a compound): "
+          + ", ".join(f"{y}: {fp}/{n} {share or 0:.0%}" for y, n, fp, share in practice_data))
+    if FITTED_BETAS:
+        print("  blend_practice beta per season (fitted on earlier seasons): "
+              + ", ".join(f"{k}: {v:.2f}" for k, v in sorted(FITTED_BETAS.items())))
+    print("  coverage by season: " + ", ".join(
+        f"{y}: {sum(r.practice_gap is not None for r in scored if r.season_year == y) / max(1, sum(r.season_year == y for r in scored)):.0%}"
+        for y in sorted({r.season_year for r in scored})))
     if args.reliability:
         brier, d, lo, hi, n = reliability_signal(used_p, scores)
         print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")
