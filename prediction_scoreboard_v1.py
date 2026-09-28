@@ -404,11 +404,12 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
         print(f"  retirements                      {np.mean([s.error for s in dnf]):.2f} places   (n={len(dnf)}, "
               f"{len(dnf) / max(1, sum(s.model == main for s in scores)):.0%} of drivers)")
 
-    for field in ("p_win", "p_podium"):
-        print(f"\n=== CALIBRATION {field} ({main}): when we said X, it happened Y ===")
-        for label, n, predicted, observed in calibration(scores, main, field):
-            flag = "  <- off" if n >= 30 and abs(predicted - observed) > max(0.05, 0.5 * predicted) else ""
-            print(f"  {label:>10}  n={n:5}  said {predicted:6.1%}  happened {observed:6.1%}{flag}")
+    for model in [main] + [m for m in models if m == "blend_prob"]:
+        for field in ("p_win", "p_podium"):
+            print(f"\n=== CALIBRATION {field} ({model}): when we said X, it happened Y ===")
+            for label, n, predicted, observed in calibration(scores, model, field):
+                flag = "  <- off" if n >= 30 and abs(predicted - observed) > max(0.05, 0.5 * predicted) else ""
+                print(f"  {label:>10}  n={n:5}  said {predicted:6.1%}  happened {observed:6.1%}{flag}")
 
     print(f"\n=== WORST MISSES ({main}, classified finishers) ===")
     worst = sorted((s for s in scores if s.model == main and s.classified), key=lambda s: -s.error)[:12]
