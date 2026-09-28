@@ -10,7 +10,9 @@ Models (per race, only data strictly before the race date):
             rank - grid rank), w chosen on the previous season; pace = car pace (a driver whose
             qualifying lap was missing or >0.3% slower than the teammate's gets the teammate's
             pace + 0.3%); win/podium = grid-slot rates
-  CANDIDATES  experimental pace variants, each scored against the production blend
+  candidates  experiments, each scored against the production blend:
+    blend_dnf  blend re-ranked by expected finish, with each team's recent non-finish rate
+               (race_reliability_v1); retirements are classified behind every finisher
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
             record, incl. the new-era fallbacks the blend rows cannot rebuild)
 
@@ -210,7 +212,12 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {}
 
 
-def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *, start_year: int) -> list[DriverScore]:
+# post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
+Adjuster = Callable[[int, Sequence[DriverForm], list[int]], list[int]]
+
+
+def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *, start_year: int,
+                 adjusters: dict[str, Adjuster] | None = None) -> list[DriverScore]:
     """grid, blend and candidate predictions for every race from start_year.
 
     Each blend variant chooses its own weight on the previous season (with the same
@@ -234,6 +241,8 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
             ranked = {"grid": predictions(race_rows, 0.0)["grid"]}
             for name, transform in variants.items():
                 ranked[name] = predictions(transform(race_rows), weights[name])["blend"]
+            for name, adjust in (adjusters or {}).items():
+                ranked[name] = adjust(race_id, race_rows, ranked["blend"])
             for model, order in ranked.items():
                 preds = [Prediction(r.driver_id, rank, *slot.get(r.grid, (0.0, 0.0)))
                          for r, rank in zip(race_rows, order)]
@@ -338,7 +347,7 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
                 print(f"{m:8} {metric:20} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  "
                       f"{'BETTER' if better else 'WORSE' if worse else 'no clear difference'}")
 
-    candidates = [m for m in models if m in CANDIDATES]
+    candidates = [m for m in models if m not in ("grid", "blend", "stored")]
     if candidates:
         print("\n=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===")
         for m in candidates:
@@ -410,6 +419,36 @@ def compare(current: dict, baseline: dict) -> list[str]:
     return problems
 
 
+def reliability_adjuster(starts, meta: dict[int, RaceMeta]) -> tuple[Adjuster, dict]:
+    """blend_dnf candidate, plus the per-driver p_dnf it used (for the signal check)."""
+    from race_reliability_v1 import expected_position_ranks, race_probabilities
+
+    used: dict[tuple[int, int], float] = {}
+
+    def adjust(race_id: int, rows: Sequence[DriverForm], blend_ranks: list[int]) -> list[int]:
+        probs = race_probabilities(starts, meta[race_id].race_date, [r.team_id for r in rows])
+        p = [probs[r.team_id] for r in rows]
+        for r, q in zip(rows, p):
+            used[(race_id, r.driver_id)] = q
+        return expected_position_ranks(blend_ranks, p)
+    return adjust, used
+
+
+def reliability_signal(used: dict, scores: Sequence[DriverScore]) -> tuple[float, float, float, float, int]:
+    """Brier of team p_dnf vs a flat rate (the scored races' own mean) for 'did not finish'.
+    Negative difference with CI below 0 = team reliability really predicts retirements."""
+    rows = [(s.race_id, used[(s.race_id, s.driver_id)], not s.classified)
+            for s in scores if s.model == "blend" and (s.race_id, s.driver_id) in used]
+    if not rows:
+        return (float("nan"),) * 4 + (0,)
+    flat = float(np.mean([d for _, _, d in rows]))
+    per_race = defaultdict(list)
+    for race_id, p, dnf in rows:
+        per_race[race_id].append((p - dnf) ** 2 - (flat - dnf) ** 2)
+    d, lo, hi = race_clustered(per_race)
+    return float(np.mean([(p - dnf) ** 2 for _, p, dnf in rows])), d, lo, hi, len(rows)
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -428,8 +467,12 @@ def main() -> int:
         rates = slot_rate_function(load_finishes(db))
         observations = load_observations(db, start_year=2018, end_year=args.end_year)
         rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year, include_wet=True)
-        scores = model_scores(rows, meta, rates, start_year=args.start_year)
-        models = ["grid", "blend", *CANDIDATES]
+        from race_reliability_v1 import load_starts
+
+        adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
+        adjusters = {"blend_dnf": adjust_dnf}
+        scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters)
+        models = ["grid", "blend", *CANDIDATES, *adjusters]
         if args.stored:
             scores += [s for s in stored_scores(db, meta, load_truth(db))
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
@@ -438,6 +481,10 @@ def main() -> int:
 
     print(f"PREDICTION SCOREBOARD {args.start_year}-{args.end_year}")
     summary = report(scores, meta, names, models)
+    brier, d, lo, hi, n = reliability_signal(used_p, scores)
+    print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")
+    print(f"  Brier team p_dnf {brier:.4f}; minus flat rate {d:+.5f} [{lo:+.5f}, {hi:+.5f}]  n={n}  "
+          f"{'REAL signal' if hi < 0 else 'WORSE than a flat rate' if lo > 0 else 'no clear signal'}")
     if args.save:
         with open(args.save, "w") as f:
             json.dump({"range": [args.start_year, args.end_year], "models": summary}, f, indent=2)
