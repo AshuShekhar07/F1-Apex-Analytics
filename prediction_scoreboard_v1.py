@@ -8,6 +8,9 @@ Models (per race, only data strictly before the race date):
   grid      finish in grid order; win/podium = shrunk grid-slot rates (baseline)
   blend     production: grid rank + w * (quali-implied pace + team form rank - grid rank),
             w chosen on the previous season; win/podium = grid-slot rates
+  blend_car CANDIDATE: blend, but a driver whose qualifying lap was more than 0.3% slower
+            than the teammate's (or missing) gets the teammate's pace + 0.3% -- a fast car
+            starting out of position after a quali mistake, failure or penalty
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
             record, incl. the new-era fallbacks the blend rows cannot rebuild)
 
@@ -41,7 +44,15 @@ import numpy as np
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-from race_form_signal_v1 import DriverForm, build_rows, choose_weight, predictions, race_clustered, ranks
+from race_form_signal_v1 import (
+    DriverForm,
+    build_rows,
+    choose_weight,
+    predictions,
+    race_clustered,
+    ranks,
+    with_car_pace,
+)
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
             "bad_miss_finishers", "brier_win", "brier_podium")
@@ -195,23 +206,37 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
             for r in rows if r.driver_id in by_driver]
 
 
+# candidate pace variants: name -> transform applied to a race's rows before the blend
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
+    "blend_car": with_car_pace,
+}
+
+
 def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *, start_year: int) -> list[DriverScore]:
-    """grid and blend predictions for every race from start_year (blend weight from the previous season)."""
+    """grid, blend and candidate predictions for every race from start_year.
+
+    Each blend variant chooses its own weight on the previous season (with the same
+    variant applied), so a candidate never borrows the production weight."""
     by_season = defaultdict(lambda: defaultdict(list))
     for r in rows:
         by_season[r.season_year][r.race_id].append(r)
+    variants = {"blend": list, **CANDIDATES}
     out: list[DriverScore] = []
     for season in sorted(by_season):
         if season < start_year:
             continue
-        weight = choose_weight(by_season[season - 1]) if by_season.get(season - 1) else 0.5
+        previous = by_season.get(season - 1)
+        weights = {name: choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5
+                   for name, transform in variants.items()}
         for race_id, race_rows in by_season[season].items():
             m = meta[race_id]
             slot = rates(m.race_date, m.era, len(race_rows))
-            ranked = predictions(race_rows, weight)
-            for model in ("grid", "blend"):
+            ranked = {"grid": predictions(race_rows, 0.0)["grid"]}
+            for name, transform in variants.items():
+                ranked[name] = predictions(transform(race_rows), weights[name])["blend"]
+            for model, order in ranked.items():
                 preds = [Prediction(r.driver_id, rank, *slot.get(r.grid, (0.0, 0.0)))
-                         for r, rank in zip(race_rows, ranked[model])]
+                         for r, rank in zip(race_rows, order)]
                 out += score_race(race_id, model, race_rows, preds)
     return out
 
@@ -313,6 +338,25 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
                 print(f"{m:8} {metric:20} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  "
                       f"{'BETTER' if better else 'WORSE' if worse else 'no clear difference'}")
 
+    candidates = [m for m in models if m in CANDIDATES]
+    if candidates:
+        print("\n=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===")
+        for m in candidates:
+            for metric in HEADLINE:
+                d, lo, hi = paired(scores, m, "blend", metric)
+                if d != d:
+                    continue
+                better = (hi < 0) if metric in LOWER_IS_BETTER else (lo > 0)
+                worse = (lo > 0) if metric in LOWER_IS_BETTER else (hi < 0)
+                print(f"{m:10} {metric:20} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  "
+                      f"{'BETTER' if better else 'WORSE' if worse else 'no clear difference'}")
+        for group in ("P1-3", "P4-10", "P11+"):
+            cells = []
+            for m in ["blend", *candidates]:
+                rows = [s for s in scores if s.model == m and s.classified and grid_group(s.grid) == group]
+                cells.append(f"{m} {np.mean([s.error for s in rows]):.2f}" if rows else f"{m} -")
+            print(f"  finishers started {group:6} " + "   ".join(cells))
+
     main = "blend"
     print(f"\n=== BREAKDOWN ({main}): mae_finishers / podium_overlap / races ===")
     groups: dict[str, set[int]] = defaultdict(set)
@@ -385,7 +429,7 @@ def main() -> int:
         observations = load_observations(db, start_year=2018, end_year=args.end_year)
         rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year, include_wet=True)
         scores = model_scores(rows, meta, rates, start_year=args.start_year)
-        models = ["grid", "blend"]
+        models = ["grid", "blend", *CANDIDATES]
         if args.stored:
             scores += [s for s in stored_scores(db, meta, load_truth(db))
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]

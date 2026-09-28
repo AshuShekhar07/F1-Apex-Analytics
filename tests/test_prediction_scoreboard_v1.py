@@ -62,11 +62,25 @@ def test_scoreboard_end_to_end(synthetic_db):
         rows = build_rows(db, load_observations(db, start_year=2018, end_year=2024), start_year=2023,
                           end_year=2024, include_wet=True)
         scores = model_scores(rows, meta, rates, start_year=2024)
-    assert {s.model for s in scores} == {"grid", "blend"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 2 * 24
+    assert {s.model for s in scores} == {"grid", "blend", "blend_car"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 3 * 24
+    # every synthetic driver has a representative lap close to the teammate: car pace changes nothing
+    assert summarise(scores, "blend_car")["mae"] == summarise(scores, "blend")["mae"]
     grid = summarise(scores, "grid")
     # synthetic: driver d is slower than d-1 and qualifies in that order, so grid order ~ finish order
     assert grid["rank_corr"][0] > 0.8
     assert all(0 <= s.p_win <= 1 and 0 <= s.p_podium <= 1 for s in scores)
     slot = rates(meta[5].race_date, "e", 12)
     assert all(slot[g][0] >= slot[g + 1][0] for g in range(1, 12))   # production's monotone rule
+
+
+def test_car_pace_uses_teammate_only_when_own_lap_is_unrepresentative():
+    from race_form_signal_v1 import TEAMMATE_MARGIN, car_quali_gaps
+
+    teams = {1: 10, 2: 10, 3: 20, 4: 20, 5: 30}
+    gaps = {1: 0.000, 2: 0.020,          # 2 was 2% off the teammate: failure / mistake -> car pace
+            3: 0.010, 4: 0.011,          # normal teammate gap: own lap kept
+            5: 0.030}                    # no teammate: own lap kept
+    car = car_quali_gaps(gaps, teams)
+    assert car[1] == 0.0 and car[2] == TEAMMATE_MARGIN
+    assert car[3] == 0.010 and car[4] == 0.011 and car[5] == 0.030

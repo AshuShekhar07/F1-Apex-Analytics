@@ -45,6 +45,11 @@ from race_status import is_classified
 
 FORM_RACES = 5
 SHRINK = 2.0
+# Car pace: a driver more than this far (share of pole time) behind the teammate in
+# qualifying -- or with no representative time -- is treated as not showing the car's
+# pace (quali mistake, failure, skipped session for a penalty). Fixed a priori (a
+# typical intra-team gap is ~0.1-0.3%), not tuned on scored races.
+TEAMMATE_MARGIN = 0.003
 BLEND_WEIGHTS = tuple(round(w, 1) for w in np.arange(0.0, 1.01, 0.1))
 
 
@@ -59,6 +64,8 @@ class DriverForm:
     implied_gap: float   # race gap implied by qualifying
     form: float          # team's shrunk recent residual (pre-race)
     residual: float | None  # this race's realised residual (post-race), None if no clean pace
+    team_id: int | None = None
+    car_gap: float | None = None   # race gap implied by min(own quali gap, teammate gap + TEAMMATE_MARGIN)
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -106,6 +113,26 @@ def ranks(scores: Sequence[float]) -> list[int]:
     for position, i in enumerate(order, start=1):
         out[i] = position
     return out
+
+
+def car_quali_gaps(gaps: dict[int, float], teams: dict[int, int]) -> dict[int, float]:
+    """Own quali gap, unless the teammate's gap + TEAMMATE_MARGIN is smaller (the car is
+    faster than this driver's lap showed). Drivers without a teammate keep their own gap."""
+    by_team = defaultdict(list)
+    for driver, team in teams.items():
+        if driver in gaps:
+            by_team[team].append(driver)
+    out = {}
+    for driver, gap in gaps.items():
+        mates = [gaps[d] for d in by_team.get(teams.get(driver), []) if d != driver]
+        out[driver] = min([gap] + [m + TEAMMATE_MARGIN for m in mates])
+    return out
+
+
+def with_car_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """Rows whose pace uses car_gap instead of the driver's own quali-implied gap."""
+    from dataclasses import replace
+    return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None else r for r in rows]
 
 
 def predictions(rows: Sequence[DriverForm], weight: float) -> dict[str, list[int]]:
@@ -194,6 +221,8 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         gaps = quali_gaps(best_quali_times(db, race["id"]))
         back_grid = len(entries) + 1
         back_gap = max(gaps.values()) if gaps else 0.03
+        own_gaps = {int(e["driver_id"]): gaps.get(int(e["driver_id"]), back_gap) for e in entries}
+        car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries})
 
         if models is not None and model is not None:
             times = [t for t in best_quali_times(db, race["id"]).values() if t]
@@ -210,6 +239,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     int(e["finish"]), is_classified(e["status"]), implied,
                     team_form(team_history[(era, int(e["team_id"]))], int(e["team_id"]), when),
                     (obs.race_gap - implied) if obs else None,
+                    int(e["team_id"]), model.race_gap(car_gaps[int(e["driver_id"])]),
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:
