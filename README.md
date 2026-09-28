@@ -158,3 +158,16 @@ python show_forecast.py --race 186 --compute             # build a missing forec
 Shows the stored forecast (predicted order, grid, win/podium chances), the actual result
 and error once the race is run, the era's tyre strategies, data notes and tested accuracy.
 Model changes are judged with `prediction_scoreboard_v1.py` (see its docstring).
+
+## Keeping the data current
+
+```bash
+python update_latest_races.py --season 2026                                     # load, check, forecast
+python update_latest_races.py --season 2026 --score scoreboard_baseline_2018.json # + scoreboard gate
+python data_quality_v1.py --season 2026                                         # checks only
+```
+
+Runs every loader in dependency order (each only fills what is missing), sets the
+regulation era for new races, runs the data-quality checks (a FAIL -- e.g. a driver
+identity that differs from FastF1 -- blocks that race's forecast), then stores forecasts
+for weekends with qualifying and no forecast yet. Resume a failed load with `--from-step N`.
