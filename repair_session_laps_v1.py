@@ -36,7 +36,7 @@ def _seconds(value) -> float | None:
 def incomplete_sessions(db: Any, season: int) -> list[dict]:
     rows = db.execute(text("""
         SELECT s.id AS session_id, r.id AS race_id, r.round_number, r.race_date, t.name AS track,
-               COUNT(rr.id) FILTER (WHERE NOT (lower(COALESCE(rr.status, '')) = ANY(:ns))) AS starters,
+               COUNT(DISTINCT rr.id) FILTER (WHERE NOT (lower(COALESCE(rr.status, '')) = ANY(:ns))) AS starters,
                COUNT(DISTINCT l.race_entry_id) AS with_laps
         FROM races r
         JOIN tracks t ON t.id = r.track_id

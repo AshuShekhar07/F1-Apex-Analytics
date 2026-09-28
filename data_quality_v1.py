@@ -25,6 +25,13 @@ MIN_FIELD = 15            # fewer classified entries than this = incomplete load
 MIN_SHARE = 0.9           # share of starters that must have grid / race laps
 MIN_QUALI_SHARE = 0.75    # 2-4 drivers without a qualifying time (crash, failure, no run) is normal
 
+# Gaps confirmed to be missing at the source: reported as a warning with the reason, never
+# as a failure. Add an entry only after a repair script showed the data does not exist.
+KNOWN_GAPS: dict[tuple[int, int], dict[str, str]] = {
+    (2018, 14): {"race laps": "FastF1 has no race timing for 2018 Monza (results were entered "
+                              "from the official classification; insert_2018_monza_results.py)"},
+}
+
 
 @dataclass
 class RaceCheck:
@@ -41,7 +48,19 @@ class RaceCheck:
 
 
 def evaluate(facts: dict) -> RaceCheck:
-    """Pure rule set over one race's facts (see load_facts for the keys)."""
+    """Pure rule set over one race's facts (see load_facts for the keys); failures listed in
+    KNOWN_GAPS for this weekend become warnings that carry the documented reason."""
+    c = _evaluate(facts)
+    known = KNOWN_GAPS.get((facts.get("season_year"), facts["round_number"]), {})
+    for key, reason in known.items():
+        hits = [f for f in c.fails if f.startswith(key)]
+        for f in hits:
+            c.fails.remove(f)
+            c.warns.append(f"known gap: {reason}")
+    return c
+
+
+def _evaluate(facts: dict) -> RaceCheck:
     c = RaceCheck(facts["race_id"], facts["round_number"], facts["track"], "scheduled")
     if facts["results"] > 0:
         c.stage = "raced"
@@ -101,6 +120,7 @@ def load_facts(db: Any, race: dict, identity: dict[int, list] | None = None) -> 
     one = lambda sql: db.execute(text(sql), {"r": r}).scalar()
     return {
         "race_id": r, "round_number": race["round_number"], "track": race["track"],
+        "season_year": race["season_year"],
         "regulation_era": race["regulation_era"],
         "race_distance_known": bool(race["total_race_laps"]) or bool(one("""
             SELECT 1 FROM races r2 JOIN races r ON r.id = :r
@@ -148,7 +168,7 @@ def load_facts(db: Any, race: dict, identity: dict[int, list] | None = None) -> 
 
 def season_races(db: Any, season: int) -> list[dict]:
     return [dict(r) for r in db.execute(text("""
-        SELECT r.id, r.round_number, r.race_date, r.regulation_era, r.safety_car_periods,
+        SELECT r.id, r.season_year, r.round_number, r.race_date, r.regulation_era, r.safety_car_periods,
                r.winner_time_seconds, t.name AS track, t.total_race_laps
         FROM races r JOIN tracks t ON t.id = r.track_id
         WHERE r.season_year = :s ORDER BY r.round_number

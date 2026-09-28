@@ -101,3 +101,29 @@ def test_repair_matches_fastf1_laps_by_car_number_for_missing_entries_only():
     rows = lap_rows(laps, {3: 501}, session_id=9)          # only car 3 is missing laps
     assert rows == [{"s": 9, "e": 501, "n": 1, "lt": 80.0, "s1": None, "s2": None, "s3": None, "c": "MEDIUM"}]
     assert not started("Did not start") and started("Retired") and started(None)
+
+
+def test_known_source_gaps_become_documented_warnings():
+    monza = evaluate(_facts(season_year=2018, round_number=14, drivers_with_race_laps=0))
+    assert monza.ok and any("FastF1 has no race timing for 2018 Monza" in w for w in monza.warns)
+    other = evaluate(_facts(season_year=2019, round_number=14, drivers_with_race_laps=0))
+    assert not other.ok                                     # only the documented weekend is excused
+
+
+def test_repair_finds_only_sessions_with_drivers_missing_laps(synthetic_db):
+    from repair_session_laps_v1 import incomplete_sessions, missing_entries
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            assert incomplete_sessions(db, 2024) == []           # every synthetic starter has laps
+            session, entry = db.execute(text("""
+                SELECT s.id, re.id FROM sessions s JOIN race_entries re ON re.race_id = s.race_id
+                WHERE s.race_id = 5 AND s.session_type = 'R' AND re.driver_id = 3""")).one()
+            db.execute(text("DELETE FROM laps WHERE session_id = :s AND race_entry_id = :e"),
+                       {"s": session, "e": entry})
+            [gap] = incomplete_sessions(db, 2024)
+            assert (gap["race_id"], gap["starters"], gap["with_laps"]) == (5, 12, 11)   # counts drivers, not laps
+            assert list(missing_entries(db, session, 5).values()) == [entry]
+        finally:
+            tx.rollback()
