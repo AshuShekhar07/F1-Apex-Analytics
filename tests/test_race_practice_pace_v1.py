@@ -1,0 +1,61 @@
+import pytest
+from sqlalchemy import text
+
+from race_practice_pace_v1 import MIN_RUN_LAPS, load_practice_gaps, long_run_laps, practice_gaps
+from test_race_strategy_backtest_v2 import synthetic_db  # noqa: F401  (fixture)
+
+
+def test_long_runs_keep_consecutive_race_trim_laps_only():
+    laps = ([(1, 95.0, "SOFT"), (2, 88.0, "SOFT"), (3, 99.0, "SOFT")]          # out, quali sim, in
+            + [(4, 100.0, None)]                                              # slow out-lap
+            + [(n, 91.0 + 0.05 * (n - 5), "MEDIUM") for n in range(5, 13)]    # 8-lap long run
+            + [(13, 101.0, "MEDIUM")]
+            + [(14, 91.5, "HARD"), (15, 91.6, "HARD")])                      # too short
+    runs = long_run_laps(laps)
+    assert set(runs) == {"MEDIUM"} and len(runs["MEDIUM"]) == 8
+    # a compound change inside consecutive laps splits the run (3 + 4 laps: both too short)
+    assert MIN_RUN_LAPS == 5
+    assert long_run_laps([(n, 90.0, "SOFT" if n < 4 else "MEDIUM") for n in range(1, 8)]) == {}
+
+
+def test_practice_gaps_compare_within_compound_and_rebase():
+    runs = {
+        1: {"MEDIUM": [90.0] * 6},
+        2: {"MEDIUM": [90.9] * 6},                  # 1% off on mediums
+        3: {"HARD": [91.0] * 6, "MEDIUM": [90.45] * 6},
+        4: {"HARD": [91.91] * 6},                   # 1% off the best hard
+        5: {"HARD": [91.2] * 6},
+        6: {"HARD": [91.1] * 6, "MEDIUM": [99.0] * 6},   # 10% off: unrepresentative, dropped
+    }
+    gaps = practice_gaps(runs)
+    assert gaps[1] == 0.0
+    assert gaps[2] == pytest.approx(0.01, abs=1e-6)
+    assert gaps[4] == pytest.approx(0.01, abs=1e-6)
+    assert gaps[3] == pytest.approx(0.0025, abs=1e-6)   # mean of 0% (hard) and 0.5% (medium)
+    assert 6 not in gaps
+
+
+def test_compounds_with_too_few_drivers_are_ignored():
+    assert practice_gaps({1: {"SOFT": [80.0] * 5}, 2: {"SOFT": [81.0] * 5}}) == {}
+
+
+def test_load_practice_gaps_from_the_database(synthetic_db):
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            fp2 = db.execute(text("INSERT INTO sessions (race_id, session_type, start_time) "
+                                  "VALUES (5, 'FP2', now()) RETURNING id")).scalar()
+            db.execute(text("INSERT INTO session_weather (session_id, rainfall) VALUES (:s, false)"), {"s": fp2})
+            entries = dict(db.execute(text("SELECT driver_id, id FROM race_entries WHERE race_id = 5")).all())
+            for driver, entry in entries.items():
+                for n in range(1, 9):   # 8-lap long run, driver d is 0.1 s/lap slower than d-1
+                    db.execute(text("""INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time, tire_compound)
+                                       VALUES (:s, :e, :n, :t, 'MEDIUM')"""),
+                               {"s": fp2, "e": entry, "n": n, "t": 92.0 + 0.1 * (driver - 1)})
+            gaps, session = load_practice_gaps(db, 5)
+            assert session == "FP2" and len(gaps) == len(entries)
+            assert gaps[1] == 0.0 and gaps[2] == pytest.approx(0.1 / 92.0)
+            db.execute(text("UPDATE session_weather SET rainfall = true WHERE session_id = :s"), {"s": fp2})
+            assert load_practice_gaps(db, 5) == ({}, None)          # wet practice is not used
+        finally:
+            tx.rollback()

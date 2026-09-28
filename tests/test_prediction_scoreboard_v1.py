@@ -60,14 +60,16 @@ def test_scoreboard_end_to_end(synthetic_db):
         meta = load_meta(db)
         rates = slot_rate_function(load_finishes(db))
         rows = build_rows(db, load_observations(db, start_year=2018, end_year=2024), start_year=2023,
-                          end_year=2024, include_wet=True)
+                          end_year=2024, include_wet=True, with_practice=True)
         from prediction_scoreboard_v1 import reliability_adjuster, reliability_signal
         from race_reliability_v1 import load_starts
 
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
-    assert {s.model for s in scores} == {"grid", "blend", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 3 * 24
+    assert {s.model for s in scores} == {"grid", "blend", "blend_practice", "blend_dnf"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 4 * 24
+    # synthetic weekends have no practice sessions: the candidate equals production
+    assert summarise(scores, "blend_practice")["mae"] == summarise(scores, "blend")["mae"]
     # synthetic: every car finishes, so every team has the same rate and the order is unchanged
     assert summarise(scores, "blend_dnf")["mae"] == summarise(scores, "blend")["mae"]
     assert len({round(p, 9) for p in used.values()}) <= 2

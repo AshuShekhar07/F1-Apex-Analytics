@@ -10,7 +10,9 @@ Models (per race, only data strictly before the race date):
             + team form rank - grid rank), w chosen on the previous season, pace = car pace v3
             (a driver >1% off the teammate in their last common qualifying session, or with no
             time, gets the teammate's pace + 0.3%); win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend (none open)
+  candidates  experiments, each scored against the production blend:
+    blend_practice  production pace averaged 50/50 with practice long-run pace (FP2, or FP1
+                    on sprint weekends; race_practice_pace_v1) where a driver has a long run
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
             predicted retirements no better than a flat rate and made MAE worse
@@ -52,8 +54,10 @@ from race_form_signal_v1 import (
     build_rows,
     choose_weight,
     predictions,
+    form_signal,
     race_clustered,
     ranks,
+    with_practice_pace,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -209,7 +213,14 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 
 
 # candidate pace variants: name -> transform applied to a race's rows before the blend
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {}
+def _practice_candidate(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    from race_forecast_v1 import production_pace
+    return with_practice_pace(production_pace(rows))
+
+
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
+    "blend_practice": _practice_candidate,
+}
 
 
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
@@ -468,7 +479,8 @@ def main() -> int:
         meta = load_meta(db)
         rates = slot_rate_function(load_finishes(db))
         observations = load_observations(db, start_year=2018, end_year=args.end_year)
-        rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year, include_wet=True)
+        rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year, include_wet=True,
+                          with_practice=True)
         from race_reliability_v1 import load_starts
 
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
@@ -487,6 +499,15 @@ def main() -> int:
     fired = sum(r.car_gap is not None and r.car_gap < r.implied_gap - 1e-12 for r in scored)
     print(f"\n=== CAR PACE RULE: replaced the driver's own lap for {fired} of {len(scored)} drivers "
           f"({fired / max(1, len(scored)):.1%}); it should be rare ===")
+    with_fp = [r for r in scored if r.practice_gap is not None]
+    print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
+          f"({len(with_fp) / max(1, len(scored)):.0%}) ===")
+    from dataclasses import replace as _replace
+    probe = [_replace(r, form=r.practice_gap - r.implied_gap) for r in with_fp if r.residual is not None]
+    sig, lo, hi, n = form_signal(probe)
+    print(f"  signal: corr(long-run pace vs quali-implied pace, race pace vs quali-implied pace) = {sig:+.3f} "
+          f"[{lo:+.3f}, {hi:+.3f}] n={n}  "
+          f"{'REAL extra information' if lo > 0 else 'no clear extra information'}")
     if args.reliability:
         brier, d, lo, hi, n = reliability_signal(used_p, scores)
         print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")

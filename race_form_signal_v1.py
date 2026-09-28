@@ -79,6 +79,7 @@ class DriverForm:
     residual: float | None  # this race's realised residual (post-race), None if no clean pace
     team_id: int | None = None
     car_gap: float | None = None   # race gap implied by min(own quali gap, teammate gap + TEAMMATE_MARGIN)
+    practice_gap: float | None = None  # practice long-run gap (race_practice_pace_v1), if loaded
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -166,6 +167,17 @@ def with_car_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
     return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None else r for r in rows]
 
 
+PRACTICE_SHARE = 0.5   # fixed a priori: equal say for qualifying-implied and long-run pace
+
+
+def with_practice_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """Pace = (1 - PRACTICE_SHARE) * current pace + PRACTICE_SHARE * practice long-run gap,
+    for drivers with a long run; others keep their current pace."""
+    from dataclasses import replace
+    return [replace(r, implied_gap=(1 - PRACTICE_SHARE) * r.implied_gap + PRACTICE_SHARE * r.practice_gap)
+            if r.practice_gap is not None else r for r in rows]
+
+
 def predictions(rows: Sequence[DriverForm], weight: float) -> dict[str, list[int]]:
     grid = ranks([r.grid for r in rows])
     pace = ranks([r.implied_gap + r.form for r in rows])
@@ -216,7 +228,8 @@ def choose_weight(races: dict[int, list[DriverForm]]) -> float:
 # --- database assembly ---------------------------------------------------------
 
 def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
-               models: dict | None = None, include_wet: bool = False) -> list[DriverForm]:
+               models: dict | None = None, include_wet: bool = False,
+               with_practice: bool = False) -> list[DriverForm]:
     """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time).
 
     Dry races only unless include_wet. Wet races are then scored too, but never feed
@@ -255,6 +268,10 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         own_gaps = {int(e["driver_id"]): gaps.get(int(e["driver_id"]), back_gap) for e in entries}
         car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries},
                                   quali_session_times(db, race["id"]))
+        practice = {}
+        if with_practice and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_practice_gaps
+            practice, _ = load_practice_gaps(db, race["id"])
 
         if models is not None and model is not None:
             times = [t for t in best_quali_times(db, race["id"]).values() if t]
@@ -272,6 +289,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     team_form(team_history[(era, int(e["team_id"]))], int(e["team_id"]), when),
                     (obs.race_gap - implied) if obs else None,
                     int(e["team_id"]), model.race_gap(car_gaps[int(e["driver_id"])]),
+                    practice.get(int(e["driver_id"])),
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:
