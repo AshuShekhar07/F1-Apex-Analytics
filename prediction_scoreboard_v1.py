@@ -12,7 +12,10 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend (none open)
+  candidates  experiments, each scored against the production blend:
+    blend_prob  same order as blend; win/podium chances = how often the model's own predicted
+                P1, P2, ... won / reached the podium in earlier races, shrunk toward the grid-slot
+                rate (10 starts) and made non-increasing down the order
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
             practice correction (2026-09-28): 10+ place misses 2.1% -> 1.8%, worse nowhere
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
@@ -463,6 +466,43 @@ def reliability_signal(used: dict, scores: Sequence[DriverScore]) -> tuple[float
     return float(np.mean([(p - dnf) ** 2 for _, p, dnf in rows])), d, lo, hi, len(rows)
 
 
+def rank_probability_scores(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], rates,
+                            *, k: float = 10.0, source: str = "blend", name: str = "blend_prob") -> list[DriverScore]:
+    """Candidate probabilities: win/podium rate of each PREDICTED position, from earlier races
+    only (walk-forward by date), shrunk toward the grid-slot rate of the same number."""
+    from dataclasses import replace
+
+    from race_forecast_v1 import non_increasing
+
+    by_race = defaultdict(list)
+    for s in scores:
+        if s.model == source:
+            by_race[s.race_id].append(s)
+    history = defaultdict(lambda: [0, 0, 0])          # predicted position -> starts, wins, podiums
+    out = []
+    for race_id in sorted(by_race, key=lambda r: (meta[r].race_date, r)):
+        rows = by_race[race_id]
+        m = meta[race_id]
+        prior = rates(m.race_date, m.era, len(rows))
+        positions = range(1, len(rows) + 1)
+        wins, pods, weights = [], [], []
+        for p in positions:
+            n, w, pod = history[p]
+            prior_win, prior_pod = prior.get(p, (0.0, 0.0))
+            wins.append((w + k * prior_win) / (n + k))
+            pods.append((pod + k * prior_pod) / (n + k))
+            weights.append(n + k)
+        wins, pods = non_increasing(wins, weights), non_increasing(pods, weights)
+        for s in rows:
+            out.append(replace(s, model=name, p_win=wins[s.predicted - 1], p_podium=pods[s.predicted - 1]))
+        for s in rows:                                 # update only after this race is predicted
+            h = history[s.predicted]
+            h[0] += 1
+            h[1] += int(s.finish == 1)
+            h[2] += int(s.finish <= 3)
+    return out
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -489,7 +529,8 @@ def main() -> int:
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
         adjusters = {"blend_dnf": adjust_dnf} if args.reliability else {}
         scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters)
-        models = ["grid", "blend", *CANDIDATES, *adjusters]
+        scores += rank_probability_scores(scores, meta, rates)
+        models = ["grid", "blend", *CANDIDATES, "blend_prob", *adjusters]
         if args.stored:
             scores += [s for s in stored_scores(db, meta, load_truth(db))
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]

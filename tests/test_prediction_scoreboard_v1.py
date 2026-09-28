@@ -117,3 +117,19 @@ def test_practice_correction_is_fitted_on_history_and_centred_per_race():
     assert adjusted[3] < 0.003 - 0.003                        # moved ahead by ~beta * 1%
     assert all(adjusted[d] == 0.001 * d for d in (1, 2, 4, 5, 6))
     assert practice_beta([]) == 0.0
+
+
+def test_rank_probabilities_learn_from_earlier_races_only():
+    from datetime import date, timedelta
+
+    from prediction_scoreboard_v1 import RaceMeta, rank_probability_scores
+
+    meta = {r: RaceMeta(r, date(2024, 1, 1) + timedelta(days=7 * r), 2024, "e", False, "T") for r in range(1, 41)}
+    flat = lambda as_of, era, field: {g: (0.25, 0.75) if g <= 3 else (0.0, 0.0) for g in range(1, field + 1)}
+    # the model's predicted P1 wins every race, although the grid prior only gives 25%
+    scores = [_s(d, d, d, race=r, model="blend") for r in range(1, 41) for d in range(1, 11)]
+    probs = {(s.race_id, s.driver_id): s for s in rank_probability_scores(scores, meta, flat)}
+    assert probs[(1, 1)].p_win == pytest.approx(0.25)          # first race: nothing learned yet
+    assert probs[(40, 1)].p_win > 0.75                          # 39 earlier wins from predicted P1
+    assert all(probs[(40, d)].p_win >= probs[(40, d + 1)].p_win for d in range(1, 10))
+    assert all(s.predicted == s.finish for s in probs.values())  # the order itself is unchanged
