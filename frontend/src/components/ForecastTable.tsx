@@ -56,7 +56,7 @@ export function ForecastTable({ forecast, results }: { forecast: Forecast; resul
         </table>
       </div>
       <p className="accuracy">
-        <strong>How accurate is this?</strong> Tested on 160 races from 2019–26 using only earlier data: predicted positions were
+        <strong>How accurate is this?</strong> Tested on 177 races from 2018–26 using only earlier data: predicted positions were
         off by <strong>{v.mean_abs_error_places.toFixed(1)} places</strong> on average (grid order alone:{' '}
         {v.grid_only_mean_abs_error_places.toFixed(1)}). Win and podium chances are how often drivers from each grid
         slot have won or reached the podium.

@@ -7,11 +7,11 @@ here is tuned on the races it scores.
 Models (per race, only data strictly before the race date):
   grid      finish in grid order; win/podium = shrunk grid-slot rates (baseline)
   blend     production (race_forecast_v1.production_pace): grid rank + w * (quali-implied pace
-            + team form rank - grid rank), w chosen on the previous season; win/podium =
-            grid-slot rates
-  candidates  experiments, each scored against the production blend:
-    blend_car  car pace v3: a driver >1% off the teammate's pace in their last common
-               qualifying session (or with no time) gets the teammate's pace + 0.3%
+            + team form rank - grid rank), w chosen on the previous season, pace = car pace v3
+            (a driver >1% off the teammate in their last common qualifying session, or with no
+            time, gets the teammate's pace + 0.3%); win/podium = grid-slot rates
+  candidates  experiments, each scored against the production blend (none open)
+  promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
   rejected: blend_dnf (team reliability, run with --reliability): team non-finish rates
             predicted retirements no better than a flat rate and made MAE worse
   stored    with --stored: the forecasts actually stored in race_forecasts (the live
@@ -54,7 +54,6 @@ from race_form_signal_v1 import (
     predictions,
     race_clustered,
     ranks,
-    with_car_pace,
 )
 
 HEADLINE = ("winner_hit", "podium_overlap", "top10_overlap", "rank_corr", "mae", "mae_finishers",
@@ -210,9 +209,7 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 
 
 # candidate pace variants: name -> transform applied to a race's rows before the blend
-CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {
-    "blend_car": with_car_pace,
-}
+CANDIDATES: dict[str, Callable[[Sequence[DriverForm]], list[DriverForm]]] = {}
 
 
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks

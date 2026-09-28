@@ -67,22 +67,22 @@ SLOT_SHRINK_STARTS = 10    # grid-slot rates: era evidence weighted against 10 s
 #                     expected. No wet strategy is shown: the wet precedent (method W) did not
 #                     beat the baseline in 2022-25 wet races (sequence accuracy 0.015).
 STRATEGY_METHOD = "era_mode"
-# Pace used by the blend: "own_lap" (validated) or "car_pace" (candidate: a driver off the
-# teammate's pace in their last common qualifying session gets the teammate's pace + 0.3%,
-# race_form_signal_v1). car_pace v1 was promoted then ROLLED BACK on 2026-09-28: it
-# compared best laps across sessions, fired for 5-9 drivers a race and made the 2025-26
-# live record worse (MAE 3.41 -> 3.52). v2 compares within a session; it is a scoreboard
-# candidate until it passes the gate, including on the stored live forecasts.
-PACE_METHOD = "own_lap"
+# Pace used by the blend: "car_pace" or "own_lap" (the previous method).
+# car_pace (race_form_signal_v1, v3): a driver >1% off the teammate in their last common
+# qualifying session, or with no time, gets the teammate's pace + 0.3%. Fires for ~6% of
+# drivers. prediction_scoreboard_v1 2018-2026 (177 races): finishers off by 10+ places
+# 2.5% -> 2.1% (CI excludes 0), worse nowhere. Kept only if the recomputed 2025-26 stored
+# forecasts also pass --compare (v1 was rolled back for failing exactly that check).
+PACE_METHOD = "car_pace"
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
 
 VALIDATION = {
-    "source": "prediction_scoreboard_v1 walk-forward, all races 2019-2026, 3215 drivers in 160 races",
-    "predicted_position": {"method": "grid/pace blend", "mean_abs_error_places": 3.319,
-                           "grid_only_mean_abs_error_places": 3.461,
-                           "finishers_mean_abs_error_places": 2.749, "finishers_off_by_10_or_more": 0.026,
-                           "winner_correct": 0.569, "podium_overlap": 0.694, "top10_overlap": 0.772},
+    "source": "prediction_scoreboard_v1 walk-forward, all races 2018-2026, 3555 drivers in 177 races",
+    "predicted_position": {"method": "grid/pace blend with car pace", "mean_abs_error_places": 3.361,
+                           "grid_only_mean_abs_error_places": 3.487,
+                           "finishers_mean_abs_error_places": 2.765, "finishers_off_by_10_or_more": 0.021,
+                           "winner_correct": 0.565, "podium_overlap": 0.693, "top10_overlap": 0.770},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
