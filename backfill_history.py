@@ -170,8 +170,14 @@ with engine.connect() as conn:
                 existing = conn.execute(text("""
                     SELECT id FROM sessions WHERE race_id = :r AND session_type = :s
                 """), {"r": race_id, "s": sess_type}).scalar()
-                if existing:
+                if existing and conn.execute(text("""
+                    SELECT EXISTS (SELECT 1 FROM laps WHERE session_id = :s)
+                        OR EXISTS (SELECT 1 FROM race_results WHERE session_id = :s)
+                        OR EXISTS (SELECT 1 FROM qualifying_results WHERE session_id = :s)
+                """), {"s": existing}).scalar():
                     continue  # already backfilled, skip without touching the API
+                # an existing but EMPTY session (created before FastF1 had the data) is loaded
+                # again into the same session row instead of being skipped forever
 
                 try:
                     session = api_call(fastf1.get_session, year, round_num, sess_identifier)
@@ -194,7 +200,7 @@ with engine.connect() as conn:
                     driver_id_map[row['Abbreviation']] = entry_id
                 conn.commit()
 
-                session_id = conn.execute(text("""
+                session_id = existing or conn.execute(text("""
                     INSERT INTO sessions (race_id, session_type, start_time)
                     VALUES (:r, :s, :t) RETURNING id
                 """), {"r": race_id, "s": sess_type, "t": session.date}).scalar()

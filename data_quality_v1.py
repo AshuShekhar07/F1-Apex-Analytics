@@ -22,7 +22,8 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 MIN_FIELD = 15            # fewer classified entries than this = incomplete load
-MIN_SHARE = 0.9           # share of drivers that must have grid / laps / quali time
+MIN_SHARE = 0.9           # share of starters that must have grid / race laps
+MIN_QUALI_SHARE = 0.75    # 2-4 drivers without a qualifying time (crash, failure, no run) is normal
 
 
 @dataclass
@@ -46,6 +47,11 @@ def evaluate(facts: dict) -> RaceCheck:
         c.stage = "raced"
     elif facts["quali_entries"] > 0:
         c.stage = "qualified"
+    elif facts["race_date_passed"]:
+        c.stage = "not loaded"
+        c.fails.append("race date has passed but no qualifying or results are loaded"
+                       + (f" ({facts['sessions']} empty sessions)" if facts["sessions"] else ""))
+        return c
     else:
         return c
 
@@ -56,7 +62,7 @@ def evaluate(facts: dict) -> RaceCheck:
     q, qt = facts["quali_entries"], facts["quali_with_time"]
     if q < MIN_FIELD:
         c.fails.append(f"only {q} qualifying entries")
-    elif qt < MIN_SHARE * q:
+    elif qt < MIN_QUALI_SHARE * q:
         c.fails.append(f"qualifying times for only {qt}/{q} drivers")
     if facts["duplicate_car_numbers"]:
         c.fails.append(f"car numbers used by two drivers: {facts['duplicate_car_numbers']}")
@@ -71,8 +77,10 @@ def evaluate(facts: dict) -> RaceCheck:
             c.fails.append(f"{facts['results_without_status']} results without a status")
         if facts["grid_known"] < MIN_SHARE * n:
             c.fails.append(f"starting grid known for only {facts['grid_known']}/{n}")
-        if facts["drivers_with_race_laps"] < MIN_SHARE * n:
-            c.fails.append(f"race laps for only {facts['drivers_with_race_laps']}/{n} drivers")
+        starters = facts["starters"]
+        if facts["drivers_with_race_laps"] < MIN_SHARE * starters:
+            c.fails.append(f"race laps for only {facts['drivers_with_race_laps']}/{starters} starters "
+                           "(fix: python repair_session_laps_v1.py --season YEAR --apply)")
         if not facts["race_weather"]:
             c.warns.append("no race weather (wet/dry unknown; treated as dry)")
         if facts["safety_car_periods"] is None:
@@ -115,7 +123,16 @@ def load_facts(db: Any, race: dict, identity: dict[int, list] | None = None) -> 
             JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
             WHERE s.race_id = :r AND rr.starting_grid_position IS NOT NULL"""),
         "drivers_with_race_laps": one("""SELECT COUNT(DISTINCT l.race_entry_id) FROM laps l
-            JOIN sessions s ON s.id = l.session_id AND s.session_type = 'R' WHERE s.race_id = :r"""),
+            JOIN sessions s ON s.id = l.session_id AND s.session_type = 'R'
+            JOIN race_results rr ON rr.session_id = s.id AND rr.race_entry_id = l.race_entry_id
+            WHERE s.race_id = :r AND lower(COALESCE(rr.status, '')) NOT IN
+                  ('did not start', 'withdrew', 'did not qualify', 'excluded')"""),
+        "starters": one("""SELECT COUNT(*) FROM race_results rr
+            JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+            WHERE s.race_id = :r AND lower(COALESCE(rr.status, '')) NOT IN
+                  ('did not start', 'withdrew', 'did not qualify', 'excluded')"""),
+        "race_date_passed": bool(one("SELECT race_date < CURRENT_DATE FROM races WHERE id = :r")),
+        "sessions": one("SELECT COUNT(*) FROM sessions WHERE race_id = :r"),
         "lap_metadata_share": one("""SELECT COALESCE(AVG((l.tyre_life_laps IS NOT NULL)::int), 0) FROM laps l
             JOIN sessions s ON s.id = l.session_id AND s.session_type = 'R' WHERE s.race_id = :r""") or 0.0,
         "race_weather": bool(one("""SELECT 1 FROM session_weather sw

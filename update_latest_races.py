@@ -35,6 +35,7 @@ def loaders(season: int) -> list[tuple[str, list[str]]]:
     y = str(season)
     return [
         ("sessions, entries, laps, qualifying, results", ["backfill_history.py"]),
+        ("laps missing for drivers with results", ["repair_session_laps_v1.py", "--season", y, "--apply"]),
         ("weekend format (sprint or not)", ["populate_weekend_format.py"]),
         ("sprint results", ["backfill_sprint_results.py"]),
         ("official starting grid", ["backfill_grid_position.py"]),
