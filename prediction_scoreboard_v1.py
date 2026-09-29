@@ -217,6 +217,7 @@ def score_race(race_id: int, model: str, rows: Sequence[DriverForm], preds: Sequ
 # candidate pace variants: name -> transform applied to a race's rows before the blend
 Transform = Callable[[Sequence[DriverForm]], list[DriverForm]]
 FITTED_BETAS: dict[int, float] = {}
+LAST_SUMMARY: dict = {}          # the last run's headline summary (apex_report re-saves it)
 
 
 # candidates: name -> factory(rows of seasons before `season`, season) -> pace transform
@@ -602,6 +603,8 @@ def main() -> int:
         print(f"\n=== RELIABILITY SIGNAL (does team non-finish rate predict retirements?) ===")
         print(f"  Brier team p_dnf {brier:.4f}; minus flat rate {d:+.5f} [{lo:+.5f}, {hi:+.5f}]  n={n}  "
               f"{'REAL signal' if hi < 0 else 'WORSE than a flat rate' if lo > 0 else 'no clear signal'}")
+    LAST_SUMMARY.clear()
+    LAST_SUMMARY.update({"range": [args.start_year, args.end_year], "models": summary})
     if args.save:
         with open(args.save, "w") as f:
             json.dump({"range": [args.start_year, args.end_year], "models": summary}, f, indent=2)
