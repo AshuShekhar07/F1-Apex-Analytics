@@ -646,6 +646,29 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     }
 
 
+def record_live(db: Any, forecast: dict) -> bool:
+    """Copy a forecast into race_forecast_live while the race has no results (the latest
+    pre-race version wins); once the race has run the live record is never changed."""
+    from pathlib import Path
+
+    db.execute(text((Path(__file__).resolve().parent / "migration_race_forecast_live_v1.sql").read_text()))
+    raced = db.execute(text("""
+        SELECT 1 FROM race_results rr JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+        WHERE s.race_id = :r LIMIT 1"""), {"r": forecast["race_id"]}).scalar()
+    if raced:
+        return False
+    db.execute(text("DELETE FROM race_forecast_live WHERE race_id = :r AND model_version = :v"),
+               {"r": forecast["race_id"], "v": MODEL_VERSION})
+    for d in forecast["drivers"]:
+        db.execute(text("""
+            INSERT INTO race_forecast_live (race_id, model_version, driver_id, grid, predicted_position,
+                                            p_win, p_podium, grid_source)
+            VALUES (:r, :v, :d, :g, :p, :w, :pod, :src)
+        """), {"r": forecast["race_id"], "v": MODEL_VERSION, "d": d["driver_id"], "g": d["grid"],
+               "p": d["predicted_position"], "w": d["p_win"], "pod": d["p_podium"], "src": forecast["grid_source"]})
+    return True
+
+
 def store_forecast(db: Any, forecast: dict) -> int:
     forecast_id = db.execute(text("""
         INSERT INTO race_forecasts (race_id, model_version, as_of_date, grid_source, inputs, validation)
@@ -656,6 +679,7 @@ def store_forecast(db: Any, forecast: dict) -> int:
         RETURNING id
     """), {"r": forecast["race_id"], "v": MODEL_VERSION, "d": forecast["as_of_date"], "g": forecast["grid_source"],
            "i": json.dumps(forecast["inputs"], default=str), "val": json.dumps(VALIDATION)}).scalar()
+    record_live(db, forecast)
     db.execute(text("DELETE FROM race_forecast_drivers WHERE forecast_id = :f"), {"f": forecast_id})
     for d in forecast["drivers"]:
         db.execute(text("""

@@ -40,8 +40,10 @@ Models (per race, only data strictly before the race date):
             These candidates run only with --experiments.
   rejected: blend_dnf (team reliability, --reliability): no better than a flat rate, MAE worse
             blend_prob (win/podium from predicted position, --prob): Brier no clear gain
-  stored    with --stored: the forecasts actually stored in race_forecasts (the live
-            record, incl. the new-era fallbacks the blend rows cannot rebuild)
+  stored    with --stored: the forecasts stored in race_forecasts (recomputed whenever the
+            model changes, incl. the new-era fallbacks the blend rows cannot rebuild)
+  live      with --stored: race_forecast_live, each forecast exactly as it stood before its
+            race (written only while the race had no results) -- the true live record
 
 Metrics (race-weighted means, 90% CI resampling whole races):
   winner_hit          predicted P1 won
@@ -433,6 +435,24 @@ def stored_scores(db: Any, meta: dict[int, RaceMeta], truth: dict[int, list[Driv
     return out
 
 
+def live_scores(db: Any, meta: dict[int, RaceMeta], truth: dict[int, list[DriverForm]]) -> list[DriverScore]:
+    """Forecasts exactly as they stood before each race (race_forecast_live), never recomputed."""
+    from race_forecast_v1 import MODEL_VERSION
+
+    if not db.execute(text("SELECT to_regclass('race_forecast_live') IS NOT NULL")).scalar():
+        return []
+    by_race = defaultdict(list)
+    for race_id, driver_id, pos, p_win, p_pod in db.execute(text("""
+        SELECT race_id, driver_id, predicted_position, p_win, p_podium FROM race_forecast_live
+        WHERE model_version = :v"""), {"v": MODEL_VERSION}):
+        by_race[race_id].append(Prediction(int(driver_id), int(pos), float(p_win), float(p_pod)))
+    out = []
+    for race_id, preds in by_race.items():
+        if race_id in truth and race_id in meta:
+            out += score_race(race_id, "live", truth[race_id], preds)
+    return out
+
+
 # --- database ------------------------------------------------------------------
 
 def load_meta(db: Any) -> dict[int, RaceMeta]:
@@ -514,7 +534,7 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
                 print(f"{m:8} {metric:20} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  "
                       f"{'BETTER' if better else 'WORSE' if worse else 'no clear difference'}")
 
-    candidates = [m for m in models if m not in ("grid", "blend", "stored") and not m.startswith("diag_")]
+    candidates = [m for m in models if m not in ("grid", "blend", "stored", "live") and not m.startswith("diag_")]
     if candidates:
         print("\n=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===")
         for m in candidates:
@@ -818,9 +838,15 @@ def main() -> int:
         scores = [s for s in scores if s.model in ("grid", "blend", *experiments, *prob_models, *adjusters)]
         models = ["grid", "blend", *experiments, *prob_models, *adjusters]
         if args.stored:
-            scores += [s for s in stored_scores(db, meta, load_truth(db))
+            truth = load_truth(db)
+            scores += [s for s in stored_scores(db, meta, truth)
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
             models.append("stored")
+            live = [s for s in live_scores(db, meta, truth)
+                    if args.start_year <= meta[s.race_id].season_year <= args.end_year]
+            if live:                 # forecasts as they stood before the race, never recomputed
+                scores += live
+                models.append("live")
         names = driver_names(db)
         facts = load_error_facts(db)
         practice_data = db.execute(text("""

@@ -94,3 +94,31 @@ def test_rate_limit_is_waited_out_and_sessions_are_fetched_once(monkeypatch):
     assert fg.season_sessions(2026) == [{"session_key": 1}]
     assert fg.season_sessions(2026) == [{"session_key": 1}]      # cached: no third call
     assert len(calls) == 2
+
+
+def test_live_record_is_written_before_the_race_and_frozen_after(synthetic_db):
+    from prediction_scoreboard_v1 import live_scores, load_meta, load_truth
+    from race_forecast_v1 import compute_forecast, store_forecast
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            results = db.execute(text("""SELECT rr.* FROM race_results rr JOIN sessions s ON s.id = rr.session_id
+                                         WHERE s.race_id = 6 AND s.session_type = 'R'""")).mappings().all()
+            db.execute(text("""DELETE FROM race_results WHERE session_id IN
+                               (SELECT id FROM sessions WHERE race_id = 6 AND session_type = 'R')"""))
+            store_forecast(db, compute_forecast(db, 6))                    # before the race: recorded
+            before = db.execute(text("SELECT driver_id, predicted_position FROM race_forecast_live WHERE race_id = 6")).all()
+            assert len(before) == 12
+            for r in results:                                              # the race is run
+                db.execute(text("""INSERT INTO race_results (session_id, race_entry_id, finishing_position,
+                                   starting_grid_position, points, status) VALUES (:s, :e, :p, :g, 0, 'Finished')"""),
+                           {"s": r["session_id"], "e": r["race_entry_id"], "p": r["finishing_position"],
+                            "g": r["starting_grid_position"]})
+            db.execute(text("UPDATE race_forecast_live SET computed_at = '2000-01-01' WHERE race_id = 6"))
+            store_forecast(db, compute_forecast(db, 6))                    # recomputed after: live untouched
+            assert db.execute(text("SELECT MIN(computed_at) FROM race_forecast_live WHERE race_id = 6")).scalar().year == 2000
+            live = live_scores(db, load_meta(db), load_truth(db))
+            assert {s.race_id for s in live} == {6} and len(live) == 12 and {s.model for s in live} == {"live"}
+        finally:
+            tx.rollback()
