@@ -53,14 +53,13 @@ APEX21 REPORT  2026-09-30
   R15 Baku                 winner called   podium 1/3  top10 6/10  avg error 4.5
 
 4. SCOREBOARD
-  metric                                    grid                     blend                blend_pass                    stored   better
-  winner_hit                 53.3% [47.2%,59.4%]       57.2% [51.1%,63.3%]       53.3% [47.2%,59.4%]       53.8% [41.0%,66.7%]   higher
-  podium_overlap             68.3% [65.4%,71.3%]       69.1% [66.3%,72.0%]       68.7% [65.7%,71.7%]       69.2% [64.1%,74.4%]   higher
-  mae                        3.490 [3.348,3.625]       3.308 [3.165,3.444]       3.325 [3.183,3.462]       3.310 [3.010,3.604]   lower
-  mae_finishers              2.916 [2.792,3.036]       2.712 [2.593,2.827]       2.728 [2.611,2.840]       2.679 [2.431,2.929]   lower
-  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.5%,2.4%]          1.9% [1.4%,2.3%]          2.6% [1.3%,3.9%]   lower
-  races / drivers                   180 / 3621                180 / 3621                180 / 3621                 39 / 808   
-  candidate blend_pass: better on nothing, worse on nothing -> keep off
+  metric                                    grid                     blend                    stored   better
+  winner_hit                 53.3% [47.2%,59.4%]       57.2% [51.1%,63.3%]       53.8% [41.0%,66.7%]   higher
+  podium_overlap             68.3% [65.4%,71.3%]       69.1% [66.3%,72.0%]       69.2% [64.1%,74.4%]   higher
+  mae                        3.490 [3.348,3.625]       3.308 [3.165,3.444]       3.310 [3.010,3.604]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.712 [2.593,2.827]       2.679 [2.431,2.929]   lower
+  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.5%,2.4%]          2.6% [1.3%,3.9%]   lower
+  races / drivers                   180 / 3621                180 / 3621                 39 / 808   
   WHERE THE ERROR COMES FROM (production blend; each driver in one group)
     retired (not classified)                               546 drivers   31.8% of all error  avg 6.97 places
     grid penalty / pit-lane start (>= 3 places back)       173 drivers    5.1% of all error  avg 3.54 places
