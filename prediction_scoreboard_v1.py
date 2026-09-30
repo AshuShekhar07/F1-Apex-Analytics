@@ -574,6 +574,26 @@ def groups_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta]) -> N
               + ", ".join(f"{y}: {g:.1f}/{p:.1f}" for y, (g, p) in sorted(by_season.items())))
 
 
+def confidence_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta]) -> dict:
+    """Walk-forward check of the forecast's confidence label (race_confidence_v1) on the
+    production blend: ranges fitted on earlier seasons, tested on the next one."""
+    from race_confidence_v1 import COVERAGE, LABELS, ErrorSample, coverage_check
+
+    samples = [ErrorSample(s.race_id, meta[s.race_id].season_year, s.predicted, s.finish,
+                           s.race_id in WET_QUALI_RACES, meta[s.race_id].wet)
+               for s in scores if s.model == "blend"]
+    check = coverage_check(samples)
+    print(f"\n=== CONFIDENCE LABEL (walk-forward; ranges should contain {COVERAGE:.0%} of drivers) ===")
+    for name in ("all", "dry_quali", "wet_quali", "rain_forecast"):
+        if name in check:
+            n, inside, said, actual = check[name]
+            ok = abs(inside - COVERAGE) <= 0.05 and abs(said - actual) <= 0.35
+            print(f"  {LABELS.get(name, 'all races'):28} n={n:5}  inside range {inside:6.1%}  "
+                  f"said {said:.2f} places  actual {actual:.2f}  {'ok' if ok else 'OFF'}")
+    print("  (rain forecast rows use the actual race weather as a perfect forecast)")
+    return check
+
+
 def compare(current: dict, baseline: dict) -> list[str]:
     """Headline metrics that got worse than the saved baseline by more than TOLERANCE."""
     problems = []
@@ -726,6 +746,7 @@ def main() -> int:
           f"across {len({r.race_id for r in wet_q})} races")
     if args.experiments:
         groups_report(scores, meta)
+    confidence_report(scores, meta)
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
           f"({len(with_fp) / max(1, len(scored)):.0%}) ===")

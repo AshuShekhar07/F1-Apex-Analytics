@@ -194,14 +194,30 @@ def render(data: dict, style: Style, what_if: list[dict] | None = None, scenario
                   f"{forecast['as_of_date']} · grid from {forecast['grid_source'].replace('_', ' ')}"),
         "",
     ]
+    conf = inputs.get("confidence")
+    if conf:
+        n = conf["measured_on_races"]
+        text_ = (f"Confidence: {conf['level'].upper()} ({conf['reason']}) · in {n} "
+                 f"earlier race{'s' if n != 1 else ''} like this the forecast was off by {conf['expected_error_places']:.1f} places "
+                 f"per driver on average")
+        if conf["level"] != "normal":
+            text_ += f" (dry-qualifying races: {conf['dry_expected_error_places']:.1f})"
+        lines += [style.bad(text_) if conf["level"] == "low" else style.dim(text_),
+                  style.dim(f"Range: {conf['coverage']:.0%} of drivers finished inside it in earlier races"), ""]
+    ranges = {int(d["driver_id"]): d["range"] for d in inputs.get("drivers", []) if d.get("range")}
     finished = any(d.get("finish") is not None for d in drivers)
-    header = f"{'Pred':>4}  {'Driver':<22} {'Team':<18} {'Grid':>4}  {'Win':<15} {'Podium':<15}"
+    header = (f"{'Pred':>4}  {'Driver':<22} {'Team':<18} {'Grid':>4}  {'Win':<15} {'Podium':<15}"
+              + (f" {'Range':<8}" if ranges else ""))
     lines.append(style.bold(header + ("  Actual" if finished else "")))
     for d in drivers:
         name = style.rgb("▌", hex_rgb(d.get("color_hex"))) + f" {d['driver_name'][:20]:<20}"
         row = (f"{'P' + str(d['predicted_position']):>4}  {name} {(d.get('team_name') or '')[:18]:<18} "
                f"{d['grid']:>4}  {prob_bar(d['p_win'])} {pct(d['p_win']):>4} {prob_bar(d['p_podium'])} "
                f"{pct(d['p_podium']):>4}")
+        if ranges:
+            lo, hi = ranges.get(int(d["driver_id"]), (None, None))
+            cell = "-" if lo is None else f"P{lo}" if lo == hi else f"P{lo}-{hi}"
+            row += f" {cell:<8}"
         if finished:
             if d.get("finish") is None:
                 row += "  -"

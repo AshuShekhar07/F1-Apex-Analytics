@@ -5,6 +5,9 @@ What is shown, and why (each chose by the walk-forward backtest, see VALIDATION)
                        race pace = qualifying-implied gap + recent team race form
   P(win), P(podium)    historical rate for the driver's grid slot (same era)
   strategy             the era's most common dry strategy with typical stop laps
+  confidence           race_confidence_v1: how far off the prediction usually is in earlier
+                       races with the same conditions (dry / wet qualifying / rain forecast),
+                       and an 80% range per driver
   what-if scenarios    simulator v2 replayed from the stored inputs -- scenarios,
                        NOT forecasts (it did not beat the blend at forecasting)
 
@@ -170,6 +173,29 @@ def history_rows(db: Any, observations, season: int) -> list[DriverForm]:
                                                      with_practice=PRACTICE_METHOD == "correction")
                                if r.season_year < season]
     return _HISTORY_CACHE[key]
+
+
+_SAMPLES_CACHE: dict[tuple[str, int], list] = {}
+
+
+def confidence_samples(db: Any, observations, season: int) -> list:
+    """Walk-forward errors of the production blend on every season before `season`."""
+    from race_confidence_v1 import backtest_samples
+
+    key = (str(db.engine.url), season)
+    if key not in _SAMPLES_CACHE:
+        wet_races = {int(r) for r in db.execute(text("""
+            SELECT s.race_id FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.session_type = 'R' AND sw.rainfall""")).scalars()}
+        _SAMPLES_CACHE[key] = backtest_samples(history_rows(db, observations, season), production_transform,
+                                               choose_weight, predictions, wet_races)
+    return _SAMPLES_CACHE[key]
+
+
+def quali_was_wet(db: Any, race_id: int) -> bool:
+    return bool(db.execute(text("""
+        SELECT sw.rainfall FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
+        WHERE s.race_id = :r AND s.session_type = 'Q'"""), {"r": race_id}).scalar())
 
 
 def shrunk_slot_rates(era_history, all_history, *, field_size: int, k: float = SLOT_SHRINK_STARTS) -> dict:
@@ -460,6 +486,16 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     hazards, _ = calibrate_event_hazards(event_obs)
     dnf = (sum(s in DNF_STATUSES for *_, s in finishes) + 1) / (len(finishes) + 2)
 
+    from race_confidence_v1 import ErrorTable
+    try:
+        rain = bool((strategy_payload.get("weather") or {}).get("wet_strategy_trigger"))
+        confidence = ErrorTable.fit(confidence_samples(db, observations, season)).label(
+            wet_quali=quali_was_wet(db, race_id), rain_expected=rain,
+            predicted={r.driver_id: p for r, p in zip(rows, predicted)}, field=len(rows))
+    except ValueError as exc:
+        confidence = None
+        notes.append(f"confidence: {exc}")
+
     drivers = []
     for r, position in zip(rows, predicted):
         rate = slot_rates.get(r.grid, (0.0, 0.0))
@@ -470,6 +506,8 @@ def compute_forecast(db: Any, race_id: int) -> dict:
                                             reference_lap * 0.95, reference_lap * 1.10)),
             "team_form": round(r.form, 5),
         })
+        if confidence:
+            drivers[-1]["range"] = confidence["ranges"][str(r.driver_id)]
         if r.driver_id in driver_strategies:
             drivers[-1]["strategy"] = driver_strategies[r.driver_id]
     return {
@@ -482,6 +520,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             "pit_loss": {k: _dist_json(v) for k, v in losses.items()},
             "hazards": {k: float(v) for k, v in hazards.items()}, "dnf_probability": dnf,
             "overtake_threshold": WHAT_IF_THRESHOLD, "noise_scale": WHAT_IF_NOISE_SCALE,
+            "confidence": {k: v for k, v in confidence.items() if k != "ranges"} if confidence else None,
             "data_notes": notes,
         },
     }
