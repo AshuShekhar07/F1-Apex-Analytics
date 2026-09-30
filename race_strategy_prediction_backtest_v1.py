@@ -21,6 +21,9 @@ Methods (history strictly before the race date):
      whole allocation in practice).
   L  Pirelli compounds : stop count voted by earlier races with the same C-number set (the 7
                         closest in practice wear if more), era's most common sequence with it
+     L REJECTED 2026-09-30: stop count 0.446 vs I's 0.470 in 2022-25 (no gain over B); 2026
+     sequence 0.087 vs 0.225 (WORSE) -- the same C-numbers on the 2026 cars do not behave as
+     on 2023-25 cars, and within one era there are too few same-set races to vote.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
