@@ -13,6 +13,9 @@ Methods (history strictly before the race date):
   F  last race here   : what most cars did the last time this track was raced
   H  era mode + track timing : B's sequence, stop laps timed like C. REJECTED 2026-09-30:
      first-stop error 8.64 vs 8.34 laps (worse) in 2022-25
+  J  practice wear + compounds : I's stop count; among the era's 4 most common sequences
+                        with that many stops, the one whose compounds teams long-ran in practice
+  K  era stops + compounds     : same sequence choice with B's stop count (isolates the compounds)
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -48,6 +51,7 @@ from race_strategy_timing_v1 import (
     load_car_strategies,
     predict_era_mode,
     predict_era_mode_track_timing,
+    predict_from_practice,
     predict_from_wear,
     predict_last_race_at_track,
     predict_strategy,
@@ -128,6 +132,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     from race_practice_pace_v1 import load_weekend_wear
     wear_by_race = {race_id: load_weekend_wear(db, race_id) for race_id in {c.race_id for c in cars}}
     LAST_CARS[:] = cars
+    from race_practice_pace_v1 import load_weekend_compounds
+    shares_by_race = {race_id: load_weekend_compounds(db, race_id) for _, race_id in targets}
     WEAR.clear()
     WEAR.update(wear_by_race)
     scores: list[Score] = []
@@ -146,6 +152,11 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         last_here = predict_last_race_at_track(history, track_id=track, regulation_era=era,
                                                total_laps=total_laps).strategy
         ceiling = hindsight_mode(race_cars, total_laps)
+        shares = shares_by_race.get(race_id, {})
+        with_compounds = predict_from_practice(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                               shares=shares, regulation_era=era, total_laps=total_laps).strategy
+        era_compounds = predict_from_practice(history, wear=None, wear_by_race=wear_by_race, shares=shares,
+                                              regulation_era=era, total_laps=total_laps, use_wear=False).strategy
         from_wear = predict_from_wear(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                       regulation_era=era, total_laps=total_laps).strategy
         timed = {}
@@ -164,6 +175,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             scores.append(score(race_id, "H era mode + track timing", timed[key], car))
             scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
             scores.append(score(race_id, "I practice wear", from_wear, car))
+            scores.append(score(race_id, "J practice wear + compounds", with_compounds, car))
+            scores.append(score(race_id, "K era stops + compounds", era_compounds, car))
             scores.append(score(race_id, "C hierarchy", dry_hierarchy[key], car))
             scores.append(score(race_id, "D pre-start (known start tyre)",
                                 predict_strategy(history, track_id=track, regulation_era=era, grid=car.grid,

@@ -211,3 +211,35 @@ def load_weekend_wear(db: Any, race_id: int) -> float | None:
         wear = [w for rows in laps.values() for _, run in long_runs(rows) if (w := run_wear(run)) is not None]
         return median(wear) if len(wear) >= MIN_WEAR_RUNS else None
     return None
+
+
+# --- which tyres teams practised the race on ------------------------------------------
+
+def load_weekend_compounds(db: Any, race_id: int) -> dict[str, float]:
+    """Share of long-run laps on each dry compound in FP2 (else FP1); {} if unusable. Teams
+    rehearse race stints on the compounds they expect to race."""
+    for session_type in ("FP2", "FP1"):
+        session = db.execute(text("""
+            SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
+            FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = :t
+        """), {"r": race_id, "t": session_type}).mappings().first()
+        if session is None:
+            continue
+        if session_is_wet(db, session["id"], session["wet"]):
+            return {}
+        laps = defaultdict(list)
+        for driver, n, t, c in db.execute(text("""
+            SELECT re.driver_id, l.lap_number, l.lap_time, l.tire_compound
+            FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+            WHERE l.session_id = :s AND COALESCE(l.is_deleted, FALSE) = FALSE
+        """), {"s": session["id"]}):
+            laps[int(driver)].append((int(n), float(t) if t is not None else None, c))
+        counts = defaultdict(int)
+        for rows in laps.values():
+            for compound, run in long_runs(rows):
+                if compound in ("SOFT", "MEDIUM", "HARD"):
+                    counts[compound] += len(run)
+        total = sum(counts.values())
+        return {c: n / total for c, n in counts.items()} if total >= 50 else {}
+    return {}

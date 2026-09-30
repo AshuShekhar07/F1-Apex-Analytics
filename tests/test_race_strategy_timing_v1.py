@@ -98,7 +98,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
     methods = {s.method for s in scores}
     assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
-                       "H era mode + track timing", "G CEILING (hindsight)", "I practice wear"}
+                       "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
+                       "J practice wear + compounds", "K era stops + compounds"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -203,3 +204,19 @@ def test_run_wear_is_the_relative_slope():
     run = [(n, 90.0 + 0.09 * i) for i, n in enumerate(range(10, 18))]
     assert run_wear(run) == pytest.approx(0.09 / 90.315, rel=1e-3)
     assert run_wear(run[:5]) is None
+
+
+def test_sequence_follows_the_compounds_teams_long_ran():
+    from race_strategy_timing_v1 import pick_sequence_from_practice, predict_from_practice
+
+    candidates = [(("MEDIUM", "HARD"), 0.5), (("SOFT", "HARD"), 0.3), (("HARD", "MEDIUM"), 0.2)]
+    assert pick_sequence_from_practice(candidates, {"SOFT": 0.5, "HARD": 0.5}) == ("SOFT", "HARD")
+    assert pick_sequence_from_practice(candidates, {"MEDIUM": 0.5, "HARD": 0.5}) == ("MEDIUM", "HARD")
+    history = (_hist(1, date(2024, 3, 1), 1, "e", [(("MEDIUM", "HARD"), [20])] * 10)
+               + _hist(2, date(2024, 4, 1), 2, "e", [(("SOFT", "HARD"), [12])] * 6))
+    p = predict_from_practice(history, wear=None, wear_by_race={}, shares={"SOFT": 0.6, "HARD": 0.4},
+                              regulation_era="e", total_laps=50, use_wear=False)
+    assert p.strategy.sequence == ("SOFT", "HARD") and p.strategy.stop_laps == (12,)
+    # no practice data: unchanged era mode
+    assert predict_from_practice(history, wear=None, wear_by_race={}, shares={}, regulation_era="e",
+                                 total_laps=50, use_wear=False).strategy.sequence == ("MEDIUM", "HARD")

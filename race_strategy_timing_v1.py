@@ -348,6 +348,52 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
                                         f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
+PRACTICE_SHARE_FLOOR = 0.02   # a compound nobody long-ran still gets a small chance
+
+
+def pick_sequence_from_practice(candidates: Sequence[tuple[tuple[str, ...], float]],
+                                shares: dict[str, float]) -> tuple[str, ...]:
+    """Among (sequence, era share) candidates, the one whose compounds teams long-ran most
+    this weekend: score = log(era share) + mean over its stints of log(practice share)."""
+    import math
+
+    def score(item):
+        seq, era_share = item
+        fit = sum(math.log(max(shares.get(c, 0.0), PRACTICE_SHARE_FLOOR)) for c in seq) / len(seq)
+        return (math.log(era_share) + fit, era_share)
+    return max(candidates, key=score)[0]
+
+
+def predict_from_practice(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict,
+                          shares: dict[str, float], regulation_era: str, total_laps: int,
+                          use_wear: bool = True) -> StrategyPrediction:
+    """Method J (use_wear) / K: stop count from practice wear (J) or the era's most common (K);
+    then, among the era's 4 most common sequences with that many stops, the one that fits the
+    compounds teams long-ran in practice this weekend. Falls back to I / era mode."""
+    base = (predict_from_wear(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
+                              total_laps=total_laps) if use_wear else
+            predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps))
+    if base.strategy is None or not shares:
+        return base
+    stops = len(base.strategy.sequence) - 1
+    pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)
+            and _stop_count(h) == stops]
+    if not pool:
+        return base
+    counts = Counter(h.sequence for h in pool)
+    candidates = [(seq, n / len(pool)) for seq, n in counts.most_common(4)]
+    sequence = pick_sequence_from_practice(candidates, shares)
+    same = [h for h in pool if h.sequence == sequence]
+    strategy = build_strategy(sequence, [round(median(h.stop_fractions[i] for h in same) * total_laps)
+                                         for i in range(stops)], total_laps)
+    if strategy is None:
+        return base
+    mix = ", ".join(f"{c[0]} {v:.0%}" for c, v in sorted(shares.items(), key=lambda kv: -kv[1]))
+    return StrategyPrediction(strategy, f"{base.source}; practice long runs {mix}",
+                              ((strategy, counts[sequence] / len(pool)),
+                               *((s, w) for s, w in base.alternatives if s.sequence != sequence)))
+
+
 # --- database ------------------------------------------------------------------
 
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
