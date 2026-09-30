@@ -12,7 +12,10 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend (none open right now)
+  candidates  experiments, each scored against the production blend:
+    blend_recovery  production, but drivers starting >= 3 places behind their qualifying
+                    position (grid penalty, pit lane) get their own blend weight, chosen on the
+                    last 3 seasons' such drivers (they are 4.0 places off vs 2.35 for the rest)
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -250,6 +253,7 @@ def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
 
 
 SPRINT_BETAS: dict[int, float] = {}
+RECOVERY_WEIGHTS: dict[int, tuple] = {}     # season -> (out-of-position weight or None, production weight)
 
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_wetq": _wet_quali_guard,
@@ -384,12 +388,25 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
         for name, factory in {**WEIGHT_CANDIDATES, **DIAGNOSTICS}.items():
             variants[name] = production
             race_weight[name] = factory(history, season, meta, production, weights["blend"])
+        # blend_recovery: own weight for drivers starting out of position, chosen on the last
+        # GROUP_SEASONS seasons' races (penalised drivers are ~1 per race)
+        from race_form_signal_v1 import choose_recovery_weight
+        recent = defaultdict(list)
+        for r in history:
+            if r.season_year >= season - GROUP_SEASONS:
+                recent[r.race_id].append(r)
+        recovery = {"blend_recovery": choose_recovery_weight({k: production(v) for k, v in recent.items()},
+                                                             weights["blend"])}
+        RECOVERY_WEIGHTS[season] = (recovery["blend_recovery"], weights["blend"])
+        variants["blend_recovery"] = production
+        race_weight["blend_recovery"] = race_weight["blend"]
         for race_id, race_rows in by_season[season].items():
             m = meta[race_id]
             slot = rates(m.race_date, m.era, len(race_rows))
             ranked = {"grid": predictions(race_rows, 0.0)["grid"]}
             for name, transform in variants.items():
-                ranked[name] = predictions(transform(race_rows), race_weight[name](race_id, race_rows))["blend"]
+                ranked[name] = predictions(transform(race_rows), race_weight[name](race_id, race_rows),
+                                           recovery.get(name))["blend"]
             for name, adjust in (adjusters or {}).items():
                 ranked[name] = adjust(race_id, race_rows, ranked["blend"])
             for model, order in ranked.items():
@@ -797,7 +814,7 @@ def main() -> int:
         if args.prob:
             scores += rank_probability_scores(scores, meta, rates)
             prob_models = ["blend_prob"]
-        experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS)
+        experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS, "blend_recovery")
                        if args.experiments or m not in REJECTED]
         scores = [s for s in scores if s.model in ("grid", "blend", *experiments, *prob_models, *adjusters)]
         models = ["grid", "blend", *experiments, *prob_models, *adjusters]
@@ -836,6 +853,16 @@ def main() -> int:
         groups_report(scores, meta)
     confidence_report(scores, meta)
     error_report(scores, meta, facts)
+    if RECOVERY_WEIGHTS:
+        print("  blend_recovery weight for out-of-position drivers (own / production) per season: "
+              + ", ".join(f"{y}: {'-' if w is None else f'{w:.1f}'}/{p:.1f}" for y, (w, p) in sorted(RECOVERY_WEIGHTS.items())))
+        penalised = [s for s in scores if s.model in ("blend", "blend_recovery") and s.classified
+                     and facts.get((s.race_id, s.driver_id), (None,))[0] is not None
+                     and s.grid - facts[(s.race_id, s.driver_id)][0] >= 3]
+        for m in ("blend", "blend_recovery"):
+            rows = [s.error for s in penalised if s.model == m]
+            if rows:
+                print(f"  out-of-position finishers, {m}: {np.mean(rows):.2f} places (n={len(rows)})")
     signals_report(scored)
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "

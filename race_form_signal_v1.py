@@ -90,6 +90,7 @@ class DriverForm:
     form_car: float | None = None      # team form from residuals against CAR pace (quali anomalies removed)
     driver_form: float | None = None   # driver's shrunk residual vs the teammate (race craft), car-pace based
     sprint_gap: float | None = None    # clean sprint-race pace gap (race_practice_pace_v1), sprint weekends
+    quali_pos: int | None = None       # qualifying position (grid penalties = grid well behind it)
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -269,11 +270,37 @@ def with_driver_form(rows: Sequence[DriverForm]) -> list[DriverForm]:
     return [replace(r, form=r.form + r.driver_form) if r.driver_form is not None else r for r in rows]
 
 
-def predictions(rows: Sequence[DriverForm], weight: float) -> dict[str, list[int]]:
+OUT_OF_POSITION_PLACES = 3   # starting this many places behind the qualifying position (penalty, pit lane)
+
+
+def out_of_position(r: DriverForm) -> bool:
+    return r.quali_pos is not None and r.grid - r.quali_pos >= OUT_OF_POSITION_PLACES
+
+
+def predictions(rows: Sequence[DriverForm], weight: float,
+                recovery_weight: float | None = None) -> dict[str, list[int]]:
+    """recovery_weight (research): the blend weight for drivers starting out of position."""
     grid = ranks([r.grid for r in rows])
     pace = ranks([r.implied_gap + r.form for r in rows])
-    blend = ranks([g + weight * (p - g) for g, p in zip(grid, pace)])
+    weights = [recovery_weight if recovery_weight is not None and out_of_position(r) else weight for r in rows]
+    blend = ranks([g + w * (p - g) for g, p, w in zip(grid, pace, weights)])
     return {"grid": grid, "pace_form": pace, "blend": blend}
+
+
+def choose_recovery_weight(races: dict[int, list[DriverForm]], weight: float, min_drivers: int = 20) -> float | None:
+    """Weight for out-of-position drivers minimising THEIR finishing MAE on the given earlier
+    races (everyone else keeps `weight`); None with fewer than min_drivers such drivers."""
+    chosen = {k: v for k, v in races.items() if any(out_of_position(r) for r in v)}
+    if sum(out_of_position(r) for v in chosen.values() for r in v) < min_drivers:
+        return None
+
+    def mae(w):
+        errors = []
+        for rows in chosen.values():
+            predicted = predictions(rows, weight, w)["blend"]
+            errors += [abs(p - r.finish) for p, r in zip(predicted, rows) if out_of_position(r)]
+        return mean(errors)
+    return min(BLEND_WEIGHTS, key=lambda w: (mae(w), w))
 
 
 def race_clustered(values_by_race: dict[int, list[float]], *, seed: int = 11, draws: int = 4000):
@@ -404,7 +431,10 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
             model = None
         entries = db.execute(text("""
             SELECT re.driver_id, re.team_id, rr.starting_grid_position AS grid,
-                   rr.finishing_position AS finish, rr.status
+                   rr.finishing_position AS finish, rr.status,
+                   (SELECT q.final_position FROM qualifying_results q
+                    JOIN sessions sq ON sq.id = q.session_id AND sq.session_type = 'Q'
+                    WHERE sq.race_id = s.race_id AND q.race_entry_id = re.id LIMIT 1) AS quali_pos
             FROM race_results rr
             JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
             JOIN race_entries re ON re.id = rr.race_entry_id
@@ -448,6 +478,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     team_form(driver_history[(era, int(e["driver_id"]))], int(e["driver_id"]), when,
                               races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
                     sprint.get(int(e["driver_id"])),
+                    int(e["quali_pos"]) if e["quali_pos"] else None,
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:

@@ -67,8 +67,10 @@ def test_scoreboard_end_to_end(synthetic_db):
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
     assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_track", "blend_wetqw",
-                                         "diag_wetrace", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 7 * 24
+                                         "diag_wetrace", "blend_dnf", "blend_recovery"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 8 * 24
+    # synthetic grids equal qualifying: nobody out of position, so recovery is production
+    assert summarise(scores, "blend_recovery")["mae"] == summarise(scores, "blend")["mae"]
     # synthetic qualifying is dry: the wet-qualifying guard and weight change nothing
     assert summarise(scores, "blend_wetq")["mae"] == summarise(scores, "blend")["mae"]
     assert summarise(scores, "blend_wetqw")["mae"] == summarise(scores, "blend")["mae"]
@@ -195,3 +197,19 @@ def test_group_weight_uses_only_earlier_seasons_of_the_group():
     assert group_weight(rows, 2023, lambda rs: list(rs), in_group, 0.3) > 0.5
     # the season being scored never feeds its own weight
     assert group_weight([r for r in rows if r.season_year < 2021], 2021, lambda rs: list(rs), in_group, 0.3) == 0.3
+
+
+def test_recovery_weight_only_moves_out_of_position_drivers():
+    from race_form_signal_v1 import DriverForm, choose_recovery_weight, predictions
+
+    def race(rid):
+        # driver 1 is fastest but starts 10th after a penalty (qualified 1st) and finishes 1st
+        rows = [DriverForm(rid, 2024, 1, 10, 1, True, 0.000, 0.0, None, quali_pos=1)]
+        rows += [DriverForm(rid, 2024, d, d - 1, d, True, 0.001 * d, 0.0, None, quali_pos=d - 1) for d in range(2, 11)]
+        return rows
+    rows = race(1)
+    assert predictions(rows, 0.0)["blend"][0] == 10                       # grid order: 10th
+    assert predictions(rows, 0.0, recovery_weight=1.0)["blend"][0] == 1    # own weight: recovers
+    races = {k: race(k) for k in range(1, 25)}
+    assert choose_recovery_weight(races, 0.0) == 1.0
+    assert choose_recovery_weight({1: race(1)}, 0.0) is None               # too few such drivers
