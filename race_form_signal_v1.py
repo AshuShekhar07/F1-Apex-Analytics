@@ -41,6 +41,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 from race_pace_from_quali_v1 import (
+    SESSION_WET_SQL,
     PaceObservation,
     best_quali_times,
     fit_model,
@@ -64,6 +65,11 @@ SHRINK = 2.0
 ANOMALY_MARGIN = 0.01
 TEAMMATE_MARGIN = 0.003
 BLEND_WEIGHTS = tuple(round(w, 1) for w in np.arange(0.0, 1.01, 0.1))
+# Driver form (research): a driver's race-vs-quali residual minus the teammate's, over the
+# driver's last DRIVER_FORM_RACES races in the era, shrunk harder than team form because a
+# single driver-race is noisier. Fixed in advance, not tuned.
+DRIVER_FORM_RACES = 10
+DRIVER_SHRINK = 5.0
 
 
 @dataclass(frozen=True)
@@ -81,6 +87,9 @@ class DriverForm:
     car_gap: float | None = None   # race gap implied by min(own quali gap, teammate gap + TEAMMATE_MARGIN)
     practice_gap: float | None = None  # practice long-run gap (race_practice_pace_v1), if loaded
     quali_wet: bool = False            # rain in qualifying (session_weather), if known
+    form_car: float | None = None      # team form from residuals against CAR pace (quali anomalies removed)
+    driver_form: float | None = None   # driver's shrunk residual vs the teammate (race craft), car-pace based
+    sprint_gap: float | None = None    # clean sprint-race pace gap (race_practice_pace_v1), sprint weekends
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -213,6 +222,53 @@ def with_practice_correction(rows: Sequence[DriverForm], beta: float) -> list[Dr
             for r in rows]
 
 
+def _gap_surprise(rows: Sequence[DriverForm], attr: str) -> dict[int, float]:
+    """driver -> (gap from `attr` - quali-implied gap), centred within the race."""
+    xs = {r.driver_id: getattr(r, attr) - r.implied_gap for r in rows if getattr(r, attr) is not None}
+    if len(xs) < 4:
+        return {}
+    centre = float(np.median(list(xs.values())))
+    return {d: x - centre for d, x in xs.items()}
+
+
+def sprint_beta(history: Sequence[DriverForm]) -> float:
+    """Like practice_beta, for the sprint-race surprise (sprint pace minus the pace the
+    rows already imply), fitted on earlier races only; clipped to [0, 1]."""
+    by_race = defaultdict(list)
+    for r in history:
+        by_race[r.race_id].append(r)
+    num = den = 0.0
+    for rows in by_race.values():
+        xs = _gap_surprise(rows, "sprint_gap")
+        if not xs:
+            continue
+        ys = {r.driver_id: r.residual for r in rows if r.driver_id in xs and r.residual is not None}
+        if len(ys) < 4:
+            continue
+        y_centre = float(np.median(list(ys.values())))
+        for d, y in ys.items():
+            num += xs[d] * (y - y_centre)
+            den += xs[d] ** 2
+    return float(np.clip(num / den, 0.0, 1.0)) if den > 0 else 0.0
+
+
+def with_sprint_correction(rows: Sequence[DriverForm], beta: float) -> list[DriverForm]:
+    from dataclasses import replace
+    xs = _gap_surprise(rows, "sprint_gap")
+    return [replace(r, implied_gap=r.implied_gap + beta * xs[r.driver_id]) if r.driver_id in xs else r
+            for r in rows]
+
+
+def with_car_form(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    from dataclasses import replace
+    return [replace(r, form=r.form_car) if r.form_car is not None else r for r in rows]
+
+
+def with_driver_form(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    from dataclasses import replace
+    return [replace(r, form=r.form + r.driver_form) if r.driver_form is not None else r for r in rows]
+
+
 def predictions(rows: Sequence[DriverForm], weight: float) -> dict[str, list[int]]:
     grid = ranks([r.grid for r in rows])
     pace = ranks([r.implied_gap + r.form for r in rows])
@@ -264,7 +320,7 @@ def choose_weight(races: dict[int, list[DriverForm]]) -> float:
 
 def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
                models: dict | None = None, include_wet: bool = False,
-               with_practice: bool = False) -> list[DriverForm]:
+               with_practice: bool = False, with_sprint: bool = False) -> list[DriverForm]:
     """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time).
 
     Dry races only unless include_wet. Wet races are then scored too, but never feed
@@ -272,13 +328,17 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
     """
     by_race_driver = {(o.race_id, o.driver_id): o for o in observations}
     team_history = defaultdict(list)   # (era, team) -> [(date, race_id, residual)]
-    races = db.execute(text("""
-        SELECT r.id, r.season_year, r.regulation_era, r.race_date, sw.rainfall AS wet
-        FROM races r
-        JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
-        JOIN session_weather sw ON sw.session_id = s.id AND (sw.rainfall = FALSE OR :wet)
-        WHERE r.season_year BETWEEN 2018 AND :b AND r.regulation_era IS NOT NULL
-        ORDER BY r.race_date, r.id
+    team_history_car = defaultdict(list)    # same, residual against car pace
+    driver_history = defaultdict(list)      # (era, driver) -> [(date, race_id, residual - teammate's)]
+    races = db.execute(text(f"""
+        SELECT * FROM (
+            SELECT r.id, r.season_year, r.regulation_era, r.race_date, {SESSION_WET_SQL} AS wet
+            FROM races r
+            JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
+            LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE r.season_year BETWEEN 2018 AND :b AND r.regulation_era IS NOT NULL
+        ) x WHERE NOT x.wet OR :wet
+        ORDER BY x.race_date, x.id
     """), {"b": end_year, "wet": include_wet}).mappings().all()
 
     rows: list[DriverForm] = []
@@ -304,13 +364,17 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries},
                                   quali_session_times(db, race["id"]))
         practice = {}
-        quali_wet = bool(db.execute(text("""
-            SELECT sw.rainfall FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
+        quali_wet = bool(db.execute(text(f"""
+            SELECT {SESSION_WET_SQL} FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
             WHERE s.race_id = :r AND s.session_type = 'Q'
         """), {"r": race["id"]}).scalar())
         if with_practice and race["season_year"] >= start_year:
             from race_practice_pace_v1 import load_practice_gaps
             practice, _ = load_practice_gaps(db, race["id"])
+        sprint = {}
+        if with_sprint and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_sprint_gaps
+            sprint = load_sprint_gaps(db, race["id"])
 
         if models is not None and model is not None:
             times = [t for t in best_quali_times(db, race["id"]).values() if t]
@@ -329,13 +393,26 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     (obs.race_gap - implied) if obs else None,
                     int(e["team_id"]), model.race_gap(car_gaps[int(e["driver_id"])]),
                     practice.get(int(e["driver_id"])), quali_wet,
+                    team_form(team_history_car[(era, int(e["team_id"]))], int(e["team_id"]), when),
+                    team_form(driver_history[(era, int(e["driver_id"]))], int(e["driver_id"]), when,
+                              races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
+                    sprint.get(int(e["driver_id"])),
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:
+            by_team_car = defaultdict(dict)
             for e in entries:
                 obs = by_race_driver.get((race["id"], int(e["driver_id"])))
                 if obs is not None:
                     team_history[(era, int(e["team_id"]))].append((when, race["id"], obs.race_gap - model.race_gap(obs.quali_gap)))
+                    car_residual = obs.race_gap - model.race_gap(car_gaps[int(e["driver_id"])])
+                    team_history_car[(era, int(e["team_id"]))].append((when, race["id"], car_residual))
+                    by_team_car[int(e["team_id"])][int(e["driver_id"])] = car_residual
+            for team, residuals in by_team_car.items():
+                if len(residuals) == 2:
+                    centre = mean(residuals.values())
+                    for driver, value in residuals.items():
+                        driver_history[(era, driver)].append((when, race["id"], value - centre))
     return rows
 
 

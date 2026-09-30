@@ -33,6 +33,13 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 MAX_QUALI_GAP = 0.07
+# Was a session wet? session_weather where it is loaded, else the tyres: >= 10% of timed laps
+# on intermediates/wets. Needs `s` (sessions) and a LEFT JOINed `sw` (session_weather). Without
+# the fallback, a race with no weather row silently vanished from the pace history and the
+# scoreboard.
+SESSION_WET_SQL = """COALESCE(sw.rainfall, (
+    SELECT AVG((upper(COALESCE(lw.tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int) >= 0.1
+    FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL), FALSE)"""
 CLEAN_LAP_FACTOR = 1.05
 MIN_CLEAN_LAPS = 10
 
@@ -135,12 +142,13 @@ def quali_session_times(db: Any, race_id: int) -> dict[int, tuple[float | None, 
 
 def load_observations(db: Any, *, start_year: int, end_year: int) -> list[PaceObservation]:
     """Per driver-race quali gap and clean race-pace gap (dry races only)."""
-    races = db.execute(text("""
+    races = db.execute(text(f"""
         SELECT r.id, r.season_year, r.regulation_era, r.race_date, s.id AS session_id
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
-        JOIN session_weather sw ON sw.session_id = s.id AND sw.rainfall = FALSE
+        LEFT JOIN session_weather sw ON sw.session_id = s.id
         WHERE r.season_year BETWEEN :a AND :b AND r.regulation_era IS NOT NULL
+          AND NOT {SESSION_WET_SQL}
         ORDER BY r.race_date
     """), {"a": start_year, "b": end_year}).mappings().all()
 

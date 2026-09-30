@@ -81,6 +81,21 @@ def practice_gaps(runs: dict[int, dict[str, list[float]]]) -> dict[int, float]:
     return {d: g - base for d, g in gaps.items() if g - base <= MAX_PRACTICE_GAP}
 
 
+WET_TYRE_SHARE = 0.1   # a session with >= 10% of timed laps on intermediates/wets was wet
+
+
+def session_is_wet(db: Any, session_id: int, weather_says_wet: bool | None) -> bool:
+    """Rain per session_weather where it is loaded (R, Q, FP2), else from the tyres used:
+    weather is not loaded for FP1 or sprints, and a wet session is not a dry pace sample."""
+    if weather_says_wet:
+        return True
+    share = db.execute(text("""
+        SELECT AVG((upper(COALESCE(tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int)
+        FROM laps WHERE session_id = :s AND lap_time IS NOT NULL
+    """), {"s": session_id}).scalar()
+    return bool(share is not None and float(share) >= WET_TYRE_SHARE)
+
+
 def load_practice_gaps(db: Any, race_id: int) -> tuple[dict[int, float], str | None]:
     """(driver -> long-run gap, session used) for a race weekend; ({}, None) if unusable."""
     for session_type in ("FP2", "FP1"):
@@ -91,7 +106,7 @@ def load_practice_gaps(db: Any, race_id: int) -> tuple[dict[int, float], str | N
         """), {"r": race_id, "t": session_type}).mappings().first()
         if session is None:
             continue
-        if session["wet"]:
+        if session_is_wet(db, session["id"], session["wet"]):
             return {}, None
         laps = defaultdict(list)
         for driver, n, t, c in db.execute(text("""
@@ -103,3 +118,36 @@ def load_practice_gaps(db: Any, race_id: int) -> tuple[dict[int, float], str | N
         runs = {d: r for d, rows in laps.items() if (r := long_run_laps(rows))}
         return practice_gaps(runs), session_type
     return {}, None
+
+
+# --- sprint race pace -------------------------------------------------------------
+# A sprint is ~100 km of real racing on the Saturday before the Grand Prix: race starts,
+# race fuel, tyre management. Its clean pace (same rule as the race pace model: laps 2+
+# within 105% of the driver's median) is a direct race-pace sample known before the race.
+
+MAX_SPRINT_GAP = 0.05
+
+
+def load_sprint_gaps(db: Any, race_id: int) -> dict[int, float]:
+    """driver -> clean sprint-race pace gap to the best driver; {} without a dry sprint."""
+    from race_pace_from_quali_v1 import clean_race_pace
+
+    session = db.execute(text("""
+        SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
+        FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+        WHERE s.race_id = :r AND s.session_type = 'S'
+    """), {"r": race_id}).mappings().first()
+    if session is None or session_is_wet(db, session["id"], session["wet"]):
+        return {}
+    laps = defaultdict(list)
+    for driver, n, t in db.execute(text("""
+        SELECT re.driver_id, l.lap_number, l.lap_time
+        FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+        WHERE l.session_id = :s
+    """), {"s": session["id"]}):
+        laps[int(driver)].append((int(n), float(t) if t is not None else None))
+    pace = {d: p for d, rows in laps.items() if (p := clean_race_pace(rows)) is not None}
+    if len(pace) < MIN_DRIVERS:
+        return {}
+    best = min(pace.values())
+    return {d: p / best - 1 for d, p in pace.items() if p / best - 1 <= MAX_SPRINT_GAP}

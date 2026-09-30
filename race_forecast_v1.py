@@ -44,7 +44,14 @@ from race_form_signal_v1 import (
     with_car_pace,
     with_practice_correction,
 )
-from race_pace_from_quali_v1 import best_quali_times, fit_model, load_observations, quali_gaps, quali_session_times
+from race_pace_from_quali_v1 import (
+    SESSION_WET_SQL,
+    best_quali_times,
+    fit_model,
+    load_observations,
+    quali_gaps,
+    quali_session_times,
+)
 from race_status import DNF_STATUSES
 from race_strategy_backtest_v2 import grid_slot_rates
 from race_strategy_precedent_v1 import build_strategy, historical_strategy_options, load_precedents
@@ -184,17 +191,17 @@ def confidence_samples(db: Any, observations, season: int) -> list:
 
     key = (str(db.engine.url), season)
     if key not in _SAMPLES_CACHE:
-        wet_races = {int(r) for r in db.execute(text("""
-            SELECT s.race_id FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
-            WHERE s.session_type = 'R' AND sw.rainfall""")).scalars()}
+        wet_races = {int(r) for r in db.execute(text(f"""
+            SELECT s.race_id FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.session_type = 'R' AND {SESSION_WET_SQL}""")).scalars()}
         _SAMPLES_CACHE[key] = backtest_samples(history_rows(db, observations, season), production_transform,
                                                choose_weight, predictions, wet_races)
     return _SAMPLES_CACHE[key]
 
 
 def quali_was_wet(db: Any, race_id: int) -> bool:
-    return bool(db.execute(text("""
-        SELECT sw.rainfall FROM sessions s JOIN session_weather sw ON sw.session_id = s.id
+    return bool(db.execute(text(f"""
+        SELECT {SESSION_WET_SQL} FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
         WHERE s.race_id = :r AND s.session_type = 'Q'"""), {"r": race_id}).scalar())
 
 

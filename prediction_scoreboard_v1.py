@@ -247,9 +247,42 @@ def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
     return transform
 
 
+def _production_then(*steps: str) -> Callable[[Sequence[DriverForm], int], Transform]:
+    """Candidate factory: the production transform, then the named research steps."""
+    def factory(history: Sequence[DriverForm], season: int) -> Transform:
+        from race_forecast_v1 import production_transform
+        from race_form_signal_v1 import sprint_beta, with_car_form, with_driver_form, with_sprint_correction
+
+        production = production_transform(history)
+        paced_history = production(history) if "sprint" in steps else []
+        beta_s = sprint_beta(paced_history) if "sprint" in steps else 0.0
+        if "sprint" in steps:
+            SPRINT_BETAS[season] = beta_s
+
+        def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
+            out = production(rows)
+            if "car_form" in steps:
+                out = with_car_form(out)
+            if "driver_form" in steps:
+                out = with_driver_form(out)
+            if "sprint" in steps and beta_s > 0:
+                out = with_sprint_correction(out, beta_s)
+            return out
+        return transform
+    return factory
+
+
+SPRINT_BETAS: dict[int, float] = {}
+
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
+    "blend_formcar": _production_then("car_form"),
+    "blend_driver": _production_then("driver_form"),
+    "blend_sprint": _production_then("sprint"),
+    "blend_combo": _production_then("car_form", "driver_form", "sprint"),
     "blend_wetq": _wet_quali_guard,
 }
+# shown only with --experiments (kept so the verdicts can be re-checked on new data)
+REJECTED = {"blend_wetq", "blend_track", "blend_wetqw", "diag_wetrace"}
 
 
 # --- per-race blend weight candidates --------------------------------------------
@@ -413,8 +446,10 @@ def stored_scores(db: Any, meta: dict[int, RaceMeta], truth: dict[int, list[Driv
 # --- database ------------------------------------------------------------------
 
 def load_meta(db: Any) -> dict[int, RaceMeta]:
-    rows = db.execute(text("""
-        SELECT r.id, r.race_date, r.season_year, r.regulation_era, COALESCE(sw.rainfall, FALSE), t.name
+    from race_pace_from_quali_v1 import SESSION_WET_SQL
+
+    rows = db.execute(text(f"""
+        SELECT r.id, r.race_date, r.season_year, r.regulation_era, {SESSION_WET_SQL}, t.name
         FROM races r JOIN tracks t ON t.id = r.track_id
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         LEFT JOIN session_weather sw ON sw.session_id = s.id
@@ -574,6 +609,83 @@ def groups_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta]) -> N
               + ", ".join(f"{y}: {g:.1f}/{p:.1f}" for y, (g, p) in sorted(by_season.items())))
 
 
+def load_error_facts(db: Any) -> dict[tuple[int, int], tuple[int | None, int | None]]:
+    """(race_id, driver_id) -> (qualifying position, race position after lap 1)."""
+    rows = db.execute(text("""
+        SELECT sq.race_id, re.driver_id, q.final_position,
+               (SELECT l.position FROM laps l JOIN sessions sr ON sr.id = l.session_id AND sr.session_type = 'R'
+                WHERE sr.race_id = sq.race_id AND l.race_entry_id = re.id AND l.lap_number = 1 LIMIT 1)
+        FROM qualifying_results q
+        JOIN sessions sq ON sq.id = q.session_id AND sq.session_type = 'Q'
+        JOIN race_entries re ON re.id = q.race_entry_id
+    """)).all()
+    return {(int(r), int(d)): (int(qp) if qp else None, int(l1) if l1 else None) for r, d, qp, l1 in rows}
+
+
+PENALTY_PLACES = 3        # starting this many places behind the qualifying position = grid penalty
+LAP1_CHAOS_PLACES = 5     # gaining or losing this many places on lap 1 = start / first-lap incident
+
+
+def error_categories(scores: Sequence[DriverScore], meta: dict[int, RaceMeta],
+                     facts: dict[tuple[int, int], tuple]) -> list[tuple[str, int, float, float]]:
+    """(category, drivers, share of all error, mean error) for the production blend; each
+    driver counted once, in this order: retired, grid penalty / pit-lane start, big lap-1
+    change, wet race, everything else."""
+    rows = [s for s in scores if s.model == "blend"]
+    total = sum(s.error for s in rows) or 1
+    buckets = defaultdict(list)
+    for s in rows:
+        quali_pos, lap1 = facts.get((s.race_id, s.driver_id), (None, None))
+        if not s.classified:
+            key = "retired (not classified)"
+        elif quali_pos is not None and s.grid - quali_pos >= PENALTY_PLACES:
+            key = f"grid penalty / pit-lane start (>= {PENALTY_PLACES} places back)"
+        elif lap1 is not None and abs(lap1 - s.grid) >= LAP1_CHAOS_PLACES:
+            key = f"lap 1 changed position by >= {LAP1_CHAOS_PLACES}"
+        elif meta[s.race_id].wet:
+            key = "wet race"
+        else:
+            key = "everything else"
+        buckets[key].append(s.error)
+    return [(k, len(v), sum(v) / total, float(np.mean(v))) for k, v in buckets.items()]
+
+
+def error_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], facts: dict) -> None:
+    print("\n=== WHERE THE ERROR COMES FROM (production blend; each driver in one group) ===")
+    order = ["retired", "grid penalty", "lap 1", "wet race", "everything else"]
+    for key, n, share, avg in sorted(error_categories(scores, meta, facts),
+                                     key=lambda r: next(i for i, o in enumerate(order) if r[0].startswith(o))):
+        print(f"  {key:52} {n:5} drivers  {share:6.1%} of all error  avg {avg:.2f} places")
+    # hindsight: how good is the order after lap 1? (a ceiling for anything decided before the start)
+    lap1 = [abs(facts[(s.race_id, s.driver_id)][1] - s.finish) for s in scores
+            if s.model == "blend" and s.classified and facts.get((s.race_id, s.driver_id), (None, None))[1]]
+    if lap1:
+        print(f"  hindsight: finishers' error if we knew the order after lap 1 = {np.mean(lap1):.2f} places "
+              f"(production before the start: {np.mean([s.error for s in scores if s.model == 'blend' and s.classified]):.2f})")
+
+
+def signals_report(scored: Sequence[DriverForm]) -> None:
+    """Does each research input carry information about the race-vs-qualifying residual?
+    Correlation with a race-resampled CI; the candidates above say whether it also helps
+    the finishing order."""
+    from dataclasses import replace as _replace
+
+    def line(label, rows):
+        sig, lo, hi, n = form_signal(rows)
+        verdict = "REAL signal" if lo > 0 else "no clear signal"
+        print(f"  {label:44} r={sig:+.3f} [{lo:+.3f}, {hi:+.3f}] n={n:5}  {verdict}")
+
+    print("\n=== NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races) ===")
+    line("team form (production)", scored)
+    line("team form from car-pace residuals", [_replace(r, form=r.form_car) for r in scored if r.form_car is not None])
+    line("driver form vs teammate", [_replace(r, form=r.driver_form) for r in scored if r.driver_form is not None])
+    sprint = [_replace(r, form=r.sprint_gap - r.implied_gap) for r in scored if r.sprint_gap is not None]
+    line("sprint-race pace vs qualifying pace", sprint)
+    races = {r.race_id for r in scored if r.sprint_gap is not None}
+    print(f"  sprint pace: {len(sprint)} drivers in {len(races)} sprint weekends; beta per season: "
+          + (", ".join(f"{k}: {v:.2f}" for k, v in sorted(SPRINT_BETAS.items())) or "-"))
+
+
 def confidence_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta]) -> dict:
     """Walk-forward check of the forecast's confidence label (race_confidence_v1) on the
     production blend: ranges fitted on earlier seasons, tested on the next one."""
@@ -701,7 +813,7 @@ def main() -> int:
         rates = slot_rate_function(load_finishes(db))
         observations = load_observations(db, start_year=2018, end_year=args.end_year)
         rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year, include_wet=True,
-                          with_practice=True)
+                          with_practice=True, with_sprint=True)
         from race_reliability_v1 import load_starts
 
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
@@ -711,7 +823,8 @@ def main() -> int:
         if args.prob:
             scores += rank_probability_scores(scores, meta, rates)
             prob_models = ["blend_prob"]
-        experiments = [*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS] if args.experiments else []
+        experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS)
+                       if args.experiments or m not in REJECTED]
         scores = [s for s in scores if s.model in ("grid", "blend", *experiments, *prob_models, *adjusters)]
         models = ["grid", "blend", *experiments, *prob_models, *adjusters]
         if args.stored:
@@ -719,6 +832,7 @@ def main() -> int:
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
             models.append("stored")
         names = driver_names(db)
+        facts = load_error_facts(db)
         practice_data = db.execute(text("""
             SELECT r.season_year, COUNT(DISTINCT r.id) AS races,
                    COUNT(DISTINCT CASE WHEN s.session_type IN ('FP1', 'FP2') THEN r.id END) AS with_fp_laps,
@@ -747,6 +861,8 @@ def main() -> int:
     if args.experiments:
         groups_report(scores, meta)
     confidence_report(scores, meta)
+    error_report(scores, meta, facts)
+    signals_report(scored)
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
           f"({len(with_fp) / max(1, len(scored)):.0%}) ===")

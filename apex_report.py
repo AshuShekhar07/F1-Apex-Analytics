@@ -140,7 +140,8 @@ def scoreboard(save: bool) -> list[str]:
             worse = [l.split()[1] for l in mine if l.rstrip().endswith("WORSE")]
             verdict = "PROMOTE" if better and not worse else "keep off"
             keep.append(f"  candidate {n}: better on {better or 'nothing'}, worse on {worse or 'nothing'} -> {verdict}")
-    for title in ("HARD-TO-PASS TRACKS AND WET RACES", "CONFIDENCE LABEL"):
+    for title in ("HARD-TO-PASS TRACKS AND WET RACES", "WHERE THE ERROR COMES FROM", "NEW SIGNALS",
+                  "CONFIDENCE LABEL"):
         block = re.search(rf"=== {title}.*?(?=\n\n|\Z)", full, flags=re.S)
         if block:
             keep += ["  " + l.strip("= ") if l.startswith("===") else "  " + l for l in block.group(0).splitlines()]

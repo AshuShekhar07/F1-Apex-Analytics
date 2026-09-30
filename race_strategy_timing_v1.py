@@ -297,9 +297,11 @@ def predict_last_race_at_track(history: Sequence[CarStrategy], *, track_id: int,
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
                         end_year: int = 2026, min_distance: float = 0.9) -> list[CarStrategy]:
     """Real stints for every car that covered >= min_distance of a race (R sessions)."""
-    races = db.execute(text("""
+    from race_pace_from_quali_v1 import SESSION_WET_SQL
+
+    races = db.execute(text(f"""
         SELECT r.id, r.race_date, r.season_year, r.track_id, r.regulation_era, s.id AS session_id,
-               COALESCE(sw.rainfall, FALSE) AS wet
+               {SESSION_WET_SQL} AS wet
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         LEFT JOIN session_weather sw ON sw.session_id = s.id
