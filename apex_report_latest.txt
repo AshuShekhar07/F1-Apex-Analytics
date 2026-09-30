@@ -1,0 +1,66 @@
+APEX21 REPORT  2026-09-30
+
+1. LATEST UPDATE (2026)
+  loaders: step 16/16 done in 2s
+  === DATA QUALITY 2026 ===
+    R1  Melbourne              raced     ok
+    R2  Shanghai               raced     ok
+    R3  Suzuka                 raced     ok
+    R4  Miami                  raced     ok
+    R5  Montréal               raced     ok
+    R6  Monaco                 raced     ok
+    R7  Barcelona              raced     ok
+    R8  Spielberg              raced     ok
+    R9  Silverstone            raced     ok
+    R10 Spa-Francorchamps      raced     ok
+    R11 Budapest               raced     ok
+    R12 Zandvoort              raced     ok
+    R13 Monza                  raced     ok
+    R14 Madrid                 raced     ok
+    R15 Baku                   raced     ok
+  
+  === FORECASTS ===
+    R13 Monza: forecast stored (race id 186); view: python show_forecast.py --race 186
+    R14 Madrid: forecast stored (race id 187); view: python show_forecast.py --race 187
+    R15 Baku: forecast stored (race id 188); view: python show_forecast.py --race 188
+
+2. DATA QUALITY 2018-2026 (failures only)
+  2018: ok
+  2019: ok
+  2020: ok
+  2021: ok
+  2022: ok
+  2023: ok
+  2024: ok
+  2025: ok
+  2026: ok
+
+3. 2026 FORECASTS vs RESULTS
+  R1  Melbourne            winner called   podium 2/3  top10 7/10  avg error 4.5
+  R2  Shanghai             winner called   podium 3/3  top10 7/10  avg error 3.7
+  R3  Suzuka               winner called   podium 2/3  top10 7/10  avg error 2.0
+  R4  Miami                winner called   podium 1/3  top10 8/10  avg error 3.7
+  R5  Montréal             winner missed   podium 1/3  top10 6/10  avg error 5.3
+  R6  Monaco               winner called   podium 2/3  top10 6/10  avg error 5.1
+  R7  Barcelona            winner missed   podium 2/3  top10 7/10  avg error 3.1
+  R8  Spielberg            winner called   podium 1/3  top10 10/10  avg error 1.7
+  R9  Silverstone          winner missed   podium 2/3  top10 7/10  avg error 4.4
+  R10 Spa-Francorchamps    winner called   podium 2/3  top10 7/10  avg error 2.7
+  R11 Budapest             winner called   podium 1/3  top10 9/10  avg error 2.5
+  R12 Zandvoort            winner called   podium 3/3  top10 7/10  avg error 2.8
+  R13 Monza                winner missed   podium 1/3  top10 8/10  avg error 3.5
+  R14 Madrid               winner missed   podium 3/3  top10 9/10  avg error 2.2
+  R15 Baku                 winner called   podium 1/3  top10 6/10  avg error 4.9
+
+4. SCOREBOARD
+  metric                                    grid                     blend                blend_wetq                    stored   better
+  winner_hit                 53.3% [47.2%,59.4%]       55.0% [48.9%,61.1%]       55.0% [48.9%,61.1%]       59.0% [46.2%,71.8%]   higher
+  podium_overlap             68.3% [65.4%,71.3%]       68.9% [65.9%,71.9%]       69.4% [66.5%,72.4%]       68.4% [62.4%,74.4%]   higher
+  mae                        3.490 [3.348,3.625]       3.347 [3.205,3.483]       3.350 [3.208,3.485]       3.404 [3.121,3.708]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.749 [2.631,2.862]       2.756 [2.638,2.868]       2.782 [2.542,3.030]   lower
+  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.4%,2.4%]          2.0% [1.5%,2.5%]          2.9% [1.9%,4.0%]   lower
+  races / drivers                   180 / 3621                180 / 3621                180 / 3621                 39 / 808   
+  candidate blend_wetq: better on nothing, worse on nothing -> keep off
+  in wet qualifying: 83 of 743 drivers (11.2%) across 37 races -- blend_wetq skips these
+  CAR PACE RULE: replaced the driver's own lap for 227 of 3621 drivers (6.3%); it should be rare
+  regression gate vs scoreboard_baseline_2018.json: PASS
