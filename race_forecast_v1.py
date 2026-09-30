@@ -40,7 +40,9 @@ from race_form_signal_v1 import (
     predictions,
     DRIVER_FORM_RACES,
     DRIVER_SHRINK,
+    out_of_position,
     car_form_histories,
+    choose_recovery_weight,
     practice_beta,
     sprint_beta,
     team_form,
@@ -107,16 +109,22 @@ PRACTICE_METHOD = "correction"
 # "none" switch them off.
 FORM_METHOD = "car_and_driver"
 SPRINT_METHOD = "correction"
+# Drivers starting >= 3 places behind their qualifying position (grid penalty, pit lane) get
+# their own blend weight, chosen on the last 3 seasons' such drivers. Scoreboard 2018-2026:
+# those finishers 4.04 -> 3.54 places, -0.45 [-0.79, -0.12] over 94 races, worse nowhere.
+# "none" switches it off.
+RECOVERY_METHOD = "own_weight"
+RECOVERY_SEASONS = 3
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
 
 VALIDATION = {
     "source": "prediction_scoreboard_v1 walk-forward, all races 2018-2026, 3621 drivers in 180 races",
     "predicted_position": {"method": "grid/pace blend with car pace, practice and sprint pace, car-pace team "
-                                     "form and driver form",
-                           "mean_abs_error_places": 3.314, "grid_only_mean_abs_error_places": 3.490,
-                           "finishers_mean_abs_error_places": 2.716, "finishers_off_by_10_or_more": 0.019,
-                           "winner_correct": 0.578, "podium_overlap": 0.691},
+                                     "form, driver form and a recovery weight for out-of-position starters",
+                           "mean_abs_error_places": 3.308, "grid_only_mean_abs_error_places": 3.490,
+                           "finishers_mean_abs_error_places": 2.712, "finishers_off_by_10_or_more": 0.019,
+                           "winner_correct": 0.572, "podium_overlap": 0.691},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
@@ -193,6 +201,17 @@ def production_transform(history: Sequence[DriverForm]):
     return transform
 
 
+def production_recovery_weight(history: Sequence[DriverForm], season: int, transform, weight: float) -> float | None:
+    """Blend weight for out-of-position drivers, chosen on the last RECOVERY_SEASONS seasons."""
+    if RECOVERY_METHOD != "own_weight":
+        return None
+    recent = defaultdict(list)
+    for r in history:
+        if season - RECOVERY_SEASONS <= r.season_year < season:
+            recent[r.race_id].append(r)
+    return choose_recovery_weight({k: transform(v) for k, v in recent.items()}, weight)
+
+
 _HISTORY_CACHE: dict[tuple[str, int], list[DriverForm]] = {}
 
 
@@ -222,7 +241,7 @@ def confidence_samples(db: Any, observations, season: int) -> list:
             SELECT s.race_id FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
             WHERE s.session_type = 'R' AND {SESSION_WET_SQL}""")).scalars()}
         _SAMPLES_CACHE[key] = backtest_samples(history_rows(db, observations, season), production_transform,
-                                               choose_weight, predictions, wet_races)
+                                               choose_weight, predictions, wet_races, production_recovery_weight)
     return _SAMPLES_CACHE[key]
 
 
@@ -453,7 +472,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
                                team_form(car_teams.get(team, []), team, as_of),
                                team_form(car_drivers.get(d, []), d, as_of, races=DRIVER_FORM_RACES,
                                          shrink=DRIVER_SHRINK),
-                               sprint.get(d)))
+                               sprint.get(d), int(f["final_position"]) if f["final_position"] else None))
 
     past_rows = history_rows(db, observations, season)
     transform = production_transform(past_rows)
@@ -473,7 +492,11 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     weight = choose_weight({k: transform(v) for k, v in prev_by_race.items()}) if prev_by_race else 0.5
     if not prev_by_race:
         notes.append("blend weight: no previous-season races scored, using 0.5")
-    predicted = predictions(rows, weight)["blend"]
+    recovery = production_recovery_weight(past_rows, season, transform, weight)
+    moved = [names[r.driver_id] for r in rows if out_of_position(r)]
+    if recovery is not None and moved:
+        notes.append(f"out of position (grid penalty / pit lane): {', '.join(moved)}; recovery weight {recovery:.1f}")
+    predicted = predictions(rows, weight, recovery)["blend"]
 
     finishes_sql = """
         SELECT rr.starting_grid_position, rr.finishing_position, rr.status

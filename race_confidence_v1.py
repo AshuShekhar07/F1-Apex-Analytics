@@ -132,7 +132,7 @@ class ErrorTable:
 
 
 def backtest_samples(rows, transform_for: Callable, choose_weight: Callable, predictions: Callable,
-                     wet_races: set[int]) -> list[ErrorSample]:
+                     wet_races: set[int], recovery_for: Callable | None = None) -> list[ErrorSample]:
     """Replay the production blend on every season in `rows` exactly as the scoreboard does:
     pace transform fitted on earlier seasons, blend weight chosen on the previous season."""
     by_season = defaultdict(lambda: defaultdict(list))
@@ -144,8 +144,9 @@ def backtest_samples(rows, transform_for: Callable, choose_weight: Callable, pre
         transform = transform_for(history)
         previous = by_season.get(season - 1)
         weight = choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5
+        recovery = recovery_for(history, season, transform, weight) if recovery_for else None
         for race_id, race_rows in by_season[season].items():
-            ranked = predictions(transform(race_rows), weight)["blend"]
+            ranked = predictions(transform(race_rows), weight, recovery)["blend"]
             wet_q = any(r.quali_wet for r in race_rows)
             out += [ErrorSample(race_id, season, p, r.finish, wet_q, race_id in wet_races)
                     for r, p in zip(race_rows, ranked)]
