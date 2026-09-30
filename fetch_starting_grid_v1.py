@@ -86,26 +86,43 @@ def parse_grid(rows: Iterable[dict], entries_by_number: dict[int, int], field_si
 
 # --- OpenF1 ------------------------------------------------------------------------
 
+REQUEST_PAUSE = 1.0      # seconds between OpenF1 calls (it rate-limits: 429 Too Many Requests)
+_SESSIONS: dict[int, list[dict]] = {}
+
+
 def _get(path: str, **params) -> list[dict]:
     import requests
 
-    for attempt in range(3):
+    for attempt in range(6):
+        time.sleep(REQUEST_PAUSE)
         try:
             resp = requests.get(f"{BASE_URL}/{path}", params=params, timeout=20)
-            if resp.status_code == 404:
-                return []
-            resp.raise_for_status()
-            data = resp.json()
-            return data if isinstance(data, list) else []
         except Exception:
-            if attempt == 2:
+            if attempt == 5:
                 raise
             time.sleep(2 ** attempt)
+            continue
+        if resp.status_code == 404:
+            return []
+        if resp.status_code == 429 and attempt < 5:
+            wait = resp.headers.get("Retry-After")
+            time.sleep(float(wait) if wait and wait.replace(".", "", 1).isdigit() else 5 * 2 ** attempt)
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
     return []
 
 
+def season_sessions(year: int) -> list[dict]:
+    """OpenF1 sessions of a season, fetched once per run."""
+    if year not in _SESSIONS:
+        _SESSIONS[year] = _get("sessions", year=year)
+    return _SESSIONS[year]
+
+
 def fetch_grid(race_date: date, entries_by_number: dict[int, int], field_size: int) -> tuple[dict[int, int], list[str]]:
-    sessions = _get("sessions", year=race_date.year)
+    sessions = season_sessions(race_date.year)
     race = race_session(sessions, race_date)
     if race is None:
         return {}, ["no OpenF1 race session within 3 days of the race date"]
@@ -128,6 +145,14 @@ def race_field(db: Any, race_id: int) -> tuple[dict[int, int], int]:
         WHERE s.race_id = :r AND re.car_number IS NOT NULL
     """), {"r": race_id}).all()
     return {int(n): int(e) for n, e in rows}, len(rows)
+
+
+def qualifying_order(db: Any, race_id: int) -> dict[int, int]:
+    return {int(e): int(p) for e, p in db.execute(text("""
+        SELECT q.race_entry_id, q.final_position FROM qualifying_results q
+        JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+        WHERE s.race_id = :r AND q.final_position IS NOT NULL
+    """), {"r": race_id})}
 
 
 def official_grid(db: Any, race_id: int) -> dict[int, int]:
@@ -182,11 +207,12 @@ def main() -> int:
         else:
             parser.error("give --season, --race-id or --check")
 
-    checked = exact = drivers = 0
+    checked = exact = drivers = openf1_hits = quali_hits = 0
     for race in races:
         with engine.connect() as db:
             entries, field = race_field(db, race["id"])
             official = official_grid(db, race["id"]) if args.check else {}
+            quali = qualifying_order(db, race["id"]) if args.check else {}
         try:
             grid, issues = fetch_grid(race["race_date"], entries, field)
         except Exception as exc:
@@ -198,11 +224,21 @@ def main() -> int:
         if args.check:
             same = sum(1 for e, p in grid.items() if official.get(e) == p)
             both = sum(1 for e in grid if e in official)
+            by_quali = sum(1 for e, p in quali.items() if official.get(e) == p)
+            quali_both = sum(1 for e in quali if e in official)
             checked += 1
             exact += int(same == both == len(official))
             drivers += both
-            print(f"R{race['round_number']} (race {race['id']}): {same}/{both} positions match the official grid"
-                  + ("" if same == both else "  <- differs"))
+            openf1_hits += same
+            quali_hits += by_quali
+            number = {e: n for n, e in entries.items()}
+            diff = [f"#{number.get(e, '?')} OpenF1 P{p} official P{official[e]}"
+                    for e, p in sorted(grid.items(), key=lambda kv: kv[1]) if e in official and official[e] != p]
+            pit = [f"#{number.get(e, '?')}" for e in grid if e not in official]
+            print(f"R{race['round_number']} (race {race['id']}): OpenF1 {same}/{both} match the official grid, "
+                  f"qualifying order {by_quali}/{quali_both}"
+                  + (f"  <- differs: {'; '.join(diff)}" if diff else "")
+                  + (f"  (not on the official grid / pit lane: {', '.join(pit)})" if pit else ""))
             continue
         extra = f" ({'; '.join(issues)})" if issues else ""
         if args.dry_run:
@@ -213,7 +249,8 @@ def main() -> int:
         print(f"R{race['round_number']} (race {race['id']}): stored provisional grid, {len(grid)} slots{extra}")
     if args.check:
         print(f"\nCHECK {args.check}: {exact}/{checked} races matched the official grid exactly "
-              f"({drivers} drivers compared, {len(races)} races with an official grid)")
+              f"({drivers} drivers compared, {len(races)} races with an official grid); correct slots: "
+              f"OpenF1 {openf1_hits}, qualifying order {quali_hits}")
     elif not races:
         print("no upcoming race with qualifying and without results in the next week")
     return 0

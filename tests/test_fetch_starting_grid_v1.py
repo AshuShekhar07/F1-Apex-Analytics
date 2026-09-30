@@ -67,3 +67,30 @@ def test_forecast_uses_the_provisional_grid_before_the_results(synthetic_db):
             assert any("grid penalties are not in" in n for n in f["inputs"]["data_notes"])
         finally:
             tx.rollback()
+
+
+def test_rate_limit_is_waited_out_and_sessions_are_fetched_once(monkeypatch):
+    import fetch_starting_grid_v1 as fg
+
+    calls = []
+
+    class Resp:
+        def __init__(self, code, data=None):
+            self.status_code, self._data, self.headers = code, data, {"Retry-After": "0"}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.status_code)
+
+        def json(self):
+            return self._data
+
+    replies = [Resp(429), Resp(200, [{"session_key": 1}])]
+    import requests
+    monkeypatch.setattr(requests, "get", lambda url, params, timeout: (calls.append(url), replies.pop(0))[1])
+    monkeypatch.setattr(fg, "REQUEST_PAUSE", 0.0)
+    monkeypatch.setattr(fg.time, "sleep", lambda s: None)
+    fg._SESSIONS.clear()
+    assert fg.season_sessions(2026) == [{"session_key": 1}]
+    assert fg.season_sessions(2026) == [{"session_key": 1}]      # cached: no third call
+    assert len(calls) == 2
