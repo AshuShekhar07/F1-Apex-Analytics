@@ -12,11 +12,7 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend:
-    blend_pass  positions from overtaking: expected position = grid - strength * (cars
-                starting ahead that are slower by more than a margin) + strength * (cars behind
-                that are faster by more than it); strength and margin chosen on the previous
-                season. Uses pace magnitudes, where the blend only uses pace ranks.
+  candidates  experiments, each scored against the production blend (none open right now)
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -31,7 +27,10 @@ Models (per race, only data strictly before the race date):
             recovery weight (2026-09-30): drivers starting >= 3 places behind their qualifying
               position get their own weight (last 3 seasons); those finishers 4.04 -> 3.54,
               -0.45 [-0.79, -0.12] over 94 races, headline worse nowhere
-  rejected: blend_wetq (2026-09-30): production, but the car-pace rule skipped in wet
+  rejected: blend_pass (2026-09-30): positions from overtaking clearly slower cars (pace
+              magnitudes instead of ranks); 3.325 vs 3.308, winner 53.3% vs 57.2%, better on
+              nothing; its fitted margin flipped between 0% and 0.5% season to season
+            blend_wetq (2026-09-30): production, but the car-pace rule skipped in wet
               qualifying; better on nothing, worse on nothing
             blend_track, blend_wetqw (2026-09-30): no clear difference anywhere. Hard-to-pass
               tracks are NOT a weak spot (finishers' error 2.73 there vs 2.76 elsewhere); wet
@@ -264,7 +263,7 @@ CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_wetq": _wet_quali_guard,
 }
 # shown only with --experiments (kept so the verdicts can be re-checked on new data)
-REJECTED = {"blend_wetq", "blend_track", "blend_wetqw", "diag_wetrace"}
+REJECTED = {"blend_wetq", "blend_track", "blend_wetqw", "diag_wetrace", "blend_pass"}
 
 
 # --- per-race blend weight candidates --------------------------------------------
