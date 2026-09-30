@@ -16,6 +16,9 @@ Methods (history strictly before the race date):
   J  practice wear + compounds : I's stop count; among the era's 4 most common sequences
                         with that many stops, the one whose compounds teams long-ran in practice
   K  era stops + compounds     : same sequence choice with B's stop count (isolates the compounds)
+     J/K REJECTED 2026-09-30: sequence 0.203 vs 0.255 (WORSE) in 2022-25; K never changed B's
+     pick. Practice compound mix does not say which tyres teams race on (every team runs its
+     whole allocation in practice).
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
