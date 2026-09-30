@@ -140,6 +140,31 @@ def _pool_levels(history: Sequence[CarStrategy], *, track_id: int, era: str, gri
     )
 
 
+def _stop_laps(levels, sequence: tuple[str, ...], total_laps: int, fallback: Sequence[CarStrategy]) -> list[int]:
+    """Median stop laps of `sequence` in the most specific level with enough examples of it."""
+    timing_rows = next((
+        [h for h in lvl_rows if h.sequence == sequence]
+        for _, lvl_rows in levels
+        if sum(1 for h in lvl_rows if h.sequence == sequence) >= MIN_SEQUENCE_EXAMPLES
+    ), list(fallback))
+    return [round(median(h.stop_fractions[i] for h in timing_rows) * total_laps) for i in range(len(sequence) - 1)]
+
+
+def predict_era_mode_track_timing(history: Sequence[CarStrategy], *, track_id: int, regulation_era: str,
+                                  grid: int | None, total_laps: int) -> StrategyPrediction:
+    """Method H: the era's most common sequence (exactly B), timed like method C: stop laps
+    from the most specific pool (track + grid band, track, era + band, era) with enough
+    examples of that sequence. Only the stop laps can differ from production."""
+    base = predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps, top_k=1)
+    if base.strategy is None:
+        return base
+    levels = _pool_levels(history, track_id=track_id, era=regulation_era, grid=grid, start_compound=None, wet=False)
+    sequence = base.strategy.sequence
+    strategy = build_strategy(sequence, _stop_laps(levels, sequence, total_laps, [h for h in levels[-1][1]
+                                                                                if h.sequence == sequence]), total_laps)
+    return StrategyPrediction(strategy, base.source + ", track timing", ((strategy, base.alternatives[0][1]),))
+
+
 @dataclass(frozen=True)
 class StrategyPrediction:
     strategy: Strategy | None
@@ -169,15 +194,8 @@ def predict_strategy(
     counts = Counter(h.sequence for h in rows)
     alternatives = []
     for sequence, count in counts.most_common(top_k):
-        # stop timing: the most specific level with enough examples of THIS sequence
-        timing_rows = next((
-            [h for h in lvl_rows if h.sequence == sequence]
-            for _, lvl_rows in levels
-            if sum(1 for h in lvl_rows if h.sequence == sequence) >= MIN_SEQUENCE_EXAMPLES
-        ), [h for h in rows if h.sequence == sequence])
-        stops = [round(median(h.stop_fractions[i] for h in timing_rows) * total_laps)
-                 for i in range(len(sequence) - 1)]
-        strategy = build_strategy(sequence, stops, total_laps)
+        strategy = build_strategy(sequence, _stop_laps(levels, sequence, total_laps,
+                                                       [h for h in rows if h.sequence == sequence]), total_laps)
         if strategy is not None:
             alternatives.append((strategy, count / len(rows)))
     source = f"{chosen_level}(n={len(rows)})" + (f", start={start_compound}" if start_compound else "")

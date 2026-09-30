@@ -11,6 +11,9 @@ Methods (history strictly before the race date):
   E  track-adjusted   : stop count, sequence and stop laps = the era's, pulled toward this
                         track's record by how much of it there is (predict_track_adjusted)
   F  last race here   : what most cars did the last time this track was raced
+  H  era mode + track timing : B's sequence, stop laps timed like C (track + grid band first)
+  G  CEILING (hindsight, not a method): the most common strategy actually run in the race
+     itself -- the best any single-strategy-for-every-car prediction could score
 B is production (strategy_service_v7 before the start tyre is known); others are compared to it.
 
 Dry races by default; --wet scores wet races and adds W (wet-race precedent) vs the dry methods.
@@ -41,6 +44,7 @@ from race_strategy_timing_v1 import (
     CarStrategy,
     load_car_strategies,
     predict_era_mode,
+    predict_era_mode_track_timing,
     predict_last_race_at_track,
     predict_strategy,
     predict_track_adjusted,
@@ -72,6 +76,24 @@ def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int) -> 
     return predict_era_mode(history, regulation_era=era, total_laps=total_laps).strategy
 
 
+def hindsight_mode(race_cars: Sequence[CarStrategy], total_laps: int) -> Strategy | None:
+    """The race's own most common legal dry strategy (median stop laps) -- an upper bound for
+    methods that give every car the same strategy, never a prediction."""
+    from collections import Counter
+    from statistics import median
+
+    from race_strategy_precedent_v1 import build_strategy
+    from race_strategy_timing_v1 import is_legal_dry
+
+    legal = [c for c in race_cars if is_legal_dry(c.sequence)]
+    if not legal:
+        return None
+    sequence = Counter(c.sequence for c in legal).most_common(1)[0][0]
+    same = [c for c in legal if c.sequence == sequence]
+    return build_strategy(sequence, [round(median(c.stop_fractions[i] for c in same) * total_laps)
+                                     for i in range(len(sequence) - 1)], total_laps)
+
+
 def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     cars = load_car_strategies(db, start_year=2018, end_year=end_year)
     targets = defaultdict(list)
@@ -94,6 +116,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                                 total_laps=total_laps).strategy
         last_here = predict_last_race_at_track(history, track_id=track, regulation_era=era,
                                                total_laps=total_laps).strategy
+        ceiling = hindsight_mode(race_cars, total_laps)
+        timed = {}
         for car in race_cars:
             key = (car.grid or 99) <= 10
             if key not in dry_hierarchy:
@@ -103,6 +127,11 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             scores.append(score(race_id, "B era mode (real stints)", era_mode, car))
             scores.append(score(race_id, "E track-adjusted", track_adjusted, car))
             scores.append(score(race_id, "F last race here", last_here, car))
+            if key not in timed:
+                timed[key] = predict_era_mode_track_timing(history, track_id=track, regulation_era=era,
+                                                           grid=car.grid, total_laps=total_laps).strategy
+            scores.append(score(race_id, "H era mode + track timing", timed[key], car))
+            scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
             scores.append(score(race_id, "C hierarchy", dry_hierarchy[key], car))
             scores.append(score(race_id, "D pre-start (known start tyre)",
                                 predict_strategy(history, track_id=track, regulation_era=era, grid=car.grid,

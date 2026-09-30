@@ -96,7 +96,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
         scores = run(db, start_year=2024, end_year=2024, wet=False)
     methods = {s.method for s in scores}
     assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
-                       "D pre-start (known start tyre)", "E track-adjusted", "F last race here"}
+                       "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
+                       "H era mode + track timing", "G CEILING (hindsight)"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -149,3 +150,26 @@ def test_last_race_at_track_and_fallback():
     p = predict_last_race_at_track(old + recent, track_id=7, regulation_era="e", total_laps=50)
     assert p.strategy.sequence == ("HARD", "MEDIUM") and p.strategy.stop_laps == (30,)
     assert predict_last_race_at_track(old, track_id=99, regulation_era="e", total_laps=50).strategy.sequence == ("MEDIUM", "HARD")
+
+
+def test_track_timing_keeps_the_era_sequence_and_times_it_at_the_track():
+    from race_strategy_timing_v1 import predict_era_mode_track_timing
+
+    history = (_hist(1, date(2024, 3, 1), 1, "e", [(("MEDIUM", "HARD"), [20])] * 30)
+               + _hist(2, date(2024, 5, 1), 7, "e", [(("MEDIUM", "HARD"), [35])] * 6
+                       + [(("SOFT", "HARD"), [10])] * 10))
+    p = predict_era_mode_track_timing(history, track_id=7, regulation_era="e", grid=5, total_laps=50)
+    # sequence is the era's (MEDIUM-HARD, 36 cars) even though SOFT-HARD led at this track
+    assert p.strategy.sequence == ("MEDIUM", "HARD") and p.strategy.stop_laps == (35,)
+    # too few examples at the track (< 5): era timing
+    few = _hist(1, date(2024, 3, 1), 1, "e", [(("MEDIUM", "HARD"), [20])] * 30) + \
+        _hist(2, date(2024, 5, 1), 7, "e", [(("MEDIUM", "HARD"), [35])] * 3)
+    assert predict_era_mode_track_timing(few, track_id=7, regulation_era="e", grid=5,
+                                         total_laps=50).strategy.stop_laps == (20,)
+
+
+def test_hindsight_ceiling_is_the_race_mode():
+    from race_strategy_prediction_backtest_v1 import hindsight_mode
+
+    cars = _hist(1, date(2024, 3, 1), 1, "e", [(("MEDIUM", "HARD"), [20])] * 3 + [(("HARD", "MEDIUM"), [30])] * 2)
+    assert hindsight_mode(cars, 50).sequence == ("MEDIUM", "HARD")
