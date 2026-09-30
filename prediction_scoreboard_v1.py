@@ -14,9 +14,9 @@ Models (per race, only data strictly before the race date):
             win/podium = grid-slot rates
   candidates  experiments, each scored against the production blend:
     blend_practice_all  practice long-run gap from FP1 AND FP2 (each against its own session's
-                        best, averaged), where production uses FP2 else FP1: more drivers covered
-    blend_driver_all    driver form that carries across a regulation change (driver skill does;
-                        team form does not), where production restarts it with each era
+                        best, averaged), where production uses FP2 else FP1: more drivers covered.
+                        OPEN (2026-09-30): every headline point estimate better (3.308 -> 3.289,
+                        winner 57.2% -> 58.3%) but no CI excludes 0 yet; re-judged every report
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -31,7 +31,9 @@ Models (per race, only data strictly before the race date):
             recovery weight (2026-09-30): drivers starting >= 3 places behind their qualifying
               position get their own weight (last 3 seasons); those finishers 4.04 -> 3.54,
               -0.45 [-0.79, -0.12] over 94 races, headline worse nowhere
-  rejected: blend_pass (2026-09-30): positions from overtaking clearly slower cars (pace
+  rejected: blend_driver_all (2026-09-30): driver form carried across regulation eras;
+              better on nothing (3.315 vs 3.308)
+            blend_pass (2026-09-30): positions from overtaking clearly slower cars (pace
               magnitudes instead of ranks); 3.325 vs 3.308, winner 53.3% vs 57.2%, better on
               nothing; its fitted margin flipped between 0% and 0.5% season to season
             blend_wetq (2026-09-30): production, but the car-pace rule skipped in wet
@@ -285,7 +287,7 @@ CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_wetq": _wet_quali_guard,
 }
 # shown only with --experiments (kept so the verdicts can be re-checked on new data)
-REJECTED = {"blend_wetq", "blend_track", "blend_wetqw", "diag_wetrace", "blend_pass"}
+REJECTED = {"blend_wetq", "blend_track", "blend_wetqw", "diag_wetrace", "blend_pass", "blend_driver_all"}
 
 
 # --- per-race blend weight candidates --------------------------------------------
@@ -898,7 +900,7 @@ def main() -> int:
         groups_report(scores, meta)
     confidence_report(scores, meta)
     error_report(scores, meta, facts)
-    if PASS_PARAMS:
+    if PASS_PARAMS and "blend_pass" in models:
         print("  blend_pass (strength, margin) per season: "
               + ", ".join(f"{y}: {s:.2f}/{m * 100:.1f}%" for y, (s, m) in sorted(PASS_PARAMS.items())))
     if RECOVERY_WEIGHTS:

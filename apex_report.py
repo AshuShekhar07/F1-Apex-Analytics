@@ -145,7 +145,7 @@ def scoreboard(save: bool) -> list[str]:
         block = re.search(rf"=== {title}.*?(?=\n\n|\Z)", full, flags=re.S)
         if block:
             keep += ["  " + l.strip("= ") if l.startswith("===") else "  " + l for l in block.group(0).splitlines()]
-    for pattern in (r"  in wet qualifying:[^\n]*", r"=== CAR PACE RULE[^\n]*"):
+    for pattern in (r"  in wet qualifying:[^\n]*", r"=== CAR PACE RULE[^\n]*", r"=== PRACTICE PACE[^\n]*"):
         m = re.search(pattern, full)
         if m:
             keep.append("  " + m.group(0).strip("= "))
