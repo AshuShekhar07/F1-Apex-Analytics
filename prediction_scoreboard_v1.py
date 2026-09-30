@@ -256,8 +256,8 @@ def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
 
 
 SPRINT_BETAS: dict[int, float] = {}
-RECOVERY_WEIGHTS: dict[int, tuple] = {}
-PASS_PARAMS: dict[int, tuple] = {}         # season -> (strength, margin) for blend_pass     # season -> (out-of-position weight or None, production weight)
+RECOVERY_WEIGHTS: dict[int, tuple] = {}    # season -> (out-of-position weight or None, production weight)
+PASS_PARAMS: dict[int, tuple] = {}         # season -> (strength, margin) for blend_pass
 
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_wetq": _wet_quali_guard,
