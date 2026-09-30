@@ -1,3 +1,4 @@
+import pytest
 from datetime import date
 
 from race_strategy_timing_v1 import (
@@ -97,7 +98,7 @@ def test_prediction_backtest_end_to_end(synthetic_db):
     methods = {s.method for s in scores}
     assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
-                       "H era mode + track timing", "G CEILING (hindsight)"}
+                       "H era mode + track timing", "G CEILING (hindsight)", "I practice wear"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -173,3 +174,32 @@ def test_hindsight_ceiling_is_the_race_mode():
 
     cars = _hist(1, date(2024, 3, 1), 1, "e", [(("MEDIUM", "HARD"), [20])] * 3 + [(("HARD", "MEDIUM"), [30])] * 2)
     assert hindsight_mode(cars, 50).sequence == ("MEDIUM", "HARD")
+
+
+def test_stop_count_from_practice_wear_votes_among_closest_races():
+    from race_strategy_timing_v1 import predict_from_wear, race_modes, stops_from_wear
+
+    one, two = (("MEDIUM", "HARD"), [25]), (("MEDIUM", "HARD", "HARD"), [15, 32])
+    history, wear = [], {}
+    for race in range(1, 11):                       # low wear -> 1 stop, high wear -> 2 stops
+        high = race > 5
+        history += _hist(race, date(2024, race, 1), race, "e", [two if high else one] * 6)
+        wear[race] = 0.004 if high else 0.001
+    modes = race_modes(history)
+    assert modes[1][2] == 1 and modes[10][2] == 2
+    assert stops_from_wear(modes, wear, wear=0.0038, regulation_era="e", k=3) == 2
+    assert stops_from_wear(modes, wear, wear=0.0009, regulation_era="e", k=3) == 1
+    assert stops_from_wear(modes, wear, wear=0.004, regulation_era="e", k=30) is None   # too few races
+    p = predict_from_wear(history, wear=0.0041, wear_by_race=wear, regulation_era="e", total_laps=50)
+    assert p.strategy.sequence == ("MEDIUM", "HARD", "HARD") and p.strategy.stop_laps == (15, 32)
+    # no practice wear: the era mode (B), unchanged
+    assert predict_from_wear(history, wear=None, wear_by_race=wear, regulation_era="e",
+                             total_laps=50).source.startswith("era")
+
+
+def test_run_wear_is_the_relative_slope():
+    from race_practice_pace_v1 import run_wear
+
+    run = [(n, 90.0 + 0.09 * i) for i, n in enumerate(range(10, 18))]
+    assert run_wear(run) == pytest.approx(0.09 / 90.315, rel=1e-3)
+    assert run_wear(run[:5]) is None

@@ -33,11 +33,12 @@ MIN_DRIVERS = 4
 MAX_PRACTICE_GAP = 0.05      # beyond this the run is not representative (traffic, damage)
 
 
-def long_run_laps(laps: Iterable[tuple[int, float | None, str | None]]) -> dict[str, list[float]]:
-    """compound -> lap times from long runs. laps: (lap_number, lap_time, compound)."""
+def long_runs(laps: Iterable[tuple[int, float | None, str | None]]) -> list[tuple[str, list[tuple[int, float]]]]:
+    """Long runs in lap order: [(compound, [(lap_number, lap_time), ...])], trimmed of laps
+    more than RUN_TRIM over the run's median. laps: (lap_number, lap_time, compound)."""
     timed = sorted((n, t, (c or "UNKNOWN").upper()) for n, t, c in laps if t is not None and t > 0)
     if not timed:
-        return {}
+        return []
     limit = min(t for _, t, _ in timed) * RUN_LAP_FACTOR
     runs: list[list[tuple[int, float, str]]] = []
     for lap in timed:
@@ -49,15 +50,22 @@ def long_run_laps(laps: Iterable[tuple[int, float | None, str | None]]) -> dict[
             runs[-1].append(lap)
         else:
             runs.append([lap])
-    out: dict[str, list[float]] = defaultdict(list)
+    out = []
     for run in runs:
         if len(run) < MIN_RUN_LAPS:
             continue
         centre = median(t for _, t, _ in run)
-        kept = [(t, c) for _, t, c in run if t <= centre * RUN_TRIM]
+        kept = [(n, t) for n, t, _ in run if t <= centre * RUN_TRIM]
         if len(kept) >= MIN_RUN_LAPS:
-            for t, c in kept:
-                out[c].append(t)
+            out.append((run[0][2], kept))
+    return out
+
+
+def long_run_laps(laps: Iterable[tuple[int, float | None, str | None]]) -> dict[str, list[float]]:
+    """compound -> lap times from long runs. laps: (lap_number, lap_time, compound)."""
+    out: dict[str, list[float]] = defaultdict(list)
+    for compound, run in long_runs(laps):
+        out[compound] += [t for _, t in run]
     return dict(out)
 
 
@@ -151,3 +159,48 @@ def load_sprint_gaps(db: Any, race_id: int) -> dict[int, float]:
         return {}
     best = min(pace.values())
     return {d: p / best - 1 for d, p in pace.items() if p / best - 1 <= MAX_SPRINT_GAP}
+
+
+# --- tyre wear this weekend ----------------------------------------------------------
+# How fast long-run lap times rise per lap, relative to the lap time (fuel burn-off makes
+# this smaller than the true tyre wear, by about the same amount at every track). Higher =
+# the tyres fade faster = more stops. Measured on the weekend itself, before the race.
+
+MIN_WEAR_RUN_LAPS = 6
+MIN_WEAR_RUNS = 4
+
+
+def run_wear(run: list[tuple[int, float]]) -> float | None:
+    """Least-squares lap-time slope per lap / median lap time; None for short runs."""
+    if len(run) < MIN_WEAR_RUN_LAPS:
+        return None
+    xs = [n for n, _ in run]
+    ys = [t for _, t in run]
+    mx, my = mean(xs), mean(ys)
+    den = sum((x - mx) ** 2 for x in xs)
+    return (sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den) / median(ys) if den else None
+
+
+def load_weekend_wear(db: Any, race_id: int) -> float | None:
+    """Median long-run wear over all drivers' runs in FP2 (else FP1); None if too few runs
+    or the session was wet."""
+    for session_type in ("FP2", "FP1"):
+        session = db.execute(text("""
+            SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
+            FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = :t
+        """), {"r": race_id, "t": session_type}).mappings().first()
+        if session is None:
+            continue
+        if session_is_wet(db, session["id"], session["wet"]):
+            return None
+        laps = defaultdict(list)
+        for driver, n, t, c in db.execute(text("""
+            SELECT re.driver_id, l.lap_number, l.lap_time, l.tire_compound
+            FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+            WHERE l.session_id = :s AND COALESCE(l.is_deleted, FALSE) = FALSE
+        """), {"s": session["id"]}):
+            laps[int(driver)].append((int(n), float(t) if t is not None else None, c))
+        wear = [w for rows in laps.values() for _, run in long_runs(rows) if (w := run_wear(run)) is not None]
+        return median(wear) if len(wear) >= MIN_WEAR_RUNS else None
+    return None

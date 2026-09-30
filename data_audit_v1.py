@@ -83,6 +83,13 @@ CHECKS: list[tuple[str, str]] = [
         SELECT r.season_year, COUNT(l.tire_compound), COUNT(*) FROM laps l
         JOIN sessions s ON s.id = l.session_id AND s.session_type IN ('FP1', 'FP2') JOIN races r ON r.id = s.race_id
         WHERE r.season_year BETWEEN :a AND :b GROUP BY 1"""),
+    ("  practice laps with tyre life", """
+        SELECT r.season_year, COUNT(l.tyre_life_laps), COUNT(*) FROM laps l
+        JOIN sessions s ON s.id = l.session_id AND s.session_type IN ('FP1', 'FP2') JOIN races r ON r.id = s.race_id
+        WHERE r.season_year BETWEEN :a AND :b GROUP BY 1"""),
+    ("  Pirelli compound nominations (C-numbers)", f"""
+        SELECT x.season_year, COUNT(DISTINCT n.race_id), COUNT(DISTINCT x.id) FROM ({RACED}) x
+        LEFT JOIN race_compound_nominations n ON n.race_id = x.id GROUP BY 1"""),
     ("  sprint weekends with sprint laps", f"""
         SELECT x.season_year, COUNT(DISTINCT s.race_id) FILTER (WHERE EXISTS (
                    SELECT 1 FROM laps l WHERE l.session_id = s.id)),

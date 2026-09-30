@@ -11,7 +11,10 @@ Methods (history strictly before the race date):
   E  track-adjusted   : stop count, sequence and stop laps = the era's, pulled toward this
                         track's record by how much of it there is (predict_track_adjusted)
   F  last race here   : what most cars did the last time this track was raced
-  H  era mode + track timing : B's sequence, stop laps timed like C (track + grid band first)
+  H  era mode + track timing : B's sequence, stop laps timed like C. REJECTED 2026-09-30:
+     first-stop error 8.64 vs 8.34 laps (worse) in 2022-25
+  I  practice wear    : stop count voted by the 7 earlier races with the closest practice
+                        long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
      itself -- the best any single-strategy-for-every-car prediction could score
 B is production (strategy_service_v7 before the start tyre is known); others are compared to it.
@@ -45,6 +48,7 @@ from race_strategy_timing_v1 import (
     load_car_strategies,
     predict_era_mode,
     predict_era_mode_track_timing,
+    predict_from_wear,
     predict_last_race_at_track,
     predict_strategy,
     predict_track_adjusted,
@@ -76,6 +80,26 @@ def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int) -> 
     return predict_era_mode(history, regulation_era=era, total_laps=total_laps).strategy
 
 
+WEAR: dict[int, float | None] = {}     # last run's practice wear per race (for the report)
+LAST_CARS: list[CarStrategy] = []
+
+
+def wear_report(cars: Sequence[CarStrategy], start_year: int, end_year: int) -> None:
+    """Does practice wear go with the race's stop count at all? (all races with both)"""
+    from race_strategy_timing_v1 import race_modes
+
+    modes = race_modes(cars)
+    pairs = [(WEAR[r], stops) for r, (_, when, stops) in modes.items()
+             if WEAR.get(r) is not None and start_year <= when.year <= end_year]
+    print(f"\npractice wear measured for {sum(w is not None for w in WEAR.values())} of {len(WEAR)} races")
+    if len(pairs) >= 5:
+        by_stops = defaultdict(list)
+        for w, n in pairs:
+            by_stops[n].append(w)
+        print("  median practice wear by the race's most common stop count: " + ", ".join(
+            f"{n} stop(s): {sorted(ws)[len(ws) // 2] * 100:+.3f}%/lap (n={len(ws)})" for n, ws in sorted(by_stops.items())))
+
+
 def hindsight_mode(race_cars: Sequence[CarStrategy], total_laps: int) -> Strategy | None:
     """The race's own most common legal dry strategy (median stop laps) -- an upper bound for
     methods that give every car the same strategy, never a prediction."""
@@ -101,6 +125,11 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         if start_year <= c.season_year <= end_year and c.wet == wet:
             targets[(c.race_date, c.race_id)].append(c)
     precedent_cache: dict = {}
+    from race_practice_pace_v1 import load_weekend_wear
+    wear_by_race = {race_id: load_weekend_wear(db, race_id) for race_id in {c.race_id for c in cars}}
+    LAST_CARS[:] = cars
+    WEAR.clear()
+    WEAR.update(wear_by_race)
     scores: list[Score] = []
     for (race_date, race_id), race_cars in sorted(targets.items()):
         history = [c for c in cars if c.race_date < race_date]
@@ -117,6 +146,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         last_here = predict_last_race_at_track(history, track_id=track, regulation_era=era,
                                                total_laps=total_laps).strategy
         ceiling = hindsight_mode(race_cars, total_laps)
+        from_wear = predict_from_wear(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                      regulation_era=era, total_laps=total_laps).strategy
         timed = {}
         for car in race_cars:
             key = (car.grid or 99) <= 10
@@ -132,6 +163,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                                            grid=car.grid, total_laps=total_laps).strategy
             scores.append(score(race_id, "H era mode + track timing", timed[key], car))
             scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
+            scores.append(score(race_id, "I practice wear", from_wear, car))
             scores.append(score(race_id, "C hierarchy", dry_hierarchy[key], car))
             scores.append(score(race_id, "D pre-start (known start tyre)",
                                 predict_strategy(history, track_id=track, regulation_era=era, grid=car.grid,
@@ -197,6 +229,7 @@ def main() -> int:
     for metric, method, value, cmp in summarise(scores):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
+    wear_report(LAST_CARS, args.start_year, args.end_year)
     return 0
 
 

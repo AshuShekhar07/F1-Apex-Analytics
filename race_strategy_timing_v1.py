@@ -292,6 +292,56 @@ def predict_last_race_at_track(history: Sequence[CarStrategy], *, track_id: int,
                               ((strategy, count / len(rows)),) if strategy else ())
 
 
+# Stop count from this weekend's practice tyre wear (research, method I). The hindsight
+# ceiling showed the stop count varies race to race far more than track history explains
+# (race mode 75% vs era mode 40%); practice wear is measured on the weekend itself.
+WEAR_NEIGHBOURS = 7          # earlier races with the closest practice wear vote on the stop count
+MIN_WEAR_RACES = 8           # fewer in this era -> all eras
+
+
+def race_modes(history: Sequence[CarStrategy], min_cars: int = 5) -> dict[int, tuple[str, date, int]]:
+    """race_id -> (era, date, most common stop count among legal dry strategies)."""
+    by_race = defaultdict(list)
+    for h in history:
+        if not h.wet and is_legal_dry(h.sequence):
+            by_race[h.race_id].append(h)
+    return {r: (cars[0].regulation_era, cars[0].race_date,
+                Counter(_stop_count(c) for c in cars).most_common(1)[0][0])
+            for r, cars in by_race.items() if len(cars) >= min_cars}
+
+
+def stops_from_wear(modes: dict[int, tuple[str, date, int]], wear_by_race: dict[int, float | None], *,
+                    wear: float, regulation_era: str, k: int = WEAR_NEIGHBOURS) -> int | None:
+    """Majority stop count of the k earlier races whose practice wear was closest."""
+    known = [(abs(wear_by_race[r] - wear), stops, era) for r, (era, _, stops) in modes.items()
+             if wear_by_race.get(r) is not None]
+    same_era = [x for x in known if x[2] == regulation_era]
+    pool = same_era if len(same_era) >= MIN_WEAR_RACES else known
+    if len(pool) < k:
+        return None
+    votes = Counter(stops for _, stops, _ in sorted(pool)[:k])
+    return max(votes, key=lambda n: (votes[n], -n))
+
+
+def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
+                      regulation_era: str, total_laps: int) -> StrategyPrediction:
+    """Method I: stop count from practice wear, then the era's most common sequence with that
+    many stops and its median stop laps. Without wear or history: era mode (B)."""
+    base = predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps, top_k=1)
+    if wear is None:
+        return base
+    stops = stops_from_wear(race_modes(history), wear_by_race, wear=wear, regulation_era=regulation_era)
+    pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)
+            and _stop_count(h) == stops]
+    if stops is None or not pool:
+        return base
+    sequence = Counter(h.sequence for h in pool).most_common(1)[0][0]
+    same = [h for h in pool if h.sequence == sequence]
+    strategy = build_strategy(sequence, [round(median(h.stop_fractions[i] for h in same) * total_laps)
+                                         for i in range(stops)], total_laps)
+    return StrategyPrediction(strategy, f"practice wear {wear:+.5f}/lap -> {stops} stops", ((strategy, 1.0),))
+
+
 # --- database ------------------------------------------------------------------
 
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
