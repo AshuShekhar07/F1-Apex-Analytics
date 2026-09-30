@@ -8,6 +8,9 @@ sequence_hit         E track-adjusted                  0.209   -0.046 [-0.088, -
 sequence_hit         F last race here                  0.170   -0.086 [-0.138, -0.034]  WORSE
 sequence_hit         G CEILING (hindsight)             0.460   +0.205 [+0.163, +0.250]  BETTER
 sequence_hit         H era mode + track timing         0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.234   -0.021 [-0.068, +0.025]  no clear difference
+sequence_hit         J practice wear + compounds       0.203   -0.053 [-0.094, -0.014]  WORSE
+sequence_hit         K era stops + compounds           0.255   +0.000 [+0.000, +0.000]  no clear difference
 stop_count_hit       A old production                  0.394   -0.009 [-0.029, +0.002]  no clear difference
 stop_count_hit       B era mode (real stints)          0.403   
 stop_count_hit       C hierarchy                       0.428   +0.026 [-0.043, +0.097]  no clear difference
@@ -16,6 +19,9 @@ stop_count_hit       E track-adjusted                  0.448   +0.045 [-0.029, +
 stop_count_hit       F last race here                  0.427   +0.024 [-0.054, +0.106]  no clear difference
 stop_count_hit       G CEILING (hindsight)             0.750   +0.347 [+0.268, +0.428]  BETTER
 stop_count_hit       H era mode + track timing         0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       J practice wear + compounds       0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       K era stops + compounds           0.403   +0.000 [+0.000, +0.000]  no clear difference
 first_stop_error     A old production                  8.359   +0.022 [-0.180, +0.244]  no clear difference
 first_stop_error     B era mode (real stints)          8.336   
 first_stop_error     C hierarchy                       8.660   +0.323 [-0.206, +0.865]  no clear difference
@@ -24,6 +30,9 @@ first_stop_error     E track-adjusted                  8.562   +0.225 [-0.240, +
 first_stop_error     F last race here                  9.420   +1.185 [+0.374, +2.028]  WORSE
 first_stop_error     G CEILING (hindsight)             5.732   -2.628 [-3.477, -1.862]  BETTER
 first_stop_error     H era mode + track timing         8.643   +0.306 [+0.037, +0.591]  WORSE
+first_stop_error     I practice wear                   8.208   -0.129 [-0.560, +0.313]  no clear difference
+first_stop_error     J practice wear + compounds       8.169   -0.167 [-0.530, +0.206]  no clear difference
+first_stop_error     K era stops + compounds           8.336   +0.000 [+0.000, +0.000]  no clear difference
 first_stop_within_3  A old production                  0.263   -0.006 [-0.028, +0.014]  no clear difference
 first_stop_within_3  B era mode (real stints)          0.269   
 first_stop_within_3  C hierarchy                       0.316   +0.048 [+0.005, +0.094]  BETTER
@@ -32,6 +41,12 @@ first_stop_within_3  E track-adjusted                  0.303   +0.034 [-0.011, +
 first_stop_within_3  F last race here                  0.308   +0.033 [-0.025, +0.090]  no clear difference
 first_stop_within_3  G CEILING (hindsight)             0.544   +0.281 [+0.221, +0.340]  BETTER
 first_stop_within_3  H era mode + track timing         0.249   -0.020 [-0.042, -0.001]  WORSE
+first_stop_within_3  I practice wear                   0.293   +0.024 [-0.019, +0.066]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.299   +0.031 [-0.011, +0.072]  no clear difference
+first_stop_within_3  K era stops + compounds           0.269   +0.000 [+0.000, +0.000]  no clear difference
+
+practice wear measured for 132 of 167 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.051%/lap (n=25), 2 stop(s): +0.094%/lap (n=25), 3 stop(s): +0.063%/lap (n=5), 4 stop(s): +0.334%/lap (n=1)
 === STRATEGY PREDICTION BACKTEST (dry races 2026-2026, 229 cars, truth = real stints) ===
 metric               method                           value   vs B (production) [90% CI, races resampled]
 sequence_hit         A old production                  0.225   +0.000 [+0.000, +0.000]  no clear difference
@@ -42,6 +57,9 @@ sequence_hit         E track-adjusted                  0.124   -0.101 [-0.223, +
 sequence_hit         F last race here                  0.201   -0.024 [-0.097, +0.039]  no clear difference
 sequence_hit         G CEILING (hindsight)             0.462   +0.237 [+0.133, +0.347]  BETTER
 sequence_hit         H era mode + track timing         0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.237   +0.012 [-0.047, +0.069]  no clear difference
+sequence_hit         J practice wear + compounds       0.245   +0.020 [-0.047, +0.084]  no clear difference
+sequence_hit         K era stops + compounds           0.225   +0.000 [+0.000, +0.000]  no clear difference
 stop_count_hit       A old production                  0.339   +0.000 [+0.000, +0.000]  no clear difference
 stop_count_hit       B era mode (real stints)          0.339   
 stop_count_hit       C hierarchy                       0.339   +0.000 [+0.000, +0.000]  no clear difference
@@ -50,6 +68,9 @@ stop_count_hit       E track-adjusted                  0.347   +0.008 [-0.187, +
 stop_count_hit       F last race here                  0.414   +0.075 [-0.064, +0.227]  no clear difference
 stop_count_hit       G CEILING (hindsight)             0.695   +0.356 [+0.196, +0.520]  BETTER
 stop_count_hit       H era mode + track timing         0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       J practice wear + compounds       0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       K era stops + compounds           0.339   +0.000 [+0.000, +0.000]  no clear difference
 first_stop_error     A old production                 10.233   +0.089 [-0.222, +0.423]  no clear difference
 first_stop_error     B era mode (real stints)         10.144   
 first_stop_error     C hierarchy                      10.242   +0.098 [-0.144, +0.362]  no clear difference
@@ -58,6 +79,9 @@ first_stop_error     E track-adjusted                 10.041   -0.103 [-1.460, +
 first_stop_error     F last race here                 11.053   +1.314 [-1.036, +3.617]  no clear difference
 first_stop_error     G CEILING (hindsight)             5.646   -4.407 [-6.744, -2.311]  BETTER
 first_stop_error     H era mode + track timing        10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     I practice wear                  10.002   -0.142 [-1.024, +0.607]  no clear difference
+first_stop_error     J practice wear + compounds       9.603   -0.541 [-1.367, +0.009]  no clear difference
+first_stop_error     K era stops + compounds          10.144   +0.000 [+0.000, +0.000]  no clear difference
 first_stop_within_3  A old production                  0.122   +0.005 [-0.022, +0.035]  no clear difference
 first_stop_within_3  B era mode (real stints)          0.117   
 first_stop_within_3  C hierarchy                       0.132   +0.014 [+0.004, +0.028]  BETTER
@@ -66,3 +90,9 @@ first_stop_within_3  E track-adjusted                  0.194   +0.076 [-0.024, +
 first_stop_within_3  F last race here                  0.176   +0.027 [-0.055, +0.130]  no clear difference
 first_stop_within_3  G CEILING (hindsight)             0.642   +0.537 [+0.404, +0.672]  BETTER
 first_stop_within_3  H era mode + track timing         0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  I practice wear                   0.186   +0.069 [-0.009, +0.191]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.217   +0.100 [+0.014, +0.215]  BETTER
+first_stop_within_3  K era stops + compounds           0.117   +0.000 [+0.000, +0.000]  no clear difference
+
+practice wear measured for 144 of 182 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.080%/lap (n=6), 2 stop(s): +0.195%/lap (n=5)
