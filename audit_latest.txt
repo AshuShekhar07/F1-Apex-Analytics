@@ -1,0 +1,203 @@
+DATA AUDIT (share of what could exist; ! = below 90%; * = used by the production forecast)
+                                                       2018   2019   2020   2021   2022   2023   2024   2025   2026
+* qualifying results                                  100%   100%   100%   100%   100%   100%   100%   100%   100% 
+* drivers with a qualifying time                       99%    97%   100%    98%    99%    99%    99%    98%    98% 
+* official starting grid                              100%   100%   100%   100%   100%   100%   100%   100%   100% 
+* race weather (wet/dry known)                        100%   100%   100%   100%   100%   100%   100%   100%   100% 
+* qualifying weather                                  100%   100%   100%   100%   100%   100%   100%   100%   100% 
+* starters with race laps                              95%   100%    99%    99%   100%   100%   100%   100%   100% 
+* race laps with a lap time                            98%    99%    98%    98%    98%    98%    99%    99%    98% 
+  race laps with a tyre compound                      100%   100%   100%   100%   100%   100%   100%   100%   100% 
+  race laps with tyre life (strategy truth)            99%   100%   100%   100%    98%   100%   100%    98%   100% 
+  race laps with a position (lap-1 order)             100%   100%   100%   100%   100%   100%   100%   100%   100% 
+  races with pit stops recorded                         0%!    0%!    0%!    0%!    0%!  100%   100%   100%   100% 
+* weekends with FP2 laps (practice pace)              100%   100%    88%!  100%   100%    73%!   75%!   75%!   67%!
+* weekends with FP1 laps                              100%   100%    94%   100%   100%   100%   100%   100%   100% 
+  practice laps with a compound                       100%   100%   100%   100%   100%   100%   100%   100%   100% 
+  practice laps with tyre life                         85%!    0%!    0%!    0%!    0%!    0%!   45%!    0%!   41%!
+  Pirelli compound nominations (C-numbers)              0%!  100%   100%   100%   100%   100%   100%   100%   100% 
+  sprint weekends with sprint laps                        -      -      -  100%   100%   100%   100%   100%   100% 
+  Safety Car periods loaded                           100%   100%   100%   100%   100%   100%   100%   100%   100% 
+  regulation era set                                  100%   100%   100%   100%   100%   100%   100%   100%   100% 
+
+COUNTS
+                                                       2018   2019   2020   2021   2022   2023   2024   2025   2026
+races raced                                              21     21     17     22     22     22     24     24     15
+sprint weekends                                           0      0      0      3      3      6      6      6      5
+wet races                                                 9      3      4      6      6      5      5      6      2
+wet qualifying sessions                                  10      1      2      4      4      7      6      2      2
+grid penalties (start >= 3 places behind quali)          25     35     18     38     45     20     19     14     12
+retirements (DNF statuses)                               82     57     56     58     73     59     49     51     64
+results with an unknown status                            0      0      0      0      0      0      0      0      0
+stored forecasts                                          0      0      0      0      0      0      0     24     15
+  of them from the qualifying order (no grid yet)         0      0      0      0      0      0      0      2      0
+APEX21 REPORT  2026-09-30
+
+1. LATEST UPDATE (2026)
+  loaders: step 16/16 done in 2s
+  === DATA QUALITY 2026 ===
+    R1  Melbourne              raced     ok
+    R2  Shanghai               raced     ok
+    R3  Suzuka                 raced     ok
+    R4  Miami                  raced     ok
+    R5  Montréal               raced     ok
+    R6  Monaco                 raced     ok
+    R7  Barcelona              raced     ok
+    R8  Spielberg              raced     ok
+    R9  Silverstone            raced     ok
+    R10 Spa-Francorchamps      raced     ok
+    R11 Budapest               raced     ok
+    R12 Zandvoort              raced     ok
+    R13 Monza                  raced     ok
+    R14 Madrid                 raced     ok
+    R15 Baku                   raced     ok
+  
+  === FORECASTS ===
+    R13 Monza: forecast stored (race id 186); view: python show_forecast.py --race 186
+    R14 Madrid: forecast stored (race id 187); view: python show_forecast.py --race 187
+    R15 Baku: forecast stored (race id 188); view: python show_forecast.py --race 188
+
+2. DATA QUALITY 2018-2026 (failures only)
+  2018: ok
+  2019: ok
+  2020: ok
+  2021: ok
+  2022: ok
+  2023: ok
+  2024: ok
+  2025: ok
+  2026: ok
+
+3. 2026 FORECASTS vs RESULTS
+  R1  Melbourne            winner called   podium 2/3  top10 7/10  avg error 4.5
+  R2  Shanghai             winner called   podium 3/3  top10 7/10  avg error 3.7
+  R3  Suzuka               winner called   podium 2/3  top10 7/10  avg error 2.0
+  R4  Miami                winner called   podium 1/3  top10 8/10  avg error 3.7
+  R5  Montréal             winner missed   podium 1/3  top10 6/10  avg error 5.3
+  R6  Monaco               winner called   podium 2/3  top10 6/10  avg error 5.1
+  R7  Barcelona            winner missed   podium 2/3  top10 7/10  avg error 3.1
+  R8  Spielberg            winner called   podium 1/3  top10 10/10  avg error 1.7
+  R9  Silverstone          winner missed   podium 2/3  top10 7/10  avg error 4.4
+  R10 Spa-Francorchamps    winner called   podium 2/3  top10 7/10  avg error 2.7
+  R11 Budapest             winner called   podium 1/3  top10 9/10  avg error 2.5
+  R12 Zandvoort            winner called   podium 3/3  top10 7/10  avg error 2.8
+  R13 Monza                winner missed   podium 1/3  top10 8/10  avg error 3.5
+  R14 Madrid               winner missed   podium 3/3  top10 9/10  avg error 2.2
+  R15 Baku                 winner called   podium 1/3  top10 6/10  avg error 4.9
+
+4. SCOREBOARD
+  metric                                    grid                     blend             blend_formcar              blend_driver              blend_sprint               blend_combo                    stored   better
+  winner_hit                 53.3% [47.2%,59.4%]       55.0% [48.9%,61.1%]       53.9% [47.8%,60.0%]       57.8% [51.7%,63.9%]       55.6% [49.4%,61.7%]       57.8% [51.7%,63.9%]       59.0% [46.2%,71.8%]   higher
+  podium_overlap             68.3% [65.4%,71.3%]       68.9% [65.9%,71.9%]       68.9% [66.1%,71.9%]       69.3% [66.3%,72.2%]       68.7% [65.7%,71.7%]       69.1% [66.3%,72.0%]       68.4% [62.4%,74.4%]   higher
+  mae                        3.490 [3.348,3.625]       3.347 [3.205,3.483]       3.345 [3.202,3.481]       3.341 [3.199,3.476]       3.334 [3.193,3.470]       3.314 [3.174,3.449]       3.404 [3.102,3.703]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.749 [2.631,2.862]       2.741 [2.624,2.853]       2.740 [2.625,2.853]       2.738 [2.621,2.851]       2.716 [2.601,2.827]       2.782 [2.542,3.029]   lower
+  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.4%,2.4%]          1.9% [1.4%,2.4%]          1.9% [1.4%,2.4%]          1.9% [1.4%,2.4%]          1.9% [1.5%,2.4%]          2.9% [1.9%,4.0%]   lower
+  races / drivers                   180 / 3621                180 / 3621                180 / 3621                180 / 3621                180 / 3621                180 / 3621                 39 / 808   
+  candidate blend_combo: better on ['rank_corr', 'mae', 'mae_finishers'], worse on nothing -> PROMOTE
+  candidate blend_driver: better on nothing, worse on nothing -> keep off
+  candidate blend_formcar: better on nothing, worse on nothing -> keep off
+  candidate blend_sprint: better on ['rank_corr', 'mae'], worse on nothing -> PROMOTE
+  WHERE THE ERROR COMES FROM (production blend; each driver in one group)
+    retired (not classified)                               546 drivers   31.7% of all error  avg 7.03 places
+    grid penalty / pit-lane start (>= 3 places back)       173 drivers    5.9% of all error  avg 4.16 places
+    lap 1 changed position by >= 5                         181 drivers    6.5% of all error  avg 4.32 places
+    wet race                                               642 drivers   14.9% of all error  avg 2.81 places
+    everything else                                       2079 drivers   41.0% of all error  avg 2.39 places
+    hindsight: finishers' error if we knew the order after lap 1 = 2.60 places (production before the start: 2.69)
+  NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races)
+    team form (production)                       r=+0.335 [+0.286, +0.386] n= 2601  REAL signal
+    team form from car-pace residuals            r=+0.343 [+0.294, +0.393] n= 2601  REAL signal
+    driver form vs teammate                      r=+0.062 [+0.037, +0.087] n= 2601  REAL signal
+    sprint-race pace vs qualifying pace          r=+0.376 [+0.202, +0.546] n=  329  REAL signal
+    sprint pace: 453 drivers in 24 sprint weekends; beta per season: 2018: 0.00, 2019: 0.00, 2020: 0.00, 2021: 0.00, 2022: 0.17, 2023: 0.32, 2024: 0.32, 2025: 0.38, 2026: 0.40
+  CONFIDENCE LABEL (walk-forward; ranges should contain 80% of drivers)
+    all races                    n= 3281  inside range  81.9%  said 3.47 places  actual 3.32  ok
+    dry qualifying               n= 2216  inside range  82.6%  said 3.33 places  actual 3.13  ok
+    wet qualifying               n=  563  inside range  79.4%  said 3.75 places  actual 3.85  ok
+    rain forecast for the race   n=  502  inside range  81.5%  said 3.78 places  actual 3.56  ok
+    (rain forecast rows use the actual race weather as a perfect forecast)
+  in wet qualifying: 83 of 743 drivers (11.2%) across 37 races
+  CAR PACE RULE: replaced the driver's own lap for 227 of 3621 drivers (6.3%); it should be rare
+  regression gate vs scoreboard_baseline_2018.json: PASS
+=== STRATEGY PREDICTION BACKTEST (dry races 2022-2025, 1248 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.245   -0.010 [-0.030, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.255   
+sequence_hit         C hierarchy                       0.191   -0.064 [-0.109, -0.021]  WORSE
+sequence_hit         D pre-start (known start tyre)    0.287   +0.032 [+0.002, +0.060]  BETTER
+sequence_hit         E track-adjusted                  0.209   -0.046 [-0.088, -0.005]  WORSE
+sequence_hit         F last race here                  0.170   -0.086 [-0.138, -0.034]  WORSE
+sequence_hit         G CEILING (hindsight)             0.460   +0.205 [+0.163, +0.250]  BETTER
+sequence_hit         H era mode + track timing         0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.234   -0.021 [-0.068, +0.025]  no clear difference
+stop_count_hit       A old production                  0.394   -0.009 [-0.029, +0.002]  no clear difference
+stop_count_hit       B era mode (real stints)          0.403   
+stop_count_hit       C hierarchy                       0.428   +0.026 [-0.043, +0.097]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.427   +0.024 [-0.023, +0.074]  no clear difference
+stop_count_hit       E track-adjusted                  0.448   +0.045 [-0.029, +0.122]  no clear difference
+stop_count_hit       F last race here                  0.427   +0.024 [-0.054, +0.106]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.750   +0.347 [+0.268, +0.428]  BETTER
+stop_count_hit       H era mode + track timing         0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.470   +0.068 [+0.000, +0.139]  BETTER
+first_stop_error     A old production                  8.359   +0.022 [-0.180, +0.244]  no clear difference
+first_stop_error     B era mode (real stints)          8.336   
+first_stop_error     C hierarchy                       8.660   +0.323 [-0.206, +0.865]  no clear difference
+first_stop_error     D pre-start (known start tyre)    7.985   -0.360 [-0.907, +0.202]  no clear difference
+first_stop_error     E track-adjusted                  8.562   +0.225 [-0.240, +0.689]  no clear difference
+first_stop_error     F last race here                  9.420   +1.185 [+0.374, +2.028]  WORSE
+first_stop_error     G CEILING (hindsight)             5.732   -2.628 [-3.477, -1.862]  BETTER
+first_stop_error     H era mode + track timing         8.643   +0.306 [+0.037, +0.591]  WORSE
+first_stop_error     I practice wear                   8.208   -0.129 [-0.560, +0.313]  no clear difference
+first_stop_within_3  A old production                  0.263   -0.006 [-0.028, +0.014]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.269   
+first_stop_within_3  C hierarchy                       0.316   +0.048 [+0.005, +0.094]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.313   +0.053 [+0.008, +0.098]  BETTER
+first_stop_within_3  E track-adjusted                  0.303   +0.034 [-0.011, +0.081]  no clear difference
+first_stop_within_3  F last race here                  0.308   +0.033 [-0.025, +0.090]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.544   +0.281 [+0.221, +0.340]  BETTER
+first_stop_within_3  H era mode + track timing         0.249   -0.020 [-0.042, -0.001]  WORSE
+first_stop_within_3  I practice wear                   0.293   +0.024 [-0.019, +0.066]  no clear difference
+
+practice wear measured for 132 of 167 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.051%/lap (n=25), 2 stop(s): +0.094%/lap (n=25), 3 stop(s): +0.063%/lap (n=5), 4 stop(s): +0.334%/lap (n=1)
+=== STRATEGY PREDICTION BACKTEST (dry races 2026-2026, 229 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.225   
+sequence_hit         C hierarchy                       0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         D pre-start (known start tyre)    0.267   +0.042 [+0.013, +0.074]  BETTER
+sequence_hit         E track-adjusted                  0.124   -0.101 [-0.223, +0.009]  no clear difference
+sequence_hit         F last race here                  0.201   -0.024 [-0.097, +0.039]  no clear difference
+sequence_hit         G CEILING (hindsight)             0.462   +0.237 [+0.133, +0.347]  BETTER
+sequence_hit         H era mode + track timing         0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.237   +0.012 [-0.047, +0.069]  no clear difference
+stop_count_hit       A old production                  0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       B era mode (real stints)          0.339   
+stop_count_hit       C hierarchy                       0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.327   -0.012 [-0.058, +0.031]  no clear difference
+stop_count_hit       E track-adjusted                  0.347   +0.008 [-0.187, +0.204]  no clear difference
+stop_count_hit       F last race here                  0.414   +0.075 [-0.064, +0.227]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.695   +0.356 [+0.196, +0.520]  BETTER
+stop_count_hit       H era mode + track timing         0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.447   +0.107 [-0.043, +0.271]  no clear difference
+first_stop_error     A old production                 10.233   +0.089 [-0.222, +0.423]  no clear difference
+first_stop_error     B era mode (real stints)         10.144   
+first_stop_error     C hierarchy                      10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     D pre-start (known start tyre)   10.416   +0.577 [-0.415, +1.562]  no clear difference
+first_stop_error     E track-adjusted                 10.041   -0.103 [-1.460, +1.221]  no clear difference
+first_stop_error     F last race here                 11.053   +1.314 [-1.036, +3.617]  no clear difference
+first_stop_error     G CEILING (hindsight)             5.646   -4.407 [-6.744, -2.311]  BETTER
+first_stop_error     H era mode + track timing        10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     I practice wear                  10.002   -0.142 [-1.024, +0.607]  no clear difference
+first_stop_within_3  A old production                  0.122   +0.005 [-0.022, +0.035]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.117   
+first_stop_within_3  C hierarchy                       0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.160   +0.043 [+0.014, +0.078]  BETTER
+first_stop_within_3  E track-adjusted                  0.194   +0.076 [-0.024, +0.190]  no clear difference
+first_stop_within_3  F last race here                  0.176   +0.027 [-0.055, +0.130]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.642   +0.537 [+0.404, +0.672]  BETTER
+first_stop_within_3  H era mode + track timing         0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  I practice wear                   0.186   +0.069 [-0.009, +0.191]  no clear difference
+
+practice wear measured for 144 of 182 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.080%/lap (n=6), 2 stop(s): +0.195%/lap (n=5)
