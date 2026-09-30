@@ -95,11 +95,57 @@ def test_prediction_backtest_end_to_end(synthetic_db):
     with synthetic_db.connect() as db:
         scores = run(db, start_year=2024, end_year=2024, wet=False)
     methods = {s.method for s in scores}
-    assert methods == {"A production", "B era mode (real stints)", "C hierarchy", "D pre-start (known start tyre)"}
-    assert len([s for s in scores if s.method == "A production"]) == 24     # every classified car
+    assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
+                       "D pre-start (known start tyre)", "E track-adjusted", "F last race here"}
+    assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
     rows = summarise(scores)
     assert {r[0] for r in rows} == {"sequence_hit", "stop_count_hit", "first_stop_error", "first_stop_within_3"}
-    baseline = [r for r in rows if r[1] == "A production"]
+    baseline = [r for r in rows if r[1] == "B era mode (real stints)"]
     assert len(baseline) == 4 and all(r[3] is None for r in baseline)
+
+
+def _hist(race, when, track, era, seqs_stops, laps=50):
+    """seqs_stops: list of (sequence, stop laps) -> one car each."""
+    out = []
+    for seq, stops in seqs_stops:
+        bounds = [0, *stops, laps]
+        out.append(CarStrategy(race, when, when.year, track, era, 5, False, laps,
+                               tuple(Stint(c, bounds[i] + 1, bounds[i + 1]) for i, c in enumerate(seq))))
+    return out
+
+
+def test_track_adjusted_moves_toward_the_track_only_with_evidence():
+    from race_strategy_timing_v1 import predict_track_adjusted
+
+    one = (("MEDIUM", "HARD"), [20])
+    two = (("MEDIUM", "HARD", "HARD"), [15, 32])
+    # era: 60 one-stoppers at other tracks; track 7: 40 two-stoppers stopping at lap 15
+    history = (_hist(1, date(2024, 3, 1), 1, "e", [one] * 30) + _hist(2, date(2024, 4, 1), 2, "e", [one] * 30)
+               + _hist(3, date(2024, 5, 1), 7, "e", [two] * 20) + _hist(4, date(2025, 5, 1), 7, "e", [two] * 20))
+    p = predict_track_adjusted(history, track_id=7, regulation_era="e", total_laps=50)
+    assert p.strategy.sequence == ("MEDIUM", "HARD", "HARD")
+    # 40 track cars at lap 15 vs k=20 cars of the era median (lap 15 for this sequence at... only track)
+    assert p.strategy.stop_laps[0] == 15
+    # a new track: pure era answer
+    new = predict_track_adjusted(history, track_id=99, regulation_era="e", total_laps=50)
+    assert new.strategy.sequence == ("MEDIUM", "HARD") and new.strategy.stop_laps == (20,)
+    # a single car at the track is not enough to overturn 60 era cars
+    few = predict_track_adjusted(history[:60] + _hist(5, date(2024, 6, 1), 8, "e", [two]),
+                                 track_id=8, regulation_era="e", total_laps=50)
+    assert few.strategy.sequence == ("MEDIUM", "HARD")
+    # timing: one-stop track evidence at lap 30 pulls the era's lap 20 toward it
+    late = predict_track_adjusted(history[:60] + _hist(6, date(2024, 7, 1), 9, "e", [(("MEDIUM", "HARD"), [30])] * 20),
+                                  track_id=9, regulation_era="e", total_laps=50)
+    assert late.strategy.stop_laps == (25,)
+
+
+def test_last_race_at_track_and_fallback():
+    from race_strategy_timing_v1 import predict_last_race_at_track
+
+    old = _hist(1, date(2023, 5, 1), 7, "e", [(("MEDIUM", "HARD"), [20])] * 10)
+    recent = _hist(2, date(2024, 5, 1), 7, "e", [(("HARD", "MEDIUM"), [30])] * 6 + [(("SOFT", "HARD"), [10])] * 4)
+    p = predict_last_race_at_track(old + recent, track_id=7, regulation_era="e", total_laps=50)
+    assert p.strategy.sequence == ("HARD", "MEDIUM") and p.strategy.stop_laps == (30,)
+    assert predict_last_race_at_track(old, track_id=99, regulation_era="e", total_laps=50).strategy.sequence == ("MEDIUM", "HARD")

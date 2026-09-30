@@ -4,10 +4,14 @@ Every car that covered >= 90% of each target race is scored against its REAL
 stints (rebuilt from pit/tyre-life lap data, so same-compound stops count).
 
 Methods (history strictly before the race date):
-  A  production today : era's most common strategy from race_stints (compound-change stints)
+  A  old production  : era's most common strategy from race_stints (compound-change stints)
   B  era mode, real   : era's most common strategy from real stints
   C  hierarchy        : track + grid band -> track -> era + band -> era (race_strategy_timing_v1)
   D  pre-start        : C, filtered to strategies that started on the car's declared compound
+  E  track-adjusted   : stop count, sequence and stop laps = the era's, pulled toward this
+                        track's record by how much of it there is (predict_track_adjusted)
+  F  last race here   : what most cars did the last time this track was raced
+B is production (strategy_service_v7 before the start tyre is known); others are compared to it.
 
 Dry races by default; --wet scores wet races and adds W (wet-race precedent) vs the dry methods.
 
@@ -33,7 +37,14 @@ from sqlalchemy import create_engine
 from race_strategy_backtest_v2 import race_clustered_ci
 from race_strategy_precedent_v1 import historical_strategy_options, load_precedents
 from race_strategy_simulator_v1 import Strategy
-from race_strategy_timing_v1 import CarStrategy, load_car_strategies, predict_era_mode, predict_strategy
+from race_strategy_timing_v1 import (
+    CarStrategy,
+    load_car_strategies,
+    predict_era_mode,
+    predict_last_race_at_track,
+    predict_strategy,
+    predict_track_adjusted,
+)
 
 
 @dataclass(frozen=True)
@@ -78,13 +89,20 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             precedent_cache[race_date] = options[0][0] if options else None
         production = precedent_cache[race_date]
         dry_hierarchy = {}
+        era_mode = era_mode_real(history, era, total_laps)
+        track_adjusted = predict_track_adjusted(history, track_id=track, regulation_era=era,
+                                                total_laps=total_laps).strategy
+        last_here = predict_last_race_at_track(history, track_id=track, regulation_era=era,
+                                               total_laps=total_laps).strategy
         for car in race_cars:
             key = (car.grid or 99) <= 10
             if key not in dry_hierarchy:
                 dry_hierarchy[key] = predict_strategy(history, track_id=track, regulation_era=era,
                                                       grid=car.grid, total_laps=total_laps).strategy
-            scores.append(score(race_id, "A production", production, car))
-            scores.append(score(race_id, "B era mode (real stints)", era_mode_real(history, era, total_laps), car))
+            scores.append(score(race_id, "A old production", production, car))
+            scores.append(score(race_id, "B era mode (real stints)", era_mode, car))
+            scores.append(score(race_id, "E track-adjusted", track_adjusted, car))
+            scores.append(score(race_id, "F last race here", last_here, car))
             scores.append(score(race_id, "C hierarchy", dry_hierarchy[key], car))
             scores.append(score(race_id, "D pre-start (known start tyre)",
                                 predict_strategy(history, track_id=track, regulation_era=era, grid=car.grid,
@@ -97,7 +115,10 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     return scores
 
 
-def summarise(scores: Sequence[Score], baseline: str = "A production") -> list[tuple]:
+PRODUCTION = "B era mode (real stints)"
+
+
+def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple]:
     methods = sorted({s.method for s in scores})
     by_method = {m: [s for s in scores if s.method == m] for m in methods}
     rows = []
@@ -140,10 +161,10 @@ def main() -> int:
     if not scores:
         print("No races scored.")
         return 1
-    n_cars = len([s for s in scores if s.method == "A production"])
+    n_cars = len([s for s in scores if s.method == PRODUCTION])
     print(f"\n=== STRATEGY PREDICTION BACKTEST ({'wet' if args.wet else 'dry'} races "
           f"{args.start_year}-{args.end_year}, {n_cars} cars, truth = real stints) ===")
-    print("metric               method                           value   vs A production [90% CI, races resampled]")
+    print("metric               method                           value   vs B (production) [90% CI, races resampled]")
     for metric, method, value, cmp in summarise(scores):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")

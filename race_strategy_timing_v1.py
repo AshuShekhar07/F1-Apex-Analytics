@@ -204,6 +204,76 @@ def predict_era_mode(history: Sequence[CarStrategy], *, regulation_era: str, tot
     return StrategyPrediction(alternatives[0][0] if alternatives else None, f"era(n={len(pool)})", tuple(alternatives))
 
 
+# Track-adjusted prediction (research): the era's answer, moved toward what teams did at
+# THIS track in proportion to how much track evidence there is. Constants are set a priori
+# (one race's worth of cars), not tuned on the races scored.
+TRACK_SHRINK_CARS = 20       # track evidence weighed against 20 cars' worth of the era answer
+EARLIER_ERA_WEIGHT = 0.5     # a car at this track in an earlier era counts half
+
+
+def _stop_count(h: CarStrategy) -> int:
+    return len(h.stints) - 1
+
+
+def predict_track_adjusted(history: Sequence[CarStrategy], *, track_id: int, regulation_era: str,
+                           total_laps: int, k: float = TRACK_SHRINK_CARS) -> StrategyPrediction:
+    """Method E: stop count, then sequence, then stop laps -- each the era's value pulled
+    toward this track's record: (track weighted count + k * era share) / (track weight + k)."""
+    legal = [h for h in history if not h.wet and is_legal_dry(h.sequence)]
+    era = [h for h in legal if h.regulation_era == regulation_era]
+    if not era:
+        return StrategyPrediction(None, "none", ())
+    track = [(h, 1.0 if h.regulation_era == regulation_era else EARLIER_ERA_WEIGHT)
+             for h in legal if h.track_id == track_id]
+    track_weight = sum(w for _, w in track)
+
+    def shrunk(key, era_rows, track_rows):
+        era_counts = Counter(key(h) for h in era_rows)
+        track_counts = defaultdict(float)
+        for h, w in track_rows:
+            track_counts[key(h)] += w
+        weight = sum(track_counts.values())
+        options = set(era_counts) | set(track_counts)
+        return {o: (track_counts[o] + k * era_counts[o] / len(era_rows)) / (weight + k) for o in options}
+
+    stop_probs = shrunk(_stop_count, era, track)
+    stops = max(stop_probs, key=lambda n: (stop_probs[n], -n))
+    era_n = [h for h in era if _stop_count(h) == stops] or era
+    track_n = [(h, w) for h, w in track if _stop_count(h) == stops]
+    seq_probs = shrunk(lambda h: h.sequence, era_n, track_n)
+    sequence = max(seq_probs, key=lambda q: (seq_probs[q], q))
+    if len(sequence) - 1 != stops:          # the track's only examples had another stop count
+        sequence = Counter(h.sequence for h in era_n).most_common(1)[0][0]
+
+    # stop laps: era median for this sequence, pulled toward the track's cars with the same stop count
+    era_seq = [h for h in era if h.sequence == sequence] or era_n
+    fractions = []
+    for i in range(len(sequence) - 1):
+        era_f = median(h.stop_fractions[i] for h in era_seq if len(h.stop_fractions) > i)
+        rows = [(h.stop_fractions[i], w) for h, w in track_n if len(h.stop_fractions) > i]
+        tw = sum(w for _, w in rows)
+        fractions.append((sum(f * w for f, w in rows) + k * era_f) / (tw + k))
+    strategy = build_strategy(sequence, [round(f * total_laps) for f in fractions], total_laps)
+    source = f"track-adjusted(track cars={track_weight:g}, era cars={len(era)}, P({stops} stops)={stop_probs[stops]:.2f})"
+    return StrategyPrediction(strategy, source, ((strategy, seq_probs[sequence]),) if strategy else ())
+
+
+def predict_last_race_at_track(history: Sequence[CarStrategy], *, track_id: int, regulation_era: str,
+                               total_laps: int) -> StrategyPrediction:
+    """Method F: what most cars did the last time this track was raced (dry); era mode if never."""
+    legal = [h for h in history if not h.wet and is_legal_dry(h.sequence) and h.track_id == track_id]
+    if not legal:
+        return predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps)
+    last = max(h.race_date for h in legal)
+    rows = [h for h in legal if h.race_date == last]
+    sequence, count = Counter(h.sequence for h in rows).most_common(1)[0]
+    same = [h for h in rows if h.sequence == sequence]
+    stops = [round(median(h.stop_fractions[i] for h in same) * total_laps) for i in range(len(sequence) - 1)]
+    strategy = build_strategy(sequence, stops, total_laps)
+    return StrategyPrediction(strategy, f"last race here ({last}, {count}/{len(rows)} cars)",
+                              ((strategy, count / len(rows)),) if strategy else ())
+
+
 # --- database ------------------------------------------------------------------
 
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
