@@ -1,43 +1,43 @@
-R1 (race 150): 20/20 positions match the official grid
-R2 (race 151): 19/19 positions match the official grid
-R3 (race 152): 20/20 positions match the official grid
-R4 (race 153): 20/20 positions match the official grid
-R5 (race 154): 20/20 positions match the official grid
-R6 (race 155): 20/20 positions match the official grid
-R7 (race 156): 20/20 positions match the official grid
-R8 (race 157): 20/20 positions match the official grid
-R9 (race 158): 13/19 positions match the official grid  <- differs
-R10 (race 159): 20/20 positions match the official grid
-R11 (race 160): 20/20 positions match the official grid
-R12 (race 161): 20/20 positions match the official grid
-R13 (race 162): 20/20 positions match the official grid
-R14 (race 163): 15/20 positions match the official grid  <- differs
-R15 (race 164): 18/20 positions match the official grid  <- differs
-R16 (race 165): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2025)
-R17 (race 166): 20/20 positions match the official grid
-R18 (race 167): 18/20 positions match the official grid  <- differs
-R19 (race 168): 20/20 positions match the official grid
-R20 (race 169): 20/20 positions match the official grid
-R21 (race 170): 15/20 positions match the official grid  <- differs
-R22 (race 171): 20/20 positions match the official grid
-R23 (race 172): 20/20 positions match the official grid
-R24 (race 173): 20/20 positions match the official grid
+R1 (race 150): OpenF1 20/20 match the official grid, qualifying order 20/20
+R2 (race 151): OpenF1 19/19 match the official grid, qualifying order 19/19  (not on the official grid / pit lane: #12)
+R3 (race 152): OpenF1 20/20 match the official grid, qualifying order 16/20
+R4 (race 153): OpenF1 20/20 match the official grid, qualifying order 16/20
+R5 (race 154): OpenF1 20/20 match the official grid, qualifying order 20/20
+R6 (race 155): OpenF1 20/20 match the official grid, qualifying order 17/20
+R7 (race 156): OpenF1 20/20 match the official grid, qualifying order 0/0
+R8 (race 157): OpenF1 20/20 match the official grid, qualifying order 13/20
+R9 (race 158): OpenF1 13/19 match the official grid, qualifying order 13/19  <- differs: #87 OpenF1 P15 official P14; #27 OpenF1 P16 official P15; #31 OpenF1 P17 official P16; #55 OpenF1 P18 official P17; #43 OpenF1 P19 official P18; #22 OpenF1 P20 official P19  (not on the official grid / pit lane: #18)
+R10 (race 159): OpenF1 20/20 match the official grid, qualifying order 10/20
+R11 (race 160): OpenF1 20/20 match the official grid, qualifying order 20/20
+R12 (race 161): OpenF1 20/20 match the official grid, qualifying order 8/20
+R13 (race 162): OpenF1 20/20 match the official grid, qualifying order 14/20
+R14 (race 163): OpenF1 15/20 match the official grid, qualifying order 15/20  <- differs: #22 OpenF1 P16 official P20; #10 OpenF1 P17 official P16; #31 OpenF1 P18 official P17; #27 OpenF1 P19 official P18; #23 OpenF1 P20 official P19
+R15 (race 164): OpenF1 18/20 match the official grid, qualifying order 18/20  <- differs: #87 OpenF1 P19 official P20; #18 OpenF1 P20 official P19
+R16 (race 165): OpenF1 15/20 match the official grid, qualifying order 9/20  <- differs: #6 OpenF1 P16 official P19; #18 OpenF1 P17 official P16; #43 OpenF1 P18 official P17; #10 OpenF1 P19 official P20; #30 OpenF1 P20 official P18
+R17 (race 166): OpenF1 20/20 match the official grid, qualifying order 20/20
+R18 (race 167): OpenF1 18/20 match the official grid, qualifying order 17/20  <- differs: #10 OpenF1 P18 official P19; #55 OpenF1 P19 official P18
+R19 (race 168): OpenF1 20/20 match the official grid, qualifying order 18/20
+R20 (race 169): OpenF1 20/20 match the official grid, qualifying order 14/20
+R21 (race 170): OpenF1 15/20 match the official grid, qualifying order 15/19  <- differs: #1 OpenF1 P16 official P19; #31 OpenF1 P17 official P20; #43 OpenF1 P18 official P16; #22 OpenF1 P19 official P17; #5 OpenF1 P20 official P18
+R22 (race 171): OpenF1 20/20 match the official grid, qualifying order 18/20
+R23 (race 172): OpenF1 20/20 match the official grid, qualifying order 14/20
+R24 (race 173): OpenF1 20/20 match the official grid, qualifying order 20/20
 
-CHECK 2025: 18/23 races matched the official grid exactly (458 drivers compared, 24 races with an official grid)
-R1 (race 174): 22/22 positions match the official grid
-R2 (race 175): 22/22 positions match the official grid
-R3 (race 176): 22/22 positions match the official grid
-R4 (race 177): 22/22 positions match the official grid
-R5 (race 178): 22/22 positions match the official grid
-R6 (race 179): 22/22 positions match the official grid
-R7 (race 180): 22/22 positions match the official grid
-R8 (race 181): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R9 (race 182): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R10 (race 183): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R11 (race 184): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R12 (race 185): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R13 (race 186): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R14 (race 187): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
-R15 (race 188): OpenF1 unavailable (HTTPError: 429 Client Error: Too Many Requests for url: https://api.openf1.org/v1/sessions?year=2026)
+CHECK 2025: 18/24 races matched the official grid exactly (478 drivers compared, 24 races with an official grid); correct slots: OpenF1 453, qualifying order 364
+R1 (race 174): OpenF1 22/22 match the official grid, qualifying order 19/19
+R2 (race 175): OpenF1 22/22 match the official grid, qualifying order 17/22
+R3 (race 176): OpenF1 22/22 match the official grid, qualifying order 22/22
+R4 (race 177): OpenF1 22/22 match the official grid, qualifying order 22/22
+R5 (race 178): OpenF1 22/22 match the official grid, qualifying order 20/22
+R6 (race 179): OpenF1 22/22 match the official grid, qualifying order 22/22
+R7 (race 180): OpenF1 22/22 match the official grid, qualifying order 22/22
+R8 (race 181): OpenF1 22/22 match the official grid, qualifying order 22/22
+R9 (race 182): OpenF1 22/22 match the official grid, qualifying order 16/22
+R10 (race 183): OpenF1 22/22 match the official grid, qualifying order 2/22
+R11 (race 184): OpenF1 22/22 match the official grid, qualifying order 16/22
+R12 (race 185): OpenF1 22/22 match the official grid, qualifying order 22/22
+R13 (race 186): OpenF1 22/22 match the official grid, qualifying order 3/22
+R14 (race 187): OpenF1 22/22 match the official grid, qualifying order 16/20
+R15 (race 188): OpenF1 22/22 match the official grid, qualifying order 13/22
 
-CHECK 2026: 7/7 races matched the official grid exactly (154 drivers compared, 15 races with an official grid)
+CHECK 2026: 15/15 races matched the official grid exactly (330 drivers compared, 15 races with an official grid); correct slots: OpenF1 330, qualifying order 254
