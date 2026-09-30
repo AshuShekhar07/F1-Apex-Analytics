@@ -348,6 +348,36 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
                                         f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
+def predict_from_wear_timed(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
+                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS) -> StrategyPrediction:
+    """Method M: method I's stop count and sequence; stop laps = median stop fractions of cars
+    with that many stops in the k earlier races (same era) whose practice wear was closest.
+    High wear -> earlier stops. Fewer than MIN_SEQUENCE_EXAMPLES such cars: I's timing."""
+    base = predict_from_wear(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
+                             total_laps=total_laps)
+    if wear is None or base.strategy is None:
+        return base
+    stops = len(base.strategy.sequence) - 1
+    if stops == 0:
+        return base
+    modes = race_modes(history)
+    near = sorted((abs(wear_by_race[r] - wear), r) for r, (era, _, _) in modes.items()
+                  if era == regulation_era and wear_by_race.get(r) is not None)[:k]
+    races = {r for _, r in near}
+    cars = [h for h in history if h.race_id in races and not h.wet and is_legal_dry(h.sequence)
+            and _stop_count(h) == stops]
+    if len(cars) < MIN_SEQUENCE_EXAMPLES:
+        return base
+    strategy = build_strategy(base.strategy.sequence,
+                              [round(median(h.stop_fractions[i] for h in cars) * total_laps) for i in range(stops)],
+                              total_laps)
+    if strategy is None:
+        return base
+    return StrategyPrediction(strategy, f"{base.source}; stop laps from {len(cars)} cars in the {len(races)} "
+                                        f"races with the closest practice wear",
+                              ((strategy, base.alternatives[0][1]), *base.alternatives[1:]))
+
+
 # Stop count from Pirelli's compound choice (research, method L). The same C-number set at
 # earlier races (e.g. C1/C2/C3: the hardest set, brought to tyre-punishing tracks) votes on the
 # stop count. C-numbers are only comparable within one numbering (pirelli_compounds_v1:

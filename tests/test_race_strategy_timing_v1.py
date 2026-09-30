@@ -99,7 +99,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
     assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
                        "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
-                       "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds"}
+                       "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
+                       "M wear + wear timing"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -241,3 +242,19 @@ def test_stop_count_from_the_same_pirelli_compound_set():
     other = allocation_key(2024, {"HARD": 2, "MEDIUM": 3, "SOFT": 4})
     assert predict_from_allocation(history, allocation=other, allocations=allocations, wear=None, wear_by_race={},
                                    regulation_era="e", total_laps=50).strategy.sequence == ("MEDIUM", "HARD")
+
+
+def test_stop_laps_follow_the_races_with_similar_practice_wear():
+    from race_strategy_timing_v1 import predict_from_wear, predict_from_wear_timed
+
+    history, wear = [], {}
+    for race in range(1, 11):                        # all 1-stop; high wear races stop early
+        high = race > 5
+        history += _hist(race, date(2024, race, 1), race, "e", [(("MEDIUM", "HARD"), [12 if high else 30])] * 6)
+        wear[race] = 0.004 if high else 0.001
+    era_timing = predict_from_wear(history, wear=0.0041, wear_by_race=wear, regulation_era="e", total_laps=50)
+    timed = predict_from_wear_timed(history, wear=0.0041, wear_by_race=wear, regulation_era="e", total_laps=50, k=5)
+    assert timed.strategy.sequence == era_timing.strategy.sequence == ("MEDIUM", "HARD")
+    assert timed.strategy.stop_laps == (12,) and era_timing.strategy.stop_laps != (12,)
+    low = predict_from_wear_timed(history, wear=0.0009, wear_by_race=wear, regulation_era="e", total_laps=50, k=5)
+    assert low.strategy.stop_laps == (30,)

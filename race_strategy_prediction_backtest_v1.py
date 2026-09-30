@@ -24,6 +24,9 @@ Methods (history strictly before the race date):
      L REJECTED 2026-09-30: stop count 0.446 vs I's 0.470 in 2022-25 (no gain over B); 2026
      sequence 0.087 vs 0.225 (WORSE) -- the same C-numbers on the 2026 cars do not behave as
      on 2023-25 cars, and within one era there are too few same-set races to vote.
+  M  wear + wear timing : I's stop count and sequence; stop laps from the cars with that many
+                        stops in the 7 earlier races with the closest practice wear (compare to I,
+                        which is production)
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -63,6 +66,7 @@ from race_strategy_timing_v1 import (
     predict_from_allocation,
     predict_from_practice,
     predict_from_wear,
+    predict_from_wear_timed,
     predict_last_race_at_track,
     predict_strategy,
     predict_track_adjusted,
@@ -173,6 +177,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         from_allocation = predict_from_allocation(
             history, allocation=allocations.get(race_id), allocations=allocations, wear=wear_by_race.get(race_id),
             wear_by_race=wear_by_race, regulation_era=era, total_laps=total_laps).strategy
+        wear_timed = predict_from_wear_timed(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                             regulation_era=era, total_laps=total_laps).strategy
         from_wear = predict_from_wear(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                       regulation_era=era, total_laps=total_laps).strategy
         timed = {}
@@ -191,6 +197,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             scores.append(score(race_id, "H era mode + track timing", timed[key], car))
             scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
             scores.append(score(race_id, "I practice wear", from_wear, car))
+            scores.append(score(race_id, "M wear + wear timing", wear_timed, car))
             scores.append(score(race_id, "J practice wear + compounds", with_compounds, car))
             scores.append(score(race_id, "L Pirelli compounds", from_allocation, car))
             scores.append(score(race_id, "K era stops + compounds", era_compounds, car))
