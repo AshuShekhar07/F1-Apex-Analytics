@@ -56,15 +56,15 @@ APEX21 REPORT  2026-09-30
   metric                                    grid                     blend                    stored   better
   winner_hit                 53.3% [47.2%,59.4%]       55.0% [48.9%,61.1%]       59.0% [46.2%,71.8%]   higher
   podium_overlap             68.3% [65.4%,71.3%]       68.9% [65.9%,71.9%]       68.4% [62.4%,74.4%]   higher
-  mae                        3.490 [3.348,3.625]       3.347 [3.205,3.483]       3.404 [3.099,3.707]   lower
-  mae_finishers              2.916 [2.792,3.036]       2.749 [2.631,2.862]       2.782 [2.534,3.032]   lower
+  mae                        3.490 [3.348,3.625]       3.347 [3.205,3.483]       3.404 [3.102,3.703]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.749 [2.631,2.862]       2.782 [2.542,3.029]   lower
   bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.4%,2.4%]          2.9% [1.9%,4.0%]   lower
   races / drivers                   180 / 3621                180 / 3621                 39 / 808   
   CONFIDENCE LABEL (walk-forward; ranges should contain 80% of drivers)
-    all races                    n= 3281  inside range  84.5%  said 3.47 places  actual 3.32  ok
-    dry qualifying               n= 2216  inside range  85.6%  said 3.33 places  actual 3.13  OFF
-    wet qualifying               n=  563  inside range  81.2%  said 3.75 places  actual 3.85  ok
-    rain forecast for the race   n=  502  inside range  83.3%  said 3.78 places  actual 3.56  ok
+    all races                    n= 3281  inside range  81.9%  said 3.47 places  actual 3.32  ok
+    dry qualifying               n= 2216  inside range  82.6%  said 3.33 places  actual 3.13  ok
+    wet qualifying               n=  563  inside range  79.4%  said 3.75 places  actual 3.85  ok
+    rain forecast for the race   n=  502  inside range  81.5%  said 3.78 places  actual 3.56  ok
     (rain forecast rows use the actual race weather as a perfect forecast)
   in wet qualifying: 83 of 743 drivers (11.2%) across 37 races
   CAR PACE RULE: replaced the driver's own lap for 227 of 3621 drivers (6.3%); it should be rare
