@@ -71,6 +71,7 @@ APEX21 REPORT  2026-09-30
     blend_recovery weight for out-of-position drivers (own / production) per season: 2018: -/0.5, 2019: 1.0/0.5, 2020: 0.9/0.5, 2021: 0.9/0.5, 2022: 0.7/0.5, 2023: 0.8/0.5, 2024: 0.8/0.5, 2025: 0.8/0.5, 2026: 0.8/0.4
     out-of-position finishers, blend: 4.04 places (n=173)
     out-of-position finishers, blend_recovery: 3.54 places (n=173)
+    blend_recovery vs production on out-of-position finishers: -0.45 places [-0.79, -0.12] over 94 races  BETTER
   NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races)
     team form (production)                       r=+0.335 [+0.286, +0.386] n= 2601  REAL signal
     team form from car-pace residuals            r=+0.343 [+0.294, +0.393] n= 2601  REAL signal
