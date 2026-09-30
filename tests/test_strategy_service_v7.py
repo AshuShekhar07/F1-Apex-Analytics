@@ -81,7 +81,8 @@ def test_endpoint(synthetic_db, monkeypatch):
         client = TestClient(app)
         body = client.get("/strategy/predict?track_id=1&race_date=2025-04-01&grid=2").json()
         assert body["model_version"] == "strategy_v7" and body["stage"] == "post_qualifying"
-        assert body["validation"]["dry"]["era_mode"]["sequence_accuracy"] == 0.307
+        assert body["validation"]["dry"]["era_mode"]["sequence_accuracy"] == 0.255
+        assert body["validation"]["dry"]["practice_wear"]["stop_count_accuracy"] == 0.470
         assert body["primary_strategy"]["stints"][0] == {"compound": "MEDIUM", "start_lap": 1, "end_lap": 14}
         assert client.get("/strategy/predict?track_id=99&race_date=2025-04-01").status_code == 404
         assert client.get("/strategy/predict?track_id=1&race_date=2025-04-01&start_compound=WET").status_code == 422

@@ -122,3 +122,20 @@ def test_data_audit_sql_runs_on_the_real_schema(synthetic_db):
     assert shares["* qualifying results"][2024] == (2, 2)
     assert shares["* starters with race laps"][2024] == (24, 24)
     assert shares["* weekends with FP2 laps (practice pace)"][2024] == (0, 2)
+
+
+def test_forecast_form_histories_match_the_scoreboard_rows(synthetic_db):
+    """The live forecast rebuilds car-pace team form and driver form from observations; it
+    must give exactly what build_rows (scored by the scoreboard) gives."""
+    from race_form_signal_v1 import DRIVER_FORM_RACES, DRIVER_SHRINK, car_form_histories, team_form
+
+    with synthetic_db.connect() as db:
+        obs = load_observations(db, start_year=2018, end_year=2024)
+        rows = build_rows(db, obs, start_year=2024, end_year=2024)
+        when = {r: d for r, d in db.execute(text("SELECT id, race_date FROM races"))}
+        for r in rows:
+            teams, drivers = car_form_histories(db, [o for o in obs if o.race_date < when[r.race_id]],
+                                                era="e", before=when[r.race_id])
+            assert team_form(teams.get(r.team_id, []), r.team_id, when[r.race_id]) == pytest.approx(r.form_car)
+            assert team_form(drivers.get(r.driver_id, []), r.driver_id, when[r.race_id], races=DRIVER_FORM_RACES,
+                             shrink=DRIVER_SHRINK) == pytest.approx(r.driver_form)

@@ -246,6 +246,12 @@ def render(data: dict, style: Style, what_if: list[dict] | None = None, scenario
             lines.append(f"  {stint_bar(o['sequence'], o.get('stop_laps', []), total_laps, style)}  "
                          f"{' → '.join(o['sequence']):<24} stop lap {stops:<8} {pct(float(o.get('weight', 0)) / total_weight):>4}")
     extras = inputs.get("strategy_extras", {})
+    predicted = extras.get("predicted")
+    if predicted and total_laps:
+        stops = ", ".join(map(str, predicted.get("stop_laps", [])))
+        lines.append(style.bold("  Predicted for this race: ")
+                     + f"{' → '.join(predicted['sequence'])}, stop lap {stops}"
+                     + style.dim(f"  ({predicted.get('source', '')})"))
     weather = extras.get("weather")
     if weather:
         lines.append(style.dim(f"  weather: rain expected {weather.get('rain_expected')}, "

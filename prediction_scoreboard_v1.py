@@ -12,9 +12,7 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend:
-    blend_wetq  production, but the car-pace rule is skipped when qualifying was wet
-                (teammate gaps in the rain reflect conditions and timing, not the car)
+  candidates  experiments, each scored against the production blend (none open right now)
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -23,7 +21,11 @@ Models (per race, only data strictly before the race date):
             uses the actual race weather, so it is the most a perfect rain forecast could gain
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
             practice correction (2026-09-28): 10+ place misses 2.1% -> 1.8%, worse nowhere
-  rejected: blend_wetq (2026-09-30): better on nothing, worse on nothing
+            blend_combo (2026-09-30): team form against car pace + driver form vs teammate +
+              sprint-race pace correction; average error 3.347 -> 3.314, finishers 2.749 ->
+              2.716, worse nowhere (alone: sprint passed, car form and driver form did not)
+  rejected: blend_wetq (2026-09-30): production, but the car-pace rule skipped in wet
+              qualifying; better on nothing, worse on nothing
             blend_track, blend_wetqw (2026-09-30): no clear difference anywhere. Hard-to-pass
               tracks are NOT a weak spot (finishers' error 2.73 there vs 2.76 elsewhere); wet
               qualifying / wet races are (3.15 / 3.12 vs ~2.64), but even diag_wetrace, which
@@ -247,38 +249,9 @@ def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
     return transform
 
 
-def _production_then(*steps: str) -> Callable[[Sequence[DriverForm], int], Transform]:
-    """Candidate factory: the production transform, then the named research steps."""
-    def factory(history: Sequence[DriverForm], season: int) -> Transform:
-        from race_forecast_v1 import production_transform
-        from race_form_signal_v1 import sprint_beta, with_car_form, with_driver_form, with_sprint_correction
-
-        production = production_transform(history)
-        paced_history = production(history) if "sprint" in steps else []
-        beta_s = sprint_beta(paced_history) if "sprint" in steps else 0.0
-        if "sprint" in steps:
-            SPRINT_BETAS[season] = beta_s
-
-        def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
-            out = production(rows)
-            if "car_form" in steps:
-                out = with_car_form(out)
-            if "driver_form" in steps:
-                out = with_driver_form(out)
-            if "sprint" in steps and beta_s > 0:
-                out = with_sprint_correction(out, beta_s)
-            return out
-        return transform
-    return factory
-
-
 SPRINT_BETAS: dict[int, float] = {}
 
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
-    "blend_formcar": _production_then("car_form"),
-    "blend_driver": _production_then("driver_form"),
-    "blend_sprint": _production_then("sprint"),
-    "blend_combo": _production_then("car_form", "driver_form", "sprint"),
     "blend_wetq": _wet_quali_guard,
 }
 # shown only with --experiments (kept so the verdicts can be re-checked on new data)
@@ -402,6 +375,7 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
         history = [r for r in all_rows if r.season_year < season]
         production = production_transform(history)
         FITTED_BETAS[season] = production.beta
+        SPRINT_BETAS[season] = production.sprint_beta
         variants = {"blend": production,
                     **{name: factory(history, season) for name, factory in CANDIDATES.items()}}
         weights = {name: choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5

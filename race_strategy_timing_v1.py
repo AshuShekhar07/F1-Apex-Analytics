@@ -339,7 +339,13 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
     same = [h for h in pool if h.sequence == sequence]
     strategy = build_strategy(sequence, [round(median(h.stop_fractions[i] for h in same) * total_laps)
                                          for i in range(stops)], total_laps)
-    return StrategyPrediction(strategy, f"practice wear {wear:+.5f}/lap -> {stops} stops", ((strategy, 1.0),))
+    if strategy is None:
+        return base
+    others = tuple((s, w) for s, w in predict_era_mode(history, regulation_era=regulation_era,
+                                                       total_laps=total_laps).alternatives
+                   if s.sequence != sequence)
+    return StrategyPrediction(strategy, f"practice wear {wear * 100:+.3f}%/lap -> {stops} stop(s), "
+                                        f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
 # --- database ------------------------------------------------------------------

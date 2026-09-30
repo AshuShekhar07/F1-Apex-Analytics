@@ -318,6 +318,59 @@ def choose_weight(races: dict[int, list[DriverForm]]) -> float:
 
 # --- database assembly ---------------------------------------------------------
 
+def race_car_gaps(db: Any, race_id: int, teams: dict[int, int], gaps: dict[int, float] | None = None) -> dict[int, float]:
+    """Car-pace qualifying gap for every entry (teams: driver -> team); a driver without a
+    time starts from the back of the valid field, as in build_rows."""
+    gaps = quali_gaps(best_quali_times(db, race_id)) if gaps is None else gaps
+    back_gap = max(gaps.values()) if gaps else 0.03
+    own = {d: gaps.get(d, back_gap) for d in teams}
+    return car_quali_gaps(own, teams, quali_session_times(db, race_id))
+
+
+_ENTRY_CACHE: dict[tuple[str, int], tuple[dict[int, int], dict[int, float]]] = {}
+
+
+def car_form_histories(db: Any, observations: Sequence[PaceObservation], *, era: str,
+                       before: date) -> tuple[dict[int, list], dict[int, list]]:
+    """(team -> history, driver -> history) of residuals against CAR pace for dry races of
+    `era` before `before` -- what build_rows accumulates for form_car and driver_form, for a
+    single forecast. Pace model per race fitted on the era's races before it."""
+    era_obs = sorted((o for o in observations
+                      if o.regulation_era == era and o.race_date is not None and o.race_date < before),
+                     key=lambda o: (o.race_date, o.race_id))
+    by_race = defaultdict(list)
+    for o in era_obs:
+        by_race[(o.race_date, o.race_id)].append(o)
+    teams_hist, drivers_hist = defaultdict(list), defaultdict(list)
+    for (when, race_id), rows in sorted(by_race.items()):
+        try:
+            model = fit_model([o for o in era_obs if o.race_date < when])
+        except ValueError:
+            continue
+        key = (str(db.engine.url), race_id)
+        if key not in _ENTRY_CACHE:
+            teams = {int(d): int(t) for d, t in db.execute(text("""
+                SELECT re.driver_id, re.team_id FROM race_results rr
+                JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+                JOIN race_entries re ON re.id = rr.race_entry_id
+                WHERE s.race_id = :r AND rr.finishing_position IS NOT NULL
+            """), {"r": race_id})}
+            _ENTRY_CACHE[key] = (teams, race_car_gaps(db, race_id, teams))
+        teams, car_gaps = _ENTRY_CACHE[key]
+        by_team = defaultdict(dict)
+        for o in rows:
+            if o.driver_id in car_gaps and o.driver_id in teams:
+                residual = o.race_gap - model.race_gap(car_gaps[o.driver_id])
+                teams_hist[teams[o.driver_id]].append((when, race_id, residual))
+                by_team[teams[o.driver_id]][o.driver_id] = residual
+        for residuals in by_team.values():
+            if len(residuals) == 2:
+                centre = mean(residuals.values())
+                for driver, value in residuals.items():
+                    drivers_hist[driver].append((when, race_id, value - centre))
+    return teams_hist, drivers_hist
+
+
 def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
                models: dict | None = None, include_wet: bool = False,
                with_practice: bool = False, with_sprint: bool = False) -> list[DriverForm]:
@@ -360,9 +413,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         gaps = quali_gaps(best_quali_times(db, race["id"]))
         back_grid = len(entries) + 1
         back_gap = max(gaps.values()) if gaps else 0.03
-        own_gaps = {int(e["driver_id"]): gaps.get(int(e["driver_id"]), back_gap) for e in entries}
-        car_gaps = car_quali_gaps(own_gaps, {int(e["driver_id"]): int(e["team_id"]) for e in entries},
-                                  quali_session_times(db, race["id"]))
+        car_gaps = race_car_gaps(db, race["id"], {int(e["driver_id"]): int(e["team_id"]) for e in entries}, gaps)
         practice = {}
         quali_wet = bool(db.execute(text(f"""
             SELECT {SESSION_WET_SQL} FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id

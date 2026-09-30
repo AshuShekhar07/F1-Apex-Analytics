@@ -3,8 +3,12 @@
 Built on race_strategy_timing_v1 (real stints, so same-compound stops count).
 Methods chosen by race_strategy_prediction_backtest_v1 (walk-forward, see VALIDATION):
 
-  before the start tyre is known   the era's most common strategy (method B). The
-                                   track + grid-band hierarchy (C) was WORSE at the
+  before the start tyre is known   stop count from this weekend's practice tyre wear
+                                   (method I: the 7 earlier races with the closest
+                                   long-run wear vote), then the era's most common
+                                   sequence with that many stops. Before practice has run
+                                   (no wear yet): the era's most common strategy (B).
+                                   The track + grid-band hierarchy (C) was WORSE at the
                                    full sequence, so grid does not change the answer.
   stage "pre_start"                start compound given: history filtered to strategies
                                    that started on it (method D; no worse in dry races,
@@ -33,6 +37,7 @@ from race_strategy_timing_v1 import (
     StrategyPrediction,
     load_car_strategies,
     predict_era_mode,
+    predict_from_wear,
     predict_strategy,
 )
 from race_strategy_simulator_v1 import Strategy
@@ -43,16 +48,21 @@ FORECAST_WINDOW_DAYS = 16
 
 VALIDATION = {
     "backtest": "race_strategy_prediction_backtest_v1, walk-forward, truth = real stints",
-    "dry": {"races": "2024-2025, 37 races, 670 cars",
-            "era_mode": {"sequence_accuracy": 0.307, "stop_count_accuracy": 0.472,
-                         "first_stop_mean_abs_error_laps": 9.37, "first_stop_within_3_laps": 0.206},
-            "pre_start": {"sequence_accuracy": 0.320, "stop_count_accuracy": 0.485,
-                          "first_stop_mean_abs_error_laps": 8.88, "first_stop_within_3_laps": 0.260}},
+    "dry": {"races": "2022-2025, 1248 cars",
+            "practice_wear": {"sequence_accuracy": 0.234, "stop_count_accuracy": 0.470,
+                              "first_stop_mean_abs_error_laps": 8.21, "first_stop_within_3_laps": 0.293},
+            "era_mode": {"sequence_accuracy": 0.255, "stop_count_accuracy": 0.403,
+                         "first_stop_mean_abs_error_laps": 8.34, "first_stop_within_3_laps": 0.269},
+            "pre_start": {"sequence_accuracy": 0.287, "stop_count_accuracy": 0.427,
+                          "first_stop_mean_abs_error_laps": 7.99, "first_stop_within_3_laps": 0.313},
+            "ceiling": {"note": "the race's own most common strategy (hindsight): sequence 0.460, "
+                                "stop count 0.750 -- what a perfect one-strategy-for-all forecast scores"}},
     "wet": {"races": "2022-2025, 22 races, 378 cars",
             "note": "no method is reliable in wet races: best sequence accuracy 8.5% (pre-start)"},
 }
 
 _cache: dict[str, Any] = {"loaded_at": 0.0, "rows": []}
+_wear: dict[tuple[str, int], float | None] = {}   # (database, race_id) -> practice long-run wear
 _lock = Lock()
 
 
@@ -71,6 +81,27 @@ def _history(db: Any) -> list[CarStrategy]:
 def clear_cache() -> None:
     with _lock:
         _cache["rows"], _cache["loaded_at"] = [], 0.0
+        _wear.clear()
+
+
+def db_url(db: Any) -> str:
+    """Database URL of a Connection (batch jobs) or a Session (the API)."""
+    return str(db.engine.url if hasattr(db, "engine") else db.get_bind().url)
+
+
+def practice_wear(db: Any, race_ids) -> dict[int, float | None]:
+    """Practice long-run tyre wear per race, measured once per process and database."""
+    from race_practice_pace_v1 import load_weekend_wear
+
+    url = db_url(db)
+    out = {}
+    for race_id in race_ids:
+        if race_id is None:
+            continue
+        if (url, race_id) not in _wear:
+            _wear[(url, race_id)] = load_weekend_wear(db, race_id)
+        out[race_id] = _wear[(url, race_id)]
+    return out
 
 
 def _race_context(db: Any, track_id: int, race_date: date) -> dict:
@@ -136,6 +167,10 @@ def predict(db: Any, track_id: int, race_date: date, *, grid: int | None = None,
         if tyre:
             return predict_strategy(history, track_id=track_id, regulation_era=scope_era, grid=grid,
                                     total_laps=laps, start_compound=tyre)
+        if ctx["race_id"] is not None:
+            wear = practice_wear(db, {ctx["race_id"], *(c.race_id for c in history)})
+            return predict_from_wear(history, wear=wear.get(ctx["race_id"]), wear_by_race=wear,
+                                     regulation_era=scope_era, total_laps=laps)
         return predict_era_mode(history, regulation_era=scope_era, total_laps=laps)
 
     dry = choose(era, start_compound)
