@@ -863,6 +863,17 @@ def main() -> int:
             rows = [s.error for s in penalised if s.model == m]
             if rows:
                 print(f"  out-of-position finishers, {m}: {np.mean(rows):.2f} places (n={len(rows)})")
+        # the group the candidate targets: paired difference, CI resampling whole races
+        diffs = defaultdict(list)
+        base = {(s.race_id, s.driver_id): s.error for s in penalised if s.model == "blend"}
+        for s in penalised:
+            if s.model == "blend_recovery" and (s.race_id, s.driver_id) in base:
+                diffs[s.race_id].append(s.error - base[(s.race_id, s.driver_id)])
+        if diffs:
+            d, lo, hi = race_clustered(diffs)
+            verdict = "BETTER" if hi < 0 else "WORSE" if lo > 0 else "no clear difference"
+            print(f"  blend_recovery vs production on out-of-position finishers: {d:+.2f} places "
+                  f"[{lo:+.2f}, {hi:+.2f}] over {len(diffs)} races  {verdict}")
     signals_report(scored)
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
