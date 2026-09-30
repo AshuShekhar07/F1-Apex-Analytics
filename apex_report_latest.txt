@@ -53,13 +53,14 @@ APEX21 REPORT  2026-09-30
   R15 Baku                 winner called   podium 1/3  top10 6/10  avg error 4.6
 
 4. SCOREBOARD
-  metric                                    grid                     blend                    stored   better
-  winner_hit                 53.3% [47.2%,59.4%]       57.8% [51.7%,63.9%]       56.4% [43.6%,69.2%]   higher
-  podium_overlap             68.3% [65.4%,71.3%]       69.1% [66.3%,72.0%]       69.2% [64.1%,74.4%]   higher
-  mae                        3.490 [3.348,3.625]       3.313 [3.172,3.448]       3.325 [3.043,3.634]   lower
-  mae_finishers              2.916 [2.792,3.036]       2.714 [2.599,2.826]       2.694 [2.466,2.953]   lower
-  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.5%,2.4%]          2.9% [1.7%,4.2%]   lower
-  races / drivers                   180 / 3621                180 / 3621                 39 / 808   
+  metric                                    grid                     blend            blend_recovery                    stored   better
+  winner_hit                 53.3% [47.2%,59.4%]       57.8% [51.7%,63.9%]       57.2% [51.1%,63.3%]       56.4% [43.6%,69.2%]   higher
+  podium_overlap             68.3% [65.4%,71.3%]       69.1% [66.3%,72.0%]       69.1% [66.3%,72.0%]       69.2% [64.1%,74.4%]   higher
+  mae                        3.490 [3.348,3.625]       3.313 [3.172,3.448]       3.308 [3.165,3.444]       3.325 [3.043,3.634]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.714 [2.599,2.826]       2.712 [2.593,2.827]       2.694 [2.466,2.953]   lower
+  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.5%,2.4%]          1.9% [1.5%,2.4%]          2.9% [1.7%,4.2%]   lower
+  races / drivers                   180 / 3621                180 / 3621                180 / 3621                 39 / 808   
+  candidate blend_recovery: better on nothing, worse on nothing -> keep off
   WHERE THE ERROR COMES FROM (production blend; each driver in one group)
     retired (not classified)                               546 drivers   31.8% of all error  avg 6.99 places
     grid penalty / pit-lane start (>= 3 places back)       173 drivers    5.8% of all error  avg 4.04 places
@@ -67,6 +68,9 @@ APEX21 REPORT  2026-09-30
     wet race                                               642 drivers   15.0% of all error  avg 2.80 places
     everything else                                       2079 drivers   40.8% of all error  avg 2.35 places
     hindsight: finishers' error if we knew the order after lap 1 = 2.60 places (production before the start: 2.66)
+    blend_recovery weight for out-of-position drivers (own / production) per season: 2018: -/0.5, 2019: 1.0/0.5, 2020: 0.9/0.5, 2021: 0.9/0.5, 2022: 0.7/0.5, 2023: 0.8/0.5, 2024: 0.8/0.5, 2025: 0.8/0.5, 2026: 0.8/0.4
+    out-of-position finishers, blend: 4.04 places (n=173)
+    out-of-position finishers, blend_recovery: 3.54 places (n=173)
   NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races)
     team form (production)                       r=+0.335 [+0.286, +0.386] n= 2601  REAL signal
     team form from car-pace residuals            r=+0.343 [+0.294, +0.393] n= 2601  REAL signal
