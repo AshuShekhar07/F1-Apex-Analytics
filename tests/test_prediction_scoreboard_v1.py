@@ -66,10 +66,14 @@ def test_scoreboard_end_to_end(synthetic_db):
 
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
-    assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 4 * 24
-    # synthetic qualifying is dry: the wet-qualifying guard changes nothing
+    assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_track", "blend_wetqw",
+                                         "diag_wetrace", "blend_dnf"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 7 * 24
+    # synthetic qualifying is dry: the wet-qualifying guard and weight change nothing
     assert summarise(scores, "blend_wetq")["mae"] == summarise(scores, "blend")["mae"]
+    assert summarise(scores, "blend_wetqw")["mae"] == summarise(scores, "blend")["mae"]
+    # too little history to rate tracks: the track candidate falls back to production
+    assert summarise(scores, "blend_track")["mae"] == summarise(scores, "blend")["mae"]
     # synthetic: every car finishes, so every team has the same rate and the order is unchanged
     assert summarise(scores, "blend_dnf")["mae"] == summarise(scores, "blend")["mae"]
     assert len({round(p, 9) for p in used.values()}) <= 2
@@ -143,3 +147,51 @@ def test_wet_qualifying_guard_keeps_own_lap_only_in_the_rain():
     dry = DriverForm(1, 2024, 1, 5, 5, True, 0.02, 0.0, None, 10, 0.01, None, False)
     wet = DriverForm(2, 2024, 1, 5, 5, True, 0.02, 0.0, None, 10, 0.01, None, True)
     assert [r.implied_gap for r in with_car_pace_dry_quali([dry, wet])] == [0.01, 0.02]
+
+
+def _row(race, season, driver, grid, finish, wet_q=False):
+    from race_form_signal_v1 import DriverForm
+    return DriverForm(race, season, driver, grid, finish, True, 0.01 * driver, 0.0, None, driver, None, None, wet_q)
+
+
+def _meta(race, season, name, wet=False):
+    from datetime import date
+    from prediction_scoreboard_v1 import RaceMeta
+    return RaceMeta(race, date(season, 1 + race % 12, 1), season, "e", wet, name)
+
+
+def test_hard_to_pass_tracks_rated_from_earlier_results_only():
+    from prediction_scoreboard_v1 import hard_to_pass_tracks, track_hold
+
+    meta, rows = {}, []
+    tracks = ["Monaco", "Baku", "Monza", "Spa", "Suzuka", "Miami"]
+    race = 0
+    for season in (2021, 2022):
+        for t, name in enumerate(tracks):
+            race += 1
+            meta[race] = _meta(race, season, name)
+            # Monaco and Baku: finish = grid; the others reshuffle more the further down the list
+            order = list(range(1, 11)) if t < 2 else [((g * (t + 2)) % 10) + 1 for g in range(10)]
+            rows += [_row(race, season, g + 1, g + 1, order[g]) for g in range(10)]
+    hold = track_hold(rows, meta)
+    assert hold["Monaco"] == pytest.approx(1.0) and hold["Baku"] == pytest.approx(1.0)
+    assert hard_to_pass_tracks(hold) >= {"Monaco", "Baku"}
+    assert "Monza" not in hard_to_pass_tracks(hold)
+    # one race at a track is not enough to rate it
+    assert "Monaco" not in track_hold([r for r in rows if meta[r.race_id].season_year == 2022], meta)
+
+
+def test_group_weight_uses_only_earlier_seasons_of_the_group():
+    from prediction_scoreboard_v1 import group_weight
+
+    # group races: grid reversed, finish = pace order (implied gap ~ driver id) -> pace wins (> 0.5)
+    # other races: finish = grid -> weight 0.0 would be chosen if they leaked in
+    rows = []
+    for race in range(1, 13):
+        season = 2020 + (race - 1) // 4
+        wet = race % 2 == 0
+        rows += [_row(race, season, d, 11 - d if wet else d, d, wet_q=wet) for d in range(10, 0, -1)]
+    in_group = lambda race_id, rs: any(r.quali_wet for r in rs)
+    assert group_weight(rows, 2023, lambda rs: list(rs), in_group, 0.3) > 0.5
+    # the season being scored never feeds its own weight
+    assert group_weight([r for r in rows if r.season_year < 2021], 2021, lambda rs: list(rs), in_group, 0.3) == 0.3

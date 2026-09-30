@@ -140,6 +140,9 @@ def scoreboard(save: bool) -> list[str]:
             worse = [l.split()[1] for l in mine if l.rstrip().endswith("WORSE")]
             verdict = "PROMOTE" if better and not worse else "keep off"
             keep.append(f"  candidate {n}: better on {better or 'nothing'}, worse on {worse or 'nothing'} -> {verdict}")
+    groups = re.search(r"=== HARD-TO-PASS TRACKS AND WET RACES.*?(?=\n\n|\Z)", full, flags=re.S)
+    if groups:
+        keep += ["  " + l.strip("= ") if l.startswith("===") else "  " + l for l in groups.group(0).splitlines()]
     for pattern in (r"  in wet qualifying:[^\n]*", r"=== CAR PACE RULE[^\n]*"):
         m = re.search(pattern, full)
         if m:

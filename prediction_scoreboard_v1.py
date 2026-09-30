@@ -15,6 +15,12 @@ Models (per race, only data strictly before the race date):
   candidates  experiments, each scored against the production blend:
     blend_wetq  production, but the car-pace rule is skipped when qualifying was wet
                 (teammate gaps in the rain reflect conditions and timing, not the car)
+    blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
+                  tracks where the grid order held best in earlier seasons; street circuits)
+    blend_wetqw   production pace, own blend weight after wet qualifying
+    (weights for these groups are chosen on the last 3 seasons' races of the group)
+  diagnostic (never promotable): diag_wetrace, own weight for races that turned out wet --
+            uses the actual race weather, so it is the most a perfect rain forecast could gain
   promoted: car pace v3 (2026-09-28): 10+ place misses 2.5% -> 2.1%, worse nowhere
             practice correction (2026-09-28): 10+ place misses 2.1% -> 1.8%, worse nowhere
   rejected: blend_dnf (team reliability, --reliability): no better than a flat rate, MAE worse
@@ -239,6 +245,98 @@ CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
 }
 
 
+# --- per-race blend weight candidates --------------------------------------------
+# Production uses one blend weight per season. These candidates keep the production pace
+# and change the weight only for one group of races, chosen on earlier seasons' races of
+# the same group (the groups are small, so GROUP_SEASONS seasons rather than one).
+HARD_TO_PASS_SHARE = 1 / 3   # the third of tracks where the starting order holds best
+MIN_TRACK_RACES = 2          # a track needs this many earlier races to be rated
+MIN_GROUP_RACES = 5          # fewer earlier races in the group -> production weight
+GROUP_SEASONS = 3
+GROUP_WEIGHTS: dict[str, dict[int, tuple]] = defaultdict(dict)   # name -> season -> (group weight, production weight)
+HARD_TRACKS: dict[int, list[str]] = {}         # season -> hard-to-pass tracks rated before it
+WET_QUALI_RACES: set[int] = set()
+
+
+def track_hold(rows: Sequence[DriverForm], meta: dict[int, RaceMeta]) -> dict[str, float]:
+    """track name -> mean Spearman(grid, finish) over classified finishers of the given
+    races; only tracks with MIN_TRACK_RACES races. High = the starting order holds."""
+    by_race = defaultdict(list)
+    for r in rows:
+        if r.classified:
+            by_race[r.race_id].append(r)
+    by_track = defaultdict(list)
+    for race_id, rs in by_race.items():
+        if len(rs) >= 5 and race_id in meta:
+            by_track[meta[race_id].name].append(_spearman([r.grid for r in rs], [r.finish for r in rs]))
+    return {t: float(np.mean(v)) for t, v in by_track.items() if len(v) >= MIN_TRACK_RACES}
+
+
+def hard_to_pass_tracks(hold: dict[str, float]) -> set[str]:
+    if len(hold) < 6:
+        return set()
+    cut = float(np.quantile(list(hold.values()), 1 - HARD_TO_PASS_SHARE))
+    return {t for t, v in hold.items() if v >= cut}
+
+
+GroupTest = Callable[[int, Sequence[DriverForm]], bool]
+RaceWeight = Callable[[int, Sequence[DriverForm]], float]
+
+
+def group_weight(history: Sequence[DriverForm], season: int, transform: Transform, in_group: GroupTest,
+                 fallback: float) -> float:
+    races = defaultdict(list)
+    for r in history:
+        if season - GROUP_SEASONS <= r.season_year < season:
+            races[r.race_id].append(r)
+    races = {k: v for k, v in races.items() if in_group(k, v)}
+    if len(races) < MIN_GROUP_RACES:
+        return fallback
+    return choose_weight({k: transform(v) for k, v in races.items()})
+
+
+def _grouped(name: str, in_group: GroupTest) -> Callable[..., RaceWeight]:
+    def factory(history, season, meta, transform, weight) -> RaceWeight:
+        w = group_weight(history, season, transform, in_group, weight)
+        GROUP_WEIGHTS[name][season] = (w, weight)
+        return lambda race_id, rows: w if in_group(race_id, rows) else weight
+    return factory
+
+
+def _track_weight(history, season, meta, transform, weight) -> RaceWeight:
+    """Separate blend weight at hard-to-pass tracks (street circuits and the like), rated
+    from earlier seasons' results only: where the grid order usually holds, pace should
+    move the prediction less."""
+    hard = hard_to_pass_tracks(track_hold(history, meta))
+    HARD_TRACKS[season] = sorted(hard)
+    return _grouped("blend_track", lambda race_id, rows: meta[race_id].name in hard)(
+        history, season, meta, transform, weight)
+
+
+def _wet_quali_weight(history, season, meta, transform, weight) -> RaceWeight:
+    """Separate blend weight after wet qualifying (known before the race): the grid is
+    shuffled by conditions, so pace and team form may deserve more weight."""
+    return _grouped("blend_wetqw", lambda race_id, rows: any(r.quali_wet for r in rows))(
+        history, season, meta, transform, weight)
+
+
+def _wet_race_oracle(history, season, meta, transform, weight) -> RaceWeight:
+    """DIAGNOSTIC ONLY, never promotable: separate weight for races that turned out wet.
+    Uses the actual race weather, which is not known when the forecast is made; it shows
+    the most a perfect rain forecast could gain."""
+    return _grouped("diag_wetrace", lambda race_id, rows: meta[race_id].wet)(
+        history, season, meta, transform, weight)
+
+
+WEIGHT_CANDIDATES: dict[str, Callable[..., RaceWeight]] = {
+    "blend_track": _track_weight,
+    "blend_wetqw": _wet_quali_weight,
+}
+DIAGNOSTICS: dict[str, Callable[..., RaceWeight]] = {
+    "diag_wetrace": _wet_race_oracle,
+}
+
+
 # post-blend candidates: name -> f(race_id, race rows, production blend ranks) -> ranks
 Adjuster = Callable[[int, Sequence[DriverForm], list[int]], list[int]]
 
@@ -255,6 +353,7 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
     from race_forecast_v1 import production_transform
 
     all_rows = list(rows)
+    WET_QUALI_RACES.update(r.race_id for r in all_rows if r.quali_wet)
     out: list[DriverScore] = []
     for season in sorted(by_season):
         if season < start_year:
@@ -267,12 +366,16 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
                     **{name: factory(history, season) for name, factory in CANDIDATES.items()}}
         weights = {name: choose_weight({k: transform(v) for k, v in previous.items()}) if previous else 0.5
                    for name, transform in variants.items()}
+        race_weight = {name: (lambda race_id, rs, w=w: w) for name, w in weights.items()}
+        for name, factory in {**WEIGHT_CANDIDATES, **DIAGNOSTICS}.items():
+            variants[name] = production
+            race_weight[name] = factory(history, season, meta, production, weights["blend"])
         for race_id, race_rows in by_season[season].items():
             m = meta[race_id]
             slot = rates(m.race_date, m.era, len(race_rows))
             ranked = {"grid": predictions(race_rows, 0.0)["grid"]}
             for name, transform in variants.items():
-                ranked[name] = predictions(transform(race_rows), weights[name])["blend"]
+                ranked[name] = predictions(transform(race_rows), race_weight[name](race_id, race_rows))["blend"]
             for name, adjust in (adjusters or {}).items():
                 ranked[name] = adjust(race_id, race_rows, ranked["blend"])
             for model, order in ranked.items():
@@ -379,7 +482,7 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
                 print(f"{m:8} {metric:20} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  "
                       f"{'BETTER' if better else 'WORSE' if worse else 'no clear difference'}")
 
-    candidates = [m for m in models if m not in ("grid", "blend", "stored")]
+    candidates = [m for m in models if m not in ("grid", "blend", "stored") and not m.startswith("diag_")]
     if candidates:
         print("\n=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===")
         for m in candidates:
@@ -433,6 +536,35 @@ def report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta], names: dict
         print(f"  {m.season_year} {m.name:22} {names.get(s.driver_id, s.driver_id):22} grid {s.grid:2}  "
               f"predicted P{s.predicted:<2} finished P{s.finish}")
     return {m: {k: list(v) for k, v in summary[m].items()} for m in models}
+
+
+def groups_report(scores: Sequence[DriverScore], meta: dict[int, RaceMeta]) -> None:
+    """Hard-to-pass tracks and wet races: where production is weakest, and whether the
+    group-weight candidates help there (finishers' average error, same races)."""
+    races = {s.race_id for s in scores if s.model == "blend"}
+    last = max(HARD_TRACKS) if HARD_TRACKS else None
+    hard = {r for r in races if meta[r].name in set(HARD_TRACKS.get(meta[r].season_year, []))}
+    wet_quali = {r for r in races if r in WET_QUALI_RACES}
+    wet = {r for r in races if meta[r].wet}
+    print("\n=== HARD-TO-PASS TRACKS AND WET RACES (finishers' average error, places) ===")
+    if last:
+        print(f"  hard-to-pass tracks for {last} (grid order held best before it): "
+              + (", ".join(HARD_TRACKS[last]) or "none rated yet"))
+    for label, group, model in (("hard-to-pass tracks", hard, "blend_track"),
+                                ("wet qualifying", wet_quali, "blend_wetqw"),
+                                ("wet race (diagnostic)", wet, "diag_wetrace")):
+        if not group:
+            continue
+        rest = races - group
+        prod, other = summarise(scores, "blend", group), summarise(scores, "grid", group)
+        d, lo, hi = paired([s for s in scores if s.race_id in group], model, "blend", "mae_finishers")
+        verdict = "BETTER" if hi < 0 else "WORSE" if lo > 0 else "no clear difference"
+        print(f"  {label:22} {len(group):3} races: production {prod['mae_finishers'][0]:.2f}, grid "
+              f"{other['mae_finishers'][0]:.2f}, rest of races {summarise(scores, 'blend', rest)['mae_finishers'][0]:.2f}"
+              f" | {model} {d:+.3f} [{lo:+.3f}, {hi:+.3f}] {verdict}")
+    for name, by_season in GROUP_WEIGHTS.items():
+        print(f"  {name} weight (group / production) per season: "
+              + ", ".join(f"{y}: {g:.1f}/{p:.1f}" for y, (g, p) in sorted(by_season.items())))
 
 
 def compare(current: dict, baseline: dict) -> list[str]:
@@ -550,7 +682,7 @@ def main() -> int:
         if args.prob:
             scores += rank_probability_scores(scores, meta, rates)
             prob_models = ["blend_prob"]
-        models = ["grid", "blend", *CANDIDATES, *prob_models, *adjusters]
+        models = ["grid", "blend", *CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS, *prob_models, *adjusters]
         if args.stored:
             scores += [s for s in stored_scores(db, meta, load_truth(db))
                        if args.start_year <= meta[s.race_id].season_year <= args.end_year]
@@ -581,6 +713,7 @@ def main() -> int:
     fired_wet = sum(r.car_gap is not None and r.car_gap < r.implied_gap - 1e-12 for r in wet_q)
     print(f"  in wet qualifying: {fired_wet} of {len(wet_q)} drivers ({fired_wet / max(1, len(wet_q)):.1%}) "
           f"across {len({r.race_id for r in wet_q})} races -- blend_wetq skips these")
+    groups_report(scores, meta)
     with_fp = [r for r in scored if r.practice_gap is not None]
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
           f"({len(with_fp) / max(1, len(scored)):.0%}) ===")
