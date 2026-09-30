@@ -14,8 +14,9 @@ Everything here is measured, never set by hand:
               rain_forecast  qualifying dry but rain forecast for the race; measured on
                              earlier races that were actually wet
   expected_error  average |predicted - finish| per driver in earlier races of that condition
-  range       per driver: predicted position +/- the COVERAGE quantile of the error for
-              drivers predicted in the same band (P1-3, P4-10, P11+) and condition
+  range       per driver: predicted position +/- the whole number of places that held
+              closest to COVERAGE of drivers predicted in the same band (P1-3, P4-10, P11+)
+              and condition; the forecast shows the share that actually held
   level       "normal", or "low" when the condition's expected error is at least
               LOW_RATIO x the dry-qualifying one
 
@@ -26,7 +27,6 @@ only, and the share of drivers who actually finished inside their range is repor
 
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Callable, Iterable, Sequence
@@ -67,8 +67,11 @@ def in_condition(s: ErrorSample, condition: str) -> bool:
     return s.wet_race and not s.wet_quali
 
 
-def _quantile(errors: Sequence[int]) -> int:
-    return int(math.ceil(float(np.quantile(errors, COVERAGE))))
+def _half_width(errors: Sequence[int]) -> int:
+    """Whole-place width whose share of errors <= width is closest to COVERAGE (ties: wider).
+    Rounding the quantile up instead overshot: 84.5% inside on 2018-2026 for an 80% target."""
+    errors = np.asarray(errors)
+    return min(range(int(errors.max()) + 1), key=lambda w: (abs(float((errors <= w).mean()) - COVERAGE), -w))
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,7 @@ class ErrorTable:
     expected_error: dict[str, float]           # condition -> mean error per driver
     samples: dict[str, int]                    # condition -> drivers
     races: dict[str, int]                      # condition -> races
+    inside: dict[str, float]                   # condition -> share of its drivers inside their range
 
     @classmethod
     def fit(cls, samples: Iterable[ErrorSample]) -> "ErrorTable":
@@ -86,7 +90,7 @@ class ErrorTable:
         by_band = defaultdict(list)
         for s in samples:
             by_band[band(s.predicted)].append(s.error)
-        half, expected, counts, races = {}, {}, {}, {}
+        half, expected, counts, races, inside = {}, {}, {}, {}, {}
         for condition in CONDITIONS:
             chosen = [s for s in samples if in_condition(s, condition)]
             counts[condition] = len(chosen)
@@ -95,8 +99,10 @@ class ErrorTable:
             for name, _, _ in BANDS:
                 cell = [s.error for s in chosen if band(s.predicted) == name]
                 pool = cell if len(cell) >= MIN_CELL else by_band.get(name, [])
-                half[(condition, name)] = _quantile(pool) if pool else 0
-        return cls(half, expected, counts, races)
+                half[(condition, name)] = _half_width(pool) if pool else 0
+            inside[condition] = (float(np.mean([s.error <= half[(condition, band(s.predicted))] for s in chosen]))
+                                 if chosen else float("nan"))
+        return cls(half, expected, counts, races, inside)
 
     def condition_for(self, wet_quali: bool, rain_expected: bool) -> str:
         condition = "wet_quali" if wet_quali else "rain_forecast" if rain_expected else "dry_quali"
@@ -119,7 +125,7 @@ class ErrorTable:
         return {
             "level": level, "condition": condition, "reason": reason,
             "expected_error_places": round(expected, 2), "dry_expected_error_places": round(dry, 2),
-            "coverage": COVERAGE, "measured_on_races": self.races[condition],
+            "coverage": round(self.inside[condition], 3), "measured_on_races": self.races[condition],
             "half_width": {name: self.half_width[(condition, name)] for name, _, _ in BANDS},
             "ranges": {str(d): r for d, r in ranges.items()},
         }

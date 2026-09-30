@@ -51,3 +51,13 @@ def test_coverage_check_fits_on_earlier_seasons_only():
     # same errors every season: the range holds the actual finish
     n, inside, *_ = coverage_check(_samples(2022, 10, 2) + _samples(2023, 10, 2))["all"]
     assert inside >= COVERAGE
+
+
+def test_range_width_is_the_whole_place_closest_to_the_target():
+    from race_confidence_v1 import _half_width
+
+    # errors <= 3: 79%, <= 4: 90% -> 3 (1 point from 80%), not 4 (rounding the quantile up)
+    errors = [0] * 40 + [2] * 20 + [3] * 19 + [4] * 11 + [9] * 10
+    assert _half_width(errors) == 3
+    table = ErrorTable.fit(_samples(2023, 20, 2))
+    assert table.inside["dry_quali"] == 1.0          # every error is exactly 2 -> width 2 holds all
