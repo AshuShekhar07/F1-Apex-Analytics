@@ -348,6 +348,70 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
                                         f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
+# Stop count from Pirelli's compound choice (research, method L). The same C-number set at
+# earlier races (e.g. C1/C2/C3: the hardest set, brought to tyre-punishing tracks) votes on the
+# stop count. C-numbers are only comparable within one numbering (pirelli_compounds_v1:
+# renumbered in 2023), so 2019-22 and 2023+ never mix.
+MIN_ALLOCATION_RACES = 3
+
+
+def allocation_key(season_year: int, numbers: dict[str, int]) -> tuple:
+    return ("2019-22" if season_year < 2023 else "2023+", numbers["HARD"], numbers["MEDIUM"], numbers["SOFT"])
+
+
+def load_allocations(db: Any) -> dict[int, tuple]:
+    """race_id -> allocation key for races with a valid HARD/MEDIUM/SOFT nomination."""
+    from pirelli_compounds_v1 import c_number, validate_nominations
+
+    rows = defaultdict(list)
+    seasons = {}
+    for race_id, season, label, c in db.execute(text("""
+        SELECT n.race_id, r.season_year, n.label, n.c_compound
+        FROM race_compound_nominations n JOIN races r ON r.id = n.race_id""")):
+        rows[int(race_id)].append((str(label).upper(), str(c).upper()))
+        seasons[int(race_id)] = int(season)
+    out = {}
+    for race_id, noms in rows.items():
+        if not validate_nominations(seasons[race_id], noms):
+            out[race_id] = allocation_key(seasons[race_id], {label: c_number(c) for label, c in noms})
+    return out
+
+
+def predict_from_allocation(history: Sequence[CarStrategy], *, allocation: tuple | None,
+                            allocations: dict[int, tuple], wear: float | None, wear_by_race: dict,
+                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS) -> StrategyPrediction:
+    """Method L: stop count voted by earlier races with the same compound set (the k closest
+    in practice wear when there are more than k); then the era's most common sequence with
+    that many stops. Too few same-set races: method I."""
+    fallback = predict_from_wear(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
+                                 total_laps=total_laps)
+    if allocation is None:
+        return fallback
+    modes = race_modes(history)
+    same = [(r, stops) for r, (_, _, stops) in modes.items() if allocations.get(r) == allocation]
+    if len(same) < MIN_ALLOCATION_RACES:
+        return fallback
+    if wear is not None and len(same) > k:
+        with_wear = [(abs(wear_by_race[r] - wear), stops) for r, stops in same if wear_by_race.get(r) is not None]
+        if len(with_wear) >= k:
+            same = [(None, stops) for _, stops in sorted(with_wear)[:k]]
+    votes = Counter(stops for _, stops in same)
+    stops = max(votes, key=lambda n: (votes[n], -n))
+    pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)
+            and _stop_count(h) == stops]
+    if not pool:
+        return fallback
+    sequence = Counter(h.sequence for h in pool).most_common(1)[0][0]
+    rows = [h for h in pool if h.sequence == sequence]
+    strategy = build_strategy(sequence, [round(median(h.stop_fractions[i] for h in rows) * total_laps)
+                                         for i in range(stops)], total_laps)
+    if strategy is None:
+        return fallback
+    label = f"C{allocation[1]}/C{allocation[2]}/C{allocation[3]}"
+    return StrategyPrediction(strategy, f"compounds {label}: {votes[stops]}/{sum(votes.values())} similar races "
+                                        f"-> {stops} stop(s)", ((strategy, len(rows) / len(pool)),))
+
+
 PRACTICE_SHARE_FLOOR = 0.02   # a compound nobody long-ran still gets a small chance
 
 

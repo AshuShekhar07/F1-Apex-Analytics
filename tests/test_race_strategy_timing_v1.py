@@ -99,7 +99,7 @@ def test_prediction_backtest_end_to_end(synthetic_db):
     assert methods == {"A old production", "B era mode (real stints)", "C hierarchy",
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
                        "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
-                       "J practice wear + compounds", "K era stops + compounds"}
+                       "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -220,3 +220,24 @@ def test_sequence_follows_the_compounds_teams_long_ran():
     # no practice data: unchanged era mode
     assert predict_from_practice(history, wear=None, wear_by_race={}, shares={}, regulation_era="e",
                                  total_laps=50, use_wear=False).strategy.sequence == ("MEDIUM", "HARD")
+
+
+def test_stop_count_from_the_same_pirelli_compound_set():
+    from race_strategy_timing_v1 import allocation_key, predict_from_allocation
+
+    hard_set = allocation_key(2024, {"HARD": 1, "MEDIUM": 2, "SOFT": 3})
+    soft_set = allocation_key(2024, {"HARD": 3, "MEDIUM": 4, "SOFT": 5})
+    assert allocation_key(2022, {"HARD": 1, "MEDIUM": 2, "SOFT": 3}) != hard_set     # other numbering
+    one, two = (("MEDIUM", "HARD"), [25]), (("MEDIUM", "HARD", "HARD"), [15, 32])
+    history, allocations = [], {}
+    for race in range(1, 9):                          # soft sets: 1 stop (more common); hard sets: 2 stops
+        hard = race <= 3
+        history += _hist(race, date(2024, race, 1), race, "e", [two if hard else one] * 6)
+        allocations[race] = hard_set if hard else soft_set
+    p = predict_from_allocation(history, allocation=hard_set, allocations=allocations, wear=None,
+                                wear_by_race={}, regulation_era="e", total_laps=50)
+    assert p.strategy.sequence == ("MEDIUM", "HARD", "HARD") and p.source.startswith("compounds C1/C2/C3")
+    # unseen compound set: falls back to I / era mode (1 stop is the era's most common)
+    other = allocation_key(2024, {"HARD": 2, "MEDIUM": 3, "SOFT": 4})
+    assert predict_from_allocation(history, allocation=other, allocations=allocations, wear=None, wear_by_race={},
+                                   regulation_era="e", total_laps=50).strategy.sequence == ("MEDIUM", "HARD")
