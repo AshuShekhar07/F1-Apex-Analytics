@@ -1,20 +1,52 @@
-Traceback (most recent call last):
-  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 175, in <module>
-    raise SystemExit(main())
-  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 168, in main
-    for metric, method, value, cmp in summarise(scores):
-  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 128, in summarise
-    value = race_clustered_ci(by_method[m], lambda s, k=metric: getattr(s, k))[0]
-  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_backtest_v2.py", line 126, in race_clustered_ci
-    boots = sorted(mean(rng.choices(race_means, k=len(race_means))) for _ in range(draws))
-  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_backtest_v2.py", line 126, in <genexpr>
-    boots = sorted(mean(rng.choices(race_means, k=len(race_means))) for _ in range(draws))
-  File "/usr/lib/python3.10/statistics.py", line 329, in mean
-    T, total, count = _sum(data)
-  File "/usr/lib/python3.10/statistics.py", line 188, in _sum
-    for n, d in map(_exact_ratio, values):
-  File "/usr/lib/python3.10/statistics.py", line 249, in _exact_ratio
-    return x.as_integer_ratio()
-KeyboardInterrupt
-Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
-BrokenPipeError: [Errno 32] Broken pipe
+=== STRATEGY PREDICTION BACKTEST (dry races 2022-2025, 1248 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.245   -0.010 [-0.030, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.255   
+sequence_hit         C hierarchy                       0.191   -0.064 [-0.109, -0.021]  WORSE
+sequence_hit         D pre-start (known start tyre)    0.287   +0.032 [+0.002, +0.060]  BETTER
+sequence_hit         E track-adjusted                  0.209   -0.046 [-0.088, -0.005]  WORSE
+sequence_hit         F last race here                  0.170   -0.086 [-0.138, -0.034]  WORSE
+stop_count_hit       A old production                  0.394   -0.009 [-0.029, +0.002]  no clear difference
+stop_count_hit       B era mode (real stints)          0.403   
+stop_count_hit       C hierarchy                       0.428   +0.026 [-0.043, +0.097]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.427   +0.024 [-0.023, +0.074]  no clear difference
+stop_count_hit       E track-adjusted                  0.448   +0.045 [-0.029, +0.122]  no clear difference
+stop_count_hit       F last race here                  0.427   +0.024 [-0.054, +0.106]  no clear difference
+first_stop_error     A old production                  8.359   +0.022 [-0.180, +0.244]  no clear difference
+first_stop_error     B era mode (real stints)          8.336   
+first_stop_error     C hierarchy                       8.660   +0.323 [-0.206, +0.865]  no clear difference
+first_stop_error     D pre-start (known start tyre)    7.985   -0.360 [-0.907, +0.202]  no clear difference
+first_stop_error     E track-adjusted                  8.562   +0.225 [-0.240, +0.689]  no clear difference
+first_stop_error     F last race here                  9.420   +1.185 [+0.374, +2.028]  WORSE
+first_stop_within_3  A old production                  0.263   -0.006 [-0.028, +0.014]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.269   
+first_stop_within_3  C hierarchy                       0.316   +0.048 [+0.005, +0.094]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.313   +0.053 [+0.008, +0.098]  BETTER
+first_stop_within_3  E track-adjusted                  0.303   +0.034 [-0.011, +0.081]  no clear difference
+first_stop_within_3  F last race here                  0.308   +0.033 [-0.025, +0.090]  no clear difference
+=== STRATEGY PREDICTION BACKTEST (dry races 2026-2026, 229 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.225   
+sequence_hit         C hierarchy                       0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         D pre-start (known start tyre)    0.267   +0.042 [+0.013, +0.074]  BETTER
+sequence_hit         E track-adjusted                  0.124   -0.101 [-0.223, +0.009]  no clear difference
+sequence_hit         F last race here                  0.201   -0.024 [-0.097, +0.039]  no clear difference
+stop_count_hit       A old production                  0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       B era mode (real stints)          0.339   
+stop_count_hit       C hierarchy                       0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.327   -0.012 [-0.058, +0.031]  no clear difference
+stop_count_hit       E track-adjusted                  0.347   +0.008 [-0.187, +0.204]  no clear difference
+stop_count_hit       F last race here                  0.414   +0.075 [-0.064, +0.227]  no clear difference
+first_stop_error     A old production                 10.233   +0.089 [-0.222, +0.423]  no clear difference
+first_stop_error     B era mode (real stints)         10.144   
+first_stop_error     C hierarchy                      10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     D pre-start (known start tyre)   10.416   +0.577 [-0.415, +1.562]  no clear difference
+first_stop_error     E track-adjusted                 10.041   -0.103 [-1.460, +1.221]  no clear difference
+first_stop_error     F last race here                 11.053   +1.314 [-1.036, +3.617]  no clear difference
+first_stop_within_3  A old production                  0.122   +0.005 [-0.022, +0.035]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.117   
+first_stop_within_3  C hierarchy                       0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.160   +0.043 [+0.014, +0.078]  BETTER
+first_stop_within_3  E track-adjusted                  0.194   +0.076 [-0.024, +0.190]  no clear difference
+first_stop_within_3  F last race here                  0.176   +0.027 [-0.055, +0.130]  no clear difference
