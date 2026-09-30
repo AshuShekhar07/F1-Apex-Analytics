@@ -104,6 +104,36 @@ def session_is_wet(db: Any, session_id: int, weather_says_wet: bool | None) -> b
     return bool(share is not None and float(share) >= WET_TYRE_SHARE)
 
 
+def load_practice_gaps_all(db: Any, race_id: int) -> dict[int, float]:
+    """(research) Long-run gap from FP1 AND FP2: each session's gaps measured against that
+    session's best driver, then averaged over the sessions a driver has a long run in and
+    re-based so the best is 0. More drivers covered than FP2-else-FP1."""
+    per_driver = defaultdict(list)
+    for session_type in ("FP1", "FP2"):
+        session = db.execute(text("""
+            SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
+            FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = :t
+        """), {"r": race_id, "t": session_type}).mappings().first()
+        if session is None or session_is_wet(db, session["id"], session["wet"]):
+            continue
+        laps = defaultdict(list)
+        for driver, n, t, c in db.execute(text("""
+            SELECT re.driver_id, l.lap_number, l.lap_time, l.tire_compound
+            FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+            WHERE l.session_id = :s AND COALESCE(l.is_deleted, FALSE) = FALSE
+        """), {"s": session["id"]}):
+            laps[int(driver)].append((int(n), float(t) if t is not None else None, c))
+        runs = {d: r for d, rows in laps.items() if (r := long_run_laps(rows))}
+        for d, g in practice_gaps(runs).items():
+            per_driver[d].append(g)
+    gaps = {d: mean(v) for d, v in per_driver.items()}
+    if not gaps:
+        return {}
+    base = min(gaps.values())
+    return {d: g - base for d, g in gaps.items()}
+
+
 def load_practice_gaps(db: Any, race_id: int) -> tuple[dict[int, float], str | None]:
     """(driver -> long-run gap, session used) for a race weekend; ({}, None) if unusable."""
     for session_type in ("FP2", "FP1"):

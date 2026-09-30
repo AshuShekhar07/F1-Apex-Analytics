@@ -12,7 +12,11 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend (none open right now)
+  candidates  experiments, each scored against the production blend:
+    blend_practice_all  practice long-run gap from FP1 AND FP2 (each against its own session's
+                        best, averaged), where production uses FP2 else FP1: more drivers covered
+    blend_driver_all    driver form that carries across a regulation change (driver skill does;
+                        team form does not), where production restarts it with each era
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -261,7 +265,23 @@ SPRINT_BETAS: dict[int, float] = {}
 RECOVERY_WEIGHTS: dict[int, tuple] = {}    # season -> (out-of-position weight or None, production weight)
 PASS_PARAMS: dict[int, tuple] = {}         # season -> (strength, margin) for blend_pass
 
+def _production_with(field_from: str, field_to: str) -> Callable[[Sequence[DriverForm], int], Transform]:
+    """Candidate: production, with one input replaced by a research version (betas refitted)."""
+    def factory(history: Sequence[DriverForm], season: int) -> Transform:
+        from dataclasses import replace
+
+        from race_forecast_v1 import production_transform
+
+        def swap(rows):
+            return [replace(r, **{field_to: getattr(r, field_from)}) for r in rows]
+        production = production_transform(swap(history))
+        return lambda rows: production(swap(rows))
+    return factory
+
+
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
+    "blend_practice_all": _production_with("practice_gap_all", "practice_gap"),
+    "blend_driver_all": _production_with("driver_form_all", "driver_form"),
     "blend_wetq": _wet_quali_guard,
 }
 # shown only with --experiments (kept so the verdicts can be re-checked on new data)
@@ -891,8 +911,10 @@ def main() -> int:
             print(f"  out-of-position finishers: {np.mean(penalised):.2f} places (n={len(penalised)})")
     signals_report(scored)
     with_fp = [r for r in scored if r.practice_gap is not None]
+    with_all = sum(r.practice_gap_all is not None for r in scored)
     print(f"\n=== PRACTICE PACE: long-run data for {len(with_fp)} of {len(scored)} drivers "
-          f"({len(with_fp) / max(1, len(scored)):.0%}) ===")
+          f"({len(with_fp) / max(1, len(scored)):.0%}); FP1+FP2 combined: {with_all} "
+          f"({with_all / max(1, len(scored)):.0%}) ===")
     from dataclasses import replace as _replace
     probe = [_replace(r, form=r.practice_gap - r.implied_gap) for r in with_fp if r.residual is not None]
     sig, lo, hi, n = form_signal(probe)

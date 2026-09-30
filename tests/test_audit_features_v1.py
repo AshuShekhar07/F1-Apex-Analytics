@@ -166,3 +166,28 @@ def test_partly_loaded_sprint_is_not_used_and_is_flagged(synthetic_db):
             assert any("sprint laps for only 4/12" in w for w in check.warns)
         finally:
             tx.rollback()
+
+
+def test_practice_from_both_sessions_covers_drivers_either_session_missed(synthetic_db):
+    from race_practice_pace_v1 import load_practice_gaps, load_practice_gaps_all
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            entries = db.execute(text("SELECT id, driver_id FROM race_entries WHERE race_id = 6 ORDER BY driver_id")).all()
+            for session_type, drivers in (("FP1", range(1, 7)), ("FP2", range(4, 13))):
+                s = db.execute(text("INSERT INTO sessions (race_id, session_type) VALUES (6, :t) RETURNING id"),
+                               {"t": session_type}).scalar()
+                for entry, driver in entries:
+                    if driver not in drivers:
+                        continue
+                    for lap in range(1, 9):
+                        db.execute(text("""INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time, tire_compound)
+                                           VALUES (:s, :e, :n, :t, 'MEDIUM')"""),
+                                   {"s": s, "e": entry, "n": lap, "t": 95 + 0.1 * driver})
+            only_fp2, _ = load_practice_gaps(db, 6)
+            both = load_practice_gaps_all(db, 6)
+            assert set(only_fp2) == set(range(4, 13))
+            assert set(both) == set(range(1, 13)) and both[1] == 0.0 and both[12] > both[6] > both[1]
+        finally:
+            tx.rollback()

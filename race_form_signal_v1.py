@@ -91,6 +91,8 @@ class DriverForm:
     driver_form: float | None = None   # driver's shrunk residual vs the teammate (race craft), car-pace based
     sprint_gap: float | None = None    # clean sprint-race pace gap (race_practice_pace_v1), sprint weekends
     quali_pos: int | None = None       # qualifying position (grid penalties = grid well behind it)
+    practice_gap_all: float | None = None   # (research) long-run gap from FP1 and FP2 combined
+    driver_form_all: float | None = None    # (research) driver form not reset at a regulation change
 
 
 # --- pure helpers --------------------------------------------------------------
@@ -438,6 +440,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
     team_history = defaultdict(list)   # (era, team) -> [(date, race_id, residual)]
     team_history_car = defaultdict(list)    # same, residual against car pace
     driver_history = defaultdict(list)      # (era, driver) -> [(date, race_id, residual - teammate's)]
+    driver_history_all = defaultdict(list)  # driver -> same, across regulation eras
     races = db.execute(text(f"""
         SELECT * FROM (
             SELECT r.id, r.season_year, r.regulation_era, r.race_date, {SESSION_WET_SQL} AS wet
@@ -480,6 +483,10 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
         if with_practice and race["season_year"] >= start_year:
             from race_practice_pace_v1 import load_practice_gaps
             practice, _ = load_practice_gaps(db, race["id"])
+        practice_all = {}
+        if with_practice and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_practice_gaps_all
+            practice_all = load_practice_gaps_all(db, race["id"])
         sprint = {}
         if with_sprint and race["season_year"] >= start_year:
             from race_practice_pace_v1 import load_sprint_gaps
@@ -507,6 +514,9 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                               races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
                     sprint.get(int(e["driver_id"])),
                     int(e["quali_pos"]) if e["quali_pos"] else None,
+                    practice_all.get(int(e["driver_id"])),
+                    team_form(driver_history_all[int(e["driver_id"])], int(e["driver_id"]), when,
+                              races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
                 ))
         # update team history with THIS race only after its rows are built (no leakage)
         if model is not None and not race["wet"]:
@@ -523,6 +533,7 @@ def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: 
                     centre = mean(residuals.values())
                     for driver, value in residuals.items():
                         driver_history[(era, driver)].append((when, race["id"], value - centre))
+                        driver_history_all[driver].append((when, race["id"], value - centre))
     return rows
 
 

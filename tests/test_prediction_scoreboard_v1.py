@@ -67,8 +67,12 @@ def test_scoreboard_end_to_end(synthetic_db):
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
     assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_track", "blend_wetqw",
-                                         "diag_wetrace", "blend_dnf", "blend_pass"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 8 * 24
+                                         "diag_wetrace", "blend_dnf", "blend_pass", "blend_practice_all",
+                                         "blend_driver_all"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 10 * 24
+    # synthetic: no practice laps, one era -> both candidates equal production
+    assert summarise(scores, "blend_practice_all")["mae"] == summarise(scores, "blend")["mae"]
+    assert summarise(scores, "blend_driver_all")["mae"] == summarise(scores, "blend")["mae"]
     # synthetic qualifying is dry: the wet-qualifying guard and weight change nothing
     assert summarise(scores, "blend_wetq")["mae"] == summarise(scores, "blend")["mae"]
     assert summarise(scores, "blend_wetqw")["mae"] == summarise(scores, "blend")["mae"]
