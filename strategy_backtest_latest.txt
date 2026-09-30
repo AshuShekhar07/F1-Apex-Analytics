@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 175, in <module>
+    raise SystemExit(main())
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 168, in main
+    for metric, method, value, cmp in summarise(scores):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_prediction_backtest_v1.py", line 128, in summarise
+    value = race_clustered_ci(by_method[m], lambda s, k=metric: getattr(s, k))[0]
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_backtest_v2.py", line 126, in race_clustered_ci
+    boots = sorted(mean(rng.choices(race_means, k=len(race_means))) for _ in range(draws))
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_strategy_backtest_v2.py", line 126, in <genexpr>
+    boots = sorted(mean(rng.choices(race_means, k=len(race_means))) for _ in range(draws))
+  File "/usr/lib/python3.10/statistics.py", line 329, in mean
+    T, total, count = _sum(data)
+  File "/usr/lib/python3.10/statistics.py", line 188, in _sum
+    for n, d in map(_exact_ratio, values):
+  File "/usr/lib/python3.10/statistics.py", line 249, in _exact_ratio
+    return x.as_integer_ratio()
+KeyboardInterrupt
+Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
+BrokenPipeError: [Errno 32] Broken pipe
