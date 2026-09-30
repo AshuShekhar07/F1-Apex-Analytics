@@ -1,0 +1,187 @@
+Request for URL https://raw.githubusercontent.com/theOehrly/f1schedule/master/schedule_2021.json failed; using cached response
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "/usr/lib/python3.10/socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connectionpool.py", line 1106, in _validate_conn
+    conn.connect()
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='raw.githubusercontent.com', port=443): Failed to resolve 'raw.githubusercontent.com' ([Errno -3] Temporary failure in name resolution)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/requests/adapters.py", line 696, in send
+    resp = conn.urlopen(
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/urllib3/util/retry.py", line 543, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='raw.githubusercontent.com', port=443): Max retries exceeded with url: /theOehrly/f1schedule/master/schedule_2021.json (Caused by NameResolutionError("HTTPSConnection(host='raw.githubusercontent.com', port=443): Failed to resolve 'raw.githubusercontent.com' ([Errno -3] Temporary failure in name resolution)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/requests_cache/session.py", line 311, in _resend
+    response = self._send_and_cache(request, actions, cached_response, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/requests_cache/session.py", line 279, in _send_and_cache
+    response = super().send(request, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastf1/req.py", line 112, in send
+    return super().send(request, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/requests/sessions.py", line 784, in send
+    r = adapter.send(request, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/requests/adapters.py", line 729, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='raw.githubusercontent.com', port=443): Max retries exceeded with url: /theOehrly/f1schedule/master/schedule_2021.json (Caused by NameResolutionError("HTTPSConnection(host='raw.githubusercontent.com', port=443): Failed to resolve 'raw.githubusercontent.com' ([Errno -3] Temporary failure in name resolution)"))
+core           INFO 	Loading data for Monaco Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 16)
+core        WARNING 	Driver 33 completed the race distance 00:00.058000 before the recorded end of the session.
+core           INFO 	Finished loading data for 20 drivers: ['33', '55', '4', '11', '5', '10', '44', '18', '31', '99', '7', '3', '14', '63', '6', '22', '9', '47', '77', '16']
+core           INFO 	Loading data for Italian Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 22)
+core        WARNING 	Driver 3 completed the race distance 00:00.086000 before the recorded end of the session.
+core           INFO 	Finished loading data for 20 drivers: ['3', '4', '77', '16', '11', '55', '18', '14', '63', '31', '6', '5', '99', '88', '47', '9', '44', '33', '10', '22']
+core           INFO 	Loading data for Abu Dhabi Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 9)
+core        WARNING 	Driver 33 completed the race distance 00:00.035000 before the recorded end of the session.
+core           INFO 	Finished loading data for 20 drivers: ['33', '44', '55', '22', '10', '77', '4', '14', '31', '16', '5', '3', '18', '47', '11', '6', '99', '63', '7', '9']
+R5 Monaco race: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+R14 Monza race: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+R22 Yas Marina race: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+core           INFO 	Loading data for Saudi Arabian Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	No lap data for driver 22
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 22)
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 47)
+core           INFO 	Finished loading data for 20 drivers: ['1', '16', '55', '11', '63', '31', '4', '10', '20', '44', '24', '27', '18', '23', '77', '14', '3', '6', '22', '47']
+R2 Jeddah race: laps for 18/19 starters
+  0 laps for 0/2 drivers without laps
+core           INFO 	Loading data for Azerbaijan Grand Prix - Sprint [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	No lap data for driver 2
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 2)
+core           INFO 	Finished loading data for 20 drivers: ['11', '16', '1', '63', '55', '14', '44', '18', '23', '81', '20', '24', '10', '21', '27', '77', '4', '31', '22', '2']
+R4 Baku sprint: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+2024: every race and sprint session has laps for every starter
+core           INFO 	Loading data for Miami Grand Prix - Sprint [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	Fixed incorrect tyre stint information for driver '4'
+core        WARNING 	Fixed incorrect tyre stint information for driver '81'
+core        WARNING 	Fixed incorrect tyre stint information for driver '44'
+core        WARNING 	Fixed incorrect tyre stint information for driver '63'
+core        WARNING 	Fixed incorrect tyre stint information for driver '18'
+core        WARNING 	Fixed incorrect tyre stint information for driver '22'
+core        WARNING 	Fixed incorrect tyre stint information for driver '12'
+core        WARNING 	Fixed incorrect tyre stint information for driver '10'
+core        WARNING 	Fixed incorrect tyre stint information for driver '27'
+core        WARNING 	Fixed incorrect tyre stint information for driver '6'
+core        WARNING 	Fixed incorrect tyre stint information for driver '23'
+core        WARNING 	Fixed incorrect tyre stint information for driver '31'
+core        WARNING 	Fixed incorrect tyre stint information for driver '30'
+core        WARNING 	Fixed incorrect tyre stint information for driver '87'
+core        WARNING 	Fixed incorrect tyre stint information for driver '5'
+core        WARNING 	Fixed incorrect tyre stint information for driver '7'
+core        WARNING 	Fixed incorrect tyre stint information for driver '1'
+core        WARNING 	Fixed incorrect tyre stint information for driver '14'
+core        WARNING 	Fixed incorrect tyre stint information for driver '55'
+core        WARNING 	No lap data for driver 16
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 16)
+core        WARNING 	Driver 4 completed the race distance 00:00.023000 before the recorded end of the session.
+core           INFO 	Finished loading data for 20 drivers: ['4', '81', '44', '63', '18', '22', '12', '10', '27', '6', '23', '31', '30', '87', '5', '7', '1', '14', '55', '16']
+R6 Miami sprint: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+core           INFO 	Loading data for Dutch Grand Prix - Sprint [v3.8.3]
+req            INFO 	No cached data found for session_info. Loading data...
+_api           INFO 	Fetching session info data...
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for driver_info. Loading data...
+_api           INFO 	Fetching driver list...
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for session_status_data. Loading data...
+_api           INFO 	Fetching session status data...
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for lap_count. Loading data...
+_api           INFO 	Fetching lap count data...
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for track_status_data. Loading data...
+_api           INFO 	Fetching track status data...
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for _extended_timing_data. Loading data...
+_api           INFO 	Fetching timing data...
+_api           INFO 	Parsing timing data...
+_api        WARNING 	Failed to align laps for drivers: ['11']
+req            INFO 	Data has been written to cache!
+req            INFO 	No cached data found for timing_app_data. Loading data...
+_api           INFO 	Fetching timing app data...
+req            INFO 	Data has been written to cache!
+core           INFO 	Processing timing data...
+core           INFO 	Finished loading data for 22 drivers: ['63', '16', '1', '12', '81', '3', '44', '10', '5', '41', '30', '43', '22', '31', '87', '23', '18', '14', '77', '55', '11', '27']
+R12 Zandvoort sprint: laps for 4/22 starters
+  410 laps for 18/18 drivers without laps
+  inserted
