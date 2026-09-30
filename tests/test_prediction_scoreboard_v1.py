@@ -238,7 +238,7 @@ def test_ablation_scores_production_with_each_part_switched_off(synthetic_db):
         rows = build_rows(db, load_observations(db, start_year=2018, end_year=2024), start_year=2023,
                           end_year=2024, include_wet=True, with_practice=True)
         scores = model_scores(rows, meta, rates, start_year=2024, ablation=True)
-    expected = {f"without_{p}" for p in ("car_pace", "practice", "sprint", "car_form", "driver_form", "recovery")}
+    expected = {f"without_{p}" for p in ("car_pace", "practice", "sprint", "driver_form", "recovery")}
     assert expected <= {s.model for s in scores}
     # synthetic: no practice, sprint or out-of-position drivers -> switching those off changes nothing
     for part in ("practice", "sprint", "recovery"):

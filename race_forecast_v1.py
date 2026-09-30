@@ -107,7 +107,11 @@ PRACTICE_METHOD = "correction"
 # Scoreboard 2018-2026, 180 races (blend_combo): average error 3.347 -> 3.314, finishers
 # 2.749 -> 2.716 (both CIs exclude 0), order correlation better, worse nowhere. "team" /
 # "none" switch them off.
-FORM_METHOD = "car_and_driver"
+# Ablation 2026-09-30 (scoreboard --ablation): without the car-pace team form NOTHING got
+# worse (top-10 overlap slightly better, average error 3.308 -> 3.314 n.s.), while removing
+# driver form, sprint, practice or car pace each made something clearly worse. So team form
+# is back to the original residuals and only driver form is added: "driver".
+FORM_METHOD = "driver"
 SPRINT_METHOD = "correction"
 # Drivers starting >= 3 places behind their qualifying position (grid penalty, pit lane) get
 # their own blend weight, chosen on the last 3 seasons' such drivers. Scoreboard 2018-2026:
@@ -120,11 +124,11 @@ WET_SWITCH = True
 
 VALIDATION = {
     "source": "prediction_scoreboard_v1 walk-forward, all races 2018-2026, 3621 drivers in 180 races",
-    "predicted_position": {"method": "grid/pace blend with car pace, practice and sprint pace, car-pace team "
-                                     "form, driver form and a recovery weight for out-of-position starters",
-                           "mean_abs_error_places": 3.308, "grid_only_mean_abs_error_places": 3.490,
-                           "finishers_mean_abs_error_places": 2.712, "finishers_off_by_10_or_more": 0.019,
-                           "winner_correct": 0.572, "podium_overlap": 0.691},
+    "predicted_position": {"method": "grid/pace blend with car pace, practice and sprint pace, team form, "
+                                     "driver form and a recovery weight for out-of-position starters",
+                           "mean_abs_error_places": 3.314, "grid_only_mean_abs_error_places": 3.490,
+                           "finishers_mean_abs_error_places": 2.715, "finishers_off_by_10_or_more": 0.019,
+                           "winner_correct": 0.572},
     "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
     "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
     "strategy": {"method": "era's most common dry strategy",
@@ -173,7 +177,7 @@ def _dist_json(d: Distribution) -> dict:
 MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow earlier eras
 
 
-ABLATABLE = ("car_pace", "practice", "sprint", "car_form", "driver_form")
+ABLATABLE = ("car_pace", "practice", "sprint", "driver_form")
 
 
 def production_pace(rows: Sequence[DriverForm], without: frozenset = frozenset()) -> list[DriverForm]:
@@ -198,11 +202,10 @@ def production_transform(history: Sequence[DriverForm], without: frozenset = fro
 
     def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
         out = pace(rows)
-        if FORM_METHOD == "car_and_driver":
-            if "car_form" not in without:
-                out = with_car_form(out)
-            if "driver_form" not in without:
-                out = with_driver_form(out)
+        if FORM_METHOD == "car_and_driver" and "car_form" not in without:
+            out = with_car_form(out)
+        if FORM_METHOD in ("car_and_driver", "driver") and "driver_form" not in without:
+            out = with_driver_form(out)
         return with_sprint_correction(out, beta_s) if beta_s > 0 else out
     transform.beta = beta
     transform.sprint_beta = beta_s
@@ -495,7 +498,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         from race_practice_pace_v1 import load_sprint_gaps
         sprint = load_sprint_gaps(db, race_id)
     car_teams, car_drivers = (car_form_histories(db, observations, era=era, before=as_of)
-                              if FORM_METHOD == "car_and_driver" else ({}, {}))
+                              if FORM_METHOD in ("car_and_driver", "driver") else ({}, {}))
     rows = []
     for f in sorted(field, key=lambda f: (grid[int(f["driver_id"])], f["driver_id"])):
         d, team = int(f["driver_id"]), int(f["team_id"])

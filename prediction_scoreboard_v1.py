@@ -28,6 +28,10 @@ Models (per race, only data strictly before the race date):
             blend_combo (2026-09-30): team form against car pace + driver form vs teammate +
               sprint-race pace correction; average error 3.347 -> 3.314, finishers 2.749 ->
               2.716, worse nowhere (alone: sprint passed, car form and driver form did not)
+            ablation (2026-09-30): the car-pace team form part of blend_combo was dropped --
+              without it nothing was worse (top-10 overlap better); car pace, practice, sprint
+              and driver form each made something clearly worse when removed; the recovery
+              weight is kept on its targeted-group result
             recovery weight (2026-09-30): drivers starting >= 3 places behind their qualifying
               position get their own weight (last 3 seasons); those finishers 4.04 -> 3.54,
               -0.45 [-0.79, -0.12] over 94 races, headline worse nowhere
