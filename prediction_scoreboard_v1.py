@@ -389,7 +389,7 @@ Adjuster = Callable[[int, Sequence[DriverForm], list[int]], list[int]]
 
 
 def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *, start_year: int,
-                 adjusters: dict[str, Adjuster] | None = None) -> list[DriverScore]:
+                 adjusters: dict[str, Adjuster] | None = None, ablation: bool = False) -> list[DriverScore]:
     """grid, blend and candidate predictions for every race from start_year.
 
     Each blend variant chooses its own weight on the previous season (with the same
@@ -418,8 +418,18 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
         for name, factory in {**WEIGHT_CANDIDATES, **DIAGNOSTICS}.items():
             variants[name] = production
             race_weight[name] = factory(history, season, meta, production, weights["blend"])
-        from race_forecast_v1 import production_recovery_weight
+        from race_forecast_v1 import ABLATABLE, production_recovery_weight
         recovery = {"blend": production_recovery_weight(history, season, production, weights["blend"])}
+        if ablation:     # production with one part switched off, weights refitted without it
+            for part in ABLATABLE:
+                name = f"without_{part}"
+                variants[name] = production_transform(history, frozenset({part}))
+                weights[name] = (choose_weight({k: variants[name](v) for k, v in previous.items()})
+                                 if previous else 0.5)
+                race_weight[name] = (lambda race_id, rs, w=weights[name]: w)
+                recovery[name] = production_recovery_weight(history, season, variants[name], weights[name])
+            variants["without_recovery"] = production
+            race_weight["without_recovery"] = race_weight["blend"]
         RECOVERY_WEIGHTS[season] = (recovery["blend"], weights["blend"])
         from race_form_signal_v1 import choose_pass_params, pass_predictions
         pass_params = choose_pass_params({k: production(v) for k, v in previous.items()}) if previous else (0.5, 0.002)
@@ -833,6 +843,8 @@ def main() -> int:
     parser.add_argument("--stored", action="store_true", help="also score the stored forecasts (live record)")
     parser.add_argument("--reliability", action="store_true", help="also run the rejected blend_dnf experiment")
     parser.add_argument("--prob", action="store_true", help="also run the rejected blend_prob experiment")
+    parser.add_argument("--ablation", action="store_true",
+                        help="also score production with each part switched off (does every part still help?)")
     parser.add_argument("--experiments", action="store_true",
                         help="also show the rejected pace/weight candidates (blend_wetq, blend_track, ...)")
     parser.add_argument("--save", help="write the headline summary to this JSON file")
@@ -852,13 +864,17 @@ def main() -> int:
 
         adjust_dnf, used_p = reliability_adjuster(load_starts(db), meta)
         adjusters = {"blend_dnf": adjust_dnf} if args.reliability else {}
-        scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters)
+        scores = model_scores(rows, meta, rates, start_year=args.start_year, adjusters=adjusters,
+                              ablation=args.ablation)
         prob_models = []
         if args.prob:
             scores += rank_probability_scores(scores, meta, rates)
             prob_models = ["blend_prob"]
         experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS, "blend_pass")
                        if args.experiments or m not in REJECTED]
+        if args.ablation:
+            from race_forecast_v1 import ABLATABLE
+            experiments += [f"without_{p}" for p in (*ABLATABLE, "recovery")]
         scores = [s for s in scores if s.model in ("grid", "blend", *experiments, *prob_models, *adjusters)]
         models = ["grid", "blend", *experiments, *prob_models, *adjusters]
         if args.stored:

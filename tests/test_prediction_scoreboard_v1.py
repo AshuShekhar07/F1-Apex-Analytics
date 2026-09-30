@@ -229,3 +229,17 @@ def test_pass_model_only_passes_clearly_slower_cars():
     races = {k: [row(1, 3, 0.000, 1), row(2, 1, 0.010, 2), row(3, 2, 0.011, 3), row(4, 4, 0.0105, 4)] for k in range(3)}
     strength, margin = choose_pass_params(races)
     assert margin < 0.01
+
+
+def test_ablation_scores_production_with_each_part_switched_off(synthetic_db):
+    with synthetic_db.connect() as db:
+        meta = load_meta(db)
+        rates = slot_rate_function(load_finishes(db))
+        rows = build_rows(db, load_observations(db, start_year=2018, end_year=2024), start_year=2023,
+                          end_year=2024, include_wet=True, with_practice=True)
+        scores = model_scores(rows, meta, rates, start_year=2024, ablation=True)
+    expected = {f"without_{p}" for p in ("car_pace", "practice", "sprint", "car_form", "driver_form", "recovery")}
+    assert expected <= {s.model for s in scores}
+    # synthetic: no practice, sprint or out-of-position drivers -> switching those off changes nothing
+    for part in ("practice", "sprint", "recovery"):
+        assert summarise(scores, f"without_{part}")["mae"] == summarise(scores, "blend")["mae"]

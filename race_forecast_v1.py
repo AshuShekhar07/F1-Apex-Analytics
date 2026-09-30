@@ -173,28 +173,36 @@ def _dist_json(d: Distribution) -> dict:
 MIN_ERA_FINISHES = 200     # below this, grid-slot rates and DNF rate borrow earlier eras
 
 
-def production_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
+ABLATABLE = ("car_pace", "practice", "sprint", "car_form", "driver_form")
+
+
+def production_pace(rows: Sequence[DriverForm], without: frozenset = frozenset()) -> list[DriverForm]:
     """Car-pace step of production (PACE_METHOD)."""
-    return with_car_pace(rows) if PACE_METHOD == "car_pace" else list(rows)
+    return with_car_pace(rows) if PACE_METHOD == "car_pace" and "car_pace" not in without else list(rows)
 
 
-def production_transform(history: Sequence[DriverForm]):
+def production_transform(history: Sequence[DriverForm], without: frozenset = frozenset()):
     """The full production pace rule given rows of all earlier seasons: car pace, the
     practice correction, car-pace team form + driver form, the sprint correction; betas
-    fitted on `history`. The scoreboard scores exactly this.
+    fitted on `history`. The scoreboard scores exactly this. `without` (ablation study,
+    scoreboard --ablation) switches single parts off.
     Returns a function rows -> rows with attributes `beta` and `sprint_beta`."""
-    beta = practice_beta(production_pace(history)) if PRACTICE_METHOD == "correction" else 0.0
+    use_practice = PRACTICE_METHOD == "correction" and "practice" not in without
+    beta = practice_beta(production_pace(history, without)) if use_practice else 0.0
 
     def pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
-        paced = production_pace(rows)
+        paced = production_pace(rows, without)
         return with_practice_correction(paced, beta) if beta > 0 else paced
 
-    beta_s = sprint_beta(pace(history)) if SPRINT_METHOD == "correction" else 0.0
+    beta_s = sprint_beta(pace(history)) if SPRINT_METHOD == "correction" and "sprint" not in without else 0.0
 
     def transform(rows: Sequence[DriverForm]) -> list[DriverForm]:
         out = pace(rows)
         if FORM_METHOD == "car_and_driver":
-            out = with_driver_form(with_car_form(out))
+            if "car_form" not in without:
+                out = with_car_form(out)
+            if "driver_form" not in without:
+                out = with_driver_form(out)
         return with_sprint_correction(out, beta_s) if beta_s > 0 else out
     transform.beta = beta
     transform.sprint_beta = beta_s
