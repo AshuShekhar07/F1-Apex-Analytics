@@ -7,7 +7,9 @@ One command instead of a dozen scripts in the right order:
   2. era      new races get the regulation era the rest of their season already has
   3. check    data_quality_v1: a race with a FAIL gets no forecast (and is listed)
   4. forecast every weekend that has qualifying, passes the checks and has no stored
-              forecast yet (race_forecast_v1; uses only races before its date)
+              forecast yet (race_forecast_v1; uses only races before its date); a pre-race
+              forecast made from the qualifying order is redone once the provisional grid
+              (fetch_starting_grid_v1, penalties applied) is in
   5. score    optional (--score): the prediction scoreboard vs the saved baseline
 
     python update_latest_races.py                     # current season
@@ -39,6 +41,7 @@ def loaders(season: int) -> list[tuple[str, list[str]]]:
         ("weekend format (sprint or not)", ["populate_weekend_format.py"]),
         ("sprint results", ["backfill_sprint_results.py"]),
         ("official starting grid", ["backfill_grid_position.py"]),
+        ("provisional starting grid for the next race (OpenF1)", ["fetch_starting_grid_v1.py", "--season", y]),
         ("winner race time", ["backfill_winner_time.py"]),
         ("gaps to the winner", ["backfill_gap_to_winner.py"]),
         ("lap-by-lap positions", ["backfill_race_positions.py"]),
@@ -112,6 +115,17 @@ def main() -> int:
         checks = check_season(db, args.season, identity=not args.no_identity)
         forecast_ids = set(db.execute(text("SELECT race_id FROM race_forecasts WHERE model_version = :v"),
                                       {"v": MODEL_VERSION}).scalars())
+        # a pre-race forecast made from the qualifying order is redone once the provisional
+        # grid (penalties) is in -- only while the race has not been run
+        upgrade = set() if not db.execute(text("SELECT to_regclass('race_provisional_grid') IS NOT NULL")).scalar() \
+            else set(db.execute(text("""
+                SELECT f.race_id FROM race_forecasts f
+                WHERE f.model_version = :v AND f.grid_source = 'qualifying'
+                  AND EXISTS (SELECT 1 FROM race_provisional_grid pg WHERE pg.race_id = f.race_id)
+                  AND NOT EXISTS (SELECT 1 FROM sessions s JOIN race_results rr ON rr.session_id = s.id
+                                  WHERE s.race_id = f.race_id AND s.session_type = 'R')
+            """), {"v": MODEL_VERSION}).scalars())
+        forecast_ids -= upgrade
     print_report(checks)
 
     print(f"\n=== FORECASTS ===")

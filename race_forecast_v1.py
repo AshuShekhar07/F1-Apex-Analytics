@@ -371,6 +371,16 @@ def predicted_strategy(db: Any, race_id: int, as_of, era: str, total_laps: int) 
     return {**strategy_to_json(p.strategy), "source": p.source}
 
 
+def provisional_grid(db: Any, race_id: int) -> dict[int, int]:
+    """driver_id -> provisional grid slot (fetch_starting_grid_v1.py), {} if none stored."""
+    if not db.execute(text("SELECT to_regclass('race_provisional_grid') IS NOT NULL")).scalar():
+        return {}
+    return {int(d): int(p) for d, p in db.execute(text("""
+        SELECT re.driver_id, pg.grid_position FROM race_provisional_grid pg
+        JOIN race_entries re ON re.id = pg.race_entry_id WHERE pg.race_id = :r
+    """), {"r": race_id})}
+
+
 def compute_forecast(db: Any, race_id: int) -> dict:
     """Forecast from races strictly before the race date.
 
@@ -413,6 +423,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     if len(field) < 10 or not any(times.values()):
         raise ForecastError("qualifying results or lap times not available yet")
     back = len(field) + 1
+    provisional = provisional_grid(db, race_id)
     grid, from_start = {}, 0
     for f in field:
         start = f["starting_grid_position"]
@@ -423,6 +434,20 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             grid[int(f["driver_id"])] = int(f["final_position"] or back)
     grid_source = ("starting_grid" if from_start == len(field)
                    else "qualifying" if from_start == 0 else "mixed")
+    if grid_source == "qualifying" and provisional:
+        # official grid not published in the results yet: the provisional grid (penalties
+        # applied); a qualified driver missing from it starts from the back (pit lane)
+        unlisted = [f["driver_name"] for f in field if int(f["driver_id"]) not in provisional]
+        for f in field:
+            grid[int(f["driver_id"])] = provisional.get(int(f["driver_id"]), back)
+        grid_source = "provisional_grid"
+        moved = [f["driver_name"] for f in field
+                 if f["final_position"] and grid[int(f["driver_id"])] - int(f["final_position"]) >= 3]
+        notes.append("grid: provisional starting grid (OpenF1) with penalties"
+                     + (f"; starting well behind their qualifying position: {', '.join(moved)}" if moved else "")
+                     + (f"; not on it (pit lane?): {', '.join(unlisted)}" if unlisted else ""))
+    elif grid_source == "qualifying":
+        notes.append("grid: qualifying order -- no official or provisional grid yet, so grid penalties are not in")
     if grid_source == "mixed":
         notes.append(f"grid: official slot for {from_start}/{len(field)} drivers, qualifying position for the rest")
 

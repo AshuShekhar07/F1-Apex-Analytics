@@ -19,6 +19,7 @@ SCHEMA_FILES = (
     "migration_fastf1_enrichment_v1.sql",
     "migration_race_entries_unique_v1.sql",
     "migration_race_forecasts_v1.sql",
+    "migration_provisional_grid_v1.sql",
 )
 
 
