@@ -134,6 +134,7 @@ def load_practice_gaps(db: Any, race_id: int) -> tuple[dict[int, float], str | N
 # within 105% of the driver's median) is a direct race-pace sample known before the race.
 
 MAX_SPRINT_GAP = 0.05
+MIN_SPRINT_SHARE = 0.6    # clean pace for at least 60% of the sprint's starters, else not used
 
 
 def load_sprint_gaps(db: Any, race_id: int) -> dict[int, float]:
@@ -155,7 +156,13 @@ def load_sprint_gaps(db: Any, race_id: int) -> dict[int, float]:
     """), {"s": session["id"]}):
         laps[int(driver)].append((int(n), float(t) if t is not None else None))
     pace = {d: p for d, rows in laps.items() if (p := clean_race_pace(rows)) is not None}
-    if len(pace) < MIN_DRIVERS:
+    # a partly loaded sprint (2026 R12 had laps for 4 of 22 drivers) would centre the
+    # correction on a handful of cars: use it only when it covers most of the field
+    starters = db.execute(text("""
+        SELECT COUNT(*) FROM race_results rr WHERE rr.session_id = :s
+          AND lower(COALESCE(rr.status, '')) NOT IN ('did not start', 'withdrew', 'did not qualify', 'excluded')
+    """), {"s": session["id"]}).scalar() or 0
+    if len(pace) < max(MIN_DRIVERS, MIN_SPRINT_SHARE * starters, 10 if not starters else 0):
         return {}
     best = min(pace.values())
     return {d: p / best - 1 for d, p in pace.items() if p / best - 1 <= MAX_SPRINT_GAP}

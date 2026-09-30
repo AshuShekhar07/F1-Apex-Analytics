@@ -139,3 +139,30 @@ def test_forecast_form_histories_match_the_scoreboard_rows(synthetic_db):
             assert team_form(teams.get(r.team_id, []), r.team_id, when[r.race_id]) == pytest.approx(r.form_car)
             assert team_form(drivers.get(r.driver_id, []), r.driver_id, when[r.race_id], races=DRIVER_FORM_RACES,
                              shrink=DRIVER_SHRINK) == pytest.approx(r.driver_form)
+
+
+def test_partly_loaded_sprint_is_not_used_and_is_flagged(synthetic_db):
+    from data_quality_v1 import evaluate, load_facts, season_races
+    from race_practice_pace_v1 import load_sprint_gaps
+    from repair_session_laps_v1 import incomplete_sessions
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            s = db.execute(text("INSERT INTO sessions (race_id, session_type) VALUES (6, 'S') RETURNING id")).scalar()
+            entries = db.execute(text("SELECT id, driver_id FROM race_entries WHERE race_id = 6 ORDER BY driver_id")).all()
+            for entry, driver in entries:                       # 12 sprint results ...
+                db.execute(text("""INSERT INTO race_results (session_id, race_entry_id, finishing_position, status)
+                                   VALUES (:s, :e, :p, 'Finished')"""), {"s": s, "e": entry, "p": driver})
+            for entry, driver in entries[:4]:                   # ... but laps for only 4 (as 2026 R12)
+                for lap in range(1, 18):
+                    db.execute(text("""INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time)
+                                       VALUES (:s, :e, :n, :t)"""), {"s": s, "e": entry, "n": lap, "t": 90 + 0.1 * driver})
+            assert load_sprint_gaps(db, 6) == {}
+            sprint = [x for x in incomplete_sessions(db, 2024) if x["session_type"] == "S"]
+            assert [(x["race_id"], x["with_laps"], x["starters"]) for x in sprint] == [(6, 4, 12)]
+            race = next(r for r in season_races(db, 2024) if r["id"] == 6)
+            check = evaluate(load_facts(db, race))
+            assert any("sprint laps for only 4/12" in w for w in check.warns)
+        finally:
+            tx.rollback()

@@ -1,9 +1,10 @@
-"""Fill in laps for drivers that have results but no laps in a race session.
+"""Fill in laps for drivers that have results but no laps in a race or sprint session.
 
 Found on 2026 R12 (Zandvoort): results for 22 drivers, race laps for only 4 -- the
 session was loaded while FastF1 was incomplete, and loaders skip sessions that exist.
+The same weekend's sprint had laps for 4 drivers too (the sprint pace signal needs them).
 
-For every race session of the season where fewer than all classified-or-retired drivers
+For every race and sprint session of the season where fewer than all classified-or-retired drivers
 (did-not-start excluded) have laps, FastF1's laps are matched to race entries by car
 number and inserted ONLY for entries that have no laps in that session, so re-running
 never duplicates. Dry run unless --apply.
@@ -35,17 +36,17 @@ def _seconds(value) -> float | None:
 
 def incomplete_sessions(db: Any, season: int) -> list[dict]:
     rows = db.execute(text("""
-        SELECT s.id AS session_id, r.id AS race_id, r.round_number, r.race_date, t.name AS track,
+        SELECT s.id AS session_id, s.session_type, r.id AS race_id, r.round_number, r.race_date, t.name AS track,
                COUNT(DISTINCT rr.id) FILTER (WHERE NOT (lower(COALESCE(rr.status, '')) = ANY(:ns))) AS starters,
                COUNT(DISTINCT l.race_entry_id) AS with_laps
         FROM races r
         JOIN tracks t ON t.id = r.track_id
-        JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
+        JOIN sessions s ON s.race_id = r.id AND s.session_type IN ('R', 'S')
         JOIN race_results rr ON rr.session_id = s.id
         LEFT JOIN laps l ON l.session_id = s.id AND l.race_entry_id = rr.race_entry_id
         WHERE r.season_year = :y
-        GROUP BY s.id, r.id, r.round_number, r.race_date, t.name
-        ORDER BY r.round_number
+        GROUP BY s.id, s.session_type, r.id, r.round_number, r.race_date, t.name
+        ORDER BY r.round_number, s.session_type
     """), {"y": season, "ns": list(NOT_STARTED)}).mappings().all()
     return [dict(r) for r in rows if r["with_laps"] < r["starters"]]
 
@@ -93,14 +94,15 @@ def main() -> int:
     with engine.connect() as db:
         sessions = incomplete_sessions(db, args.season)
     if not sessions:
-        print(f"{args.season}: every race session has laps for every starter")
+        print(f"{args.season}: every race and sprint session has laps for every starter")
         return 0
     for s in sessions:
-        print(f"R{s['round_number']} {s['track']}: laps for {s['with_laps']}/{s['starters']} starters")
+        kind = "sprint" if s["session_type"] == "S" else "race"
+        print(f"R{s['round_number']} {s['track']} {kind}: laps for {s['with_laps']}/{s['starters']} starters")
         with engine.connect() as db:
             entries = missing_entries(db, s["session_id"], s["race_id"])
         try:
-            session = fastf1.get_session(args.season, s["round_number"], "R")
+            session = fastf1.get_session(args.season, s["round_number"], s["session_type"])
             session.load(telemetry=False, weather=False, messages=False)
             rows = lap_rows(session.laps, entries, s["session_id"])
         except Exception as exc:

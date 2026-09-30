@@ -108,6 +108,11 @@ def _evaluate(facts: dict) -> RaceCheck:
             c.warns.append("Safety Car periods not loaded")
         if facts["winner_time"] is None:
             c.warns.append("winner time not loaded")
+        sprint_starters = facts.get("sprint_starters") or 0
+        if sprint_starters and facts.get("sprint_drivers_with_laps", 0) < MIN_SHARE * sprint_starters:
+            c.warns.append(f"sprint laps for only {facts.get('sprint_drivers_with_laps', 0)}/{sprint_starters} "
+                           "starters: sprint pace not used (fix: python repair_session_laps_v1.py --season "
+                           "YEAR --apply)")
         if facts["lap_metadata_share"] < 0.5:
             c.warns.append("tyre-life / pit metadata missing for most race laps (strategy models degrade)")
     if not facts["practice_laps"]:
@@ -153,6 +158,12 @@ def load_facts(db: Any, race: dict, identity: dict[int, list] | None = None) -> 
             JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
             WHERE s.race_id = :r AND lower(COALESCE(rr.status, '')) NOT IN
                   ('did not start', 'withdrew', 'did not qualify', 'excluded')"""),
+        "sprint_starters": one("""SELECT COUNT(*) FROM race_results rr
+            JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'S'
+            WHERE s.race_id = :r AND lower(COALESCE(rr.status, '')) NOT IN
+                  ('did not start', 'withdrew', 'did not qualify', 'excluded')"""),
+        "sprint_drivers_with_laps": one("""SELECT COUNT(DISTINCT l.race_entry_id) FROM laps l
+            JOIN sessions s ON s.id = l.session_id AND s.session_type = 'S' WHERE s.race_id = :r"""),
         "race_date_passed": bool(one("SELECT race_date < CURRENT_DATE FROM races WHERE id = :r")),
         "sessions": one("SELECT COUNT(*) FROM sessions WHERE race_id = :r"),
         "lap_metadata_share": one("""SELECT COALESCE(AVG((l.tyre_life_laps IS NOT NULL)::int), 0) FROM laps l
