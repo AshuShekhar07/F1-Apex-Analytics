@@ -354,9 +354,9 @@ _CAR_STRATEGIES: dict[str, list] = {}
 
 
 def predicted_strategy(db: Any, race_id: int, as_of, era: str, total_laps: int) -> dict | None:
-    """The strategy service's pick for this race (method I: stop count from this weekend's
-    practice tyre wear; era mode before practice), same history cut-off as the forecast."""
-    from race_strategy_timing_v1 import load_car_strategies, predict_from_wear
+    """The strategy service's pick for this race (method M: stop count and stop laps from the
+    races with the closest practice tyre wear; era mode before practice), same history cut-off."""
+    from race_strategy_timing_v1 import load_car_strategies, predict_from_wear_timed
     from strategy_service_v7 import db_url, practice_wear
 
     url = db_url(db)
@@ -364,8 +364,8 @@ def predicted_strategy(db: Any, race_id: int, as_of, era: str, total_laps: int) 
         _CAR_STRATEGIES[url] = load_car_strategies(db)
     history = [c for c in _CAR_STRATEGIES[url] if c.race_date < as_of]
     wear = practice_wear(db, {race_id, *(c.race_id for c in history)})
-    p = predict_from_wear(history, wear=wear.get(race_id), wear_by_race=wear, regulation_era=era,
-                          total_laps=total_laps)
+    p = predict_from_wear_timed(history, wear=wear.get(race_id), wear_by_race=wear, regulation_era=era,
+                                total_laps=total_laps)
     if p.strategy is None:
         return None
     return {**strategy_to_json(p.strategy), "source": p.source}

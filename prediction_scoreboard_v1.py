@@ -31,7 +31,9 @@ Models (per race, only data strictly before the race date):
             recovery weight (2026-09-30): drivers starting >= 3 places behind their qualifying
               position get their own weight (last 3 seasons); those finishers 4.04 -> 3.54,
               -0.45 [-0.79, -0.12] over 94 races, headline worse nowhere
-  rejected: blend_driver_all (2026-09-30): driver form carried across regulation eras;
+  rejected: blend_prob re-test (2026-09-30, current model): Brier win -0.0015 [-0.0037,
+              +0.0006], podium -0.0022 [-0.0050, +0.0005]; better point estimates, no CI excludes 0
+            blend_driver_all (2026-09-30): driver form carried across regulation eras;
               better on nothing (3.315 vs 3.308)
             blend_pass (2026-09-30): positions from overtaking clearly slower cars (pace
               magnitudes instead of ranks); 3.325 vs 3.308, winner 53.3% vs 57.2%, better on

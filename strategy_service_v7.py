@@ -6,7 +6,10 @@ Methods chosen by race_strategy_prediction_backtest_v1 (walk-forward, see VALIDA
   before the start tyre is known   stop count from this weekend's practice tyre wear
                                    (method I: the 7 earlier races with the closest
                                    long-run wear vote), then the era's most common
-                                   sequence with that many stops. Before practice has run
+                                   sequence with that many stops; stop laps from the cars
+                                   with that many stops in the same 7 races (method M:
+                                   2026 first stop within 3 laps 18.6% -> 25.8%, worse
+                                   nowhere). Before practice has run
                                    (no wear yet): the era's most common strategy (B).
                                    The track + grid-band hierarchy (C) was WORSE at the
                                    full sequence, so grid does not change the answer.
@@ -37,7 +40,7 @@ from race_strategy_timing_v1 import (
     StrategyPrediction,
     load_car_strategies,
     predict_era_mode,
-    predict_from_wear,
+    predict_from_wear_timed,
     predict_strategy,
 )
 from race_strategy_simulator_v1 import Strategy
@@ -50,7 +53,8 @@ VALIDATION = {
     "backtest": "race_strategy_prediction_backtest_v1, walk-forward, truth = real stints",
     "dry": {"races": "2022-2025, 1248 cars",
             "practice_wear": {"sequence_accuracy": 0.234, "stop_count_accuracy": 0.470,
-                              "first_stop_mean_abs_error_laps": 8.21, "first_stop_within_3_laps": 0.293},
+                              "first_stop_mean_abs_error_laps": 8.20, "first_stop_within_3_laps": 0.296,
+                              "2026": {"first_stop_mean_abs_error_laps": 9.53, "first_stop_within_3_laps": 0.258}},
             "era_mode": {"sequence_accuracy": 0.255, "stop_count_accuracy": 0.403,
                          "first_stop_mean_abs_error_laps": 8.34, "first_stop_within_3_laps": 0.269},
             "pre_start": {"sequence_accuracy": 0.287, "stop_count_accuracy": 0.427,
@@ -169,8 +173,8 @@ def predict(db: Any, track_id: int, race_date: date, *, grid: int | None = None,
                                     total_laps=laps, start_compound=tyre)
         if ctx["race_id"] is not None:
             wear = practice_wear(db, {ctx["race_id"], *(c.race_id for c in history)})
-            return predict_from_wear(history, wear=wear.get(ctx["race_id"]), wear_by_race=wear,
-                                     regulation_era=scope_era, total_laps=laps)
+            return predict_from_wear_timed(history, wear=wear.get(ctx["race_id"]), wear_by_race=wear,
+                                           regulation_era=scope_era, total_laps=laps)
         return predict_era_mode(history, regulation_era=scope_era, total_laps=laps)
 
     dry = choose(era, start_compound)

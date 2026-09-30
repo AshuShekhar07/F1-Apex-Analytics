@@ -26,7 +26,9 @@ Methods (history strictly before the race date):
      on 2023-25 cars, and within one era there are too few same-set races to vote.
   M  wear + wear timing : I's stop count and sequence; stop laps from the cars with that many
                         stops in the 7 earlier races with the closest practice wear (compare to I,
-                        which is production)
+                        which it replaced). PROMOTED 2026-09-30: sequence and stop count equal
+                        to I by construction; first stop 2026 9.53 vs 10.00 laps, within 3 laps
+                        25.8% vs 18.6% (BETTER vs B where I was not); 2022-25 equal (8.20/8.21)
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
