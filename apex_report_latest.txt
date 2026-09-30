@@ -82,4 +82,3 @@ APEX21 REPORT  2026-09-30
   in wet qualifying: 83 of 743 drivers (11.2%) across 37 races
   CAR PACE RULE: replaced the driver's own lap for 227 of 3621 drivers (6.3%); it should be rare
   regression gate vs scoreboard_baseline_2018.json: PASS
-  baseline re-saved to scoreboard_baseline_2018.json
