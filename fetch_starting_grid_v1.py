@@ -11,6 +11,10 @@ Nothing here is trusted blindly:
   * --check compares OpenF1's grid with the OFFICIAL grid for races already run, so the source
     is verified on real data before any forecast uses it.
 
+Verified 2026-09-30 (--check): slots matching the official grid -- 2025: OpenF1 453/478 vs
+qualifying order 364; 2026: OpenF1 330/330 (all 15 races exact) vs 254. The 2025 misses are
+all in P14-P20 (late back-of-grid penalties and pit-lane moves), never worse than qualifying.
+
     python fetch_starting_grid_v1.py --check 2025          # verify the source (no writes)
     python fetch_starting_grid_v1.py --season 2026         # store grids for upcoming races
     python fetch_starting_grid_v1.py --race-id 189 --dry-run
