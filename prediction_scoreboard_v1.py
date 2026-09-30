@@ -12,7 +12,11 @@ Models (per race, only data strictly before the race date):
             session, or with no time, gets the teammate's pace + 0.3%) and the practice
             correction (+ beta * long-run surprise, beta fitted on earlier seasons);
             win/podium = grid-slot rates
-  candidates  experiments, each scored against the production blend (none open right now)
+  candidates  experiments, each scored against the production blend:
+    blend_pass  positions from overtaking: expected position = grid - strength * (cars
+                starting ahead that are slower by more than a margin) + strength * (cars behind
+                that are faster by more than it); strength and margin chosen on the previous
+                season. Uses pace magnitudes, where the blend only uses pace ranks.
     blend_track   production pace, own blend weight at hard-to-pass tracks (the third of
                   tracks where the grid order held best in earlier seasons; street circuits)
     blend_wetqw   production pace, own blend weight after wet qualifying
@@ -253,7 +257,8 @@ def _wet_quali_guard(history: Sequence[DriverForm], season: int) -> Transform:
 
 
 SPRINT_BETAS: dict[int, float] = {}
-RECOVERY_WEIGHTS: dict[int, tuple] = {}     # season -> (out-of-position weight or None, production weight)
+RECOVERY_WEIGHTS: dict[int, tuple] = {}
+PASS_PARAMS: dict[int, tuple] = {}         # season -> (strength, margin) for blend_pass     # season -> (out-of-position weight or None, production weight)
 
 CANDIDATES: dict[str, Callable[[Sequence[DriverForm], int], Transform]] = {
     "blend_wetq": _wet_quali_guard,
@@ -391,6 +396,9 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
         from race_forecast_v1 import production_recovery_weight
         recovery = {"blend": production_recovery_weight(history, season, production, weights["blend"])}
         RECOVERY_WEIGHTS[season] = (recovery["blend"], weights["blend"])
+        from race_form_signal_v1 import choose_pass_params, pass_predictions
+        pass_params = choose_pass_params({k: production(v) for k, v in previous.items()}) if previous else (0.5, 0.002)
+        PASS_PARAMS[season] = pass_params
         for race_id, race_rows in by_season[season].items():
             m = meta[race_id]
             slot = rates(m.race_date, m.era, len(race_rows))
@@ -398,6 +406,7 @@ def model_scores(rows: Sequence[DriverForm], meta: dict[int, RaceMeta], rates, *
             for name, transform in variants.items():
                 ranked[name] = predictions(transform(race_rows), race_weight[name](race_id, race_rows),
                                            recovery.get(name))["blend"]
+            ranked["blend_pass"] = pass_predictions(production(race_rows), *pass_params)
             for name, adjust in (adjusters or {}).items():
                 ranked[name] = adjust(race_id, race_rows, ranked["blend"])
             for model, order in ranked.items():
@@ -805,7 +814,7 @@ def main() -> int:
         if args.prob:
             scores += rank_probability_scores(scores, meta, rates)
             prob_models = ["blend_prob"]
-        experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS)
+        experiments = [m for m in (*CANDIDATES, *WEIGHT_CANDIDATES, *DIAGNOSTICS, "blend_pass")
                        if args.experiments or m not in REJECTED]
         scores = [s for s in scores if s.model in ("grid", "blend", *experiments, *prob_models, *adjusters)]
         models = ["grid", "blend", *experiments, *prob_models, *adjusters]
@@ -844,6 +853,9 @@ def main() -> int:
         groups_report(scores, meta)
     confidence_report(scores, meta)
     error_report(scores, meta, facts)
+    if PASS_PARAMS:
+        print("  blend_pass (strength, margin) per season: "
+              + ", ".join(f"{y}: {s:.2f}/{m * 100:.1f}%" for y, (s, m) in sorted(PASS_PARAMS.items())))
     if RECOVERY_WEIGHTS:
         print("  recovery weight for out-of-position drivers (own / everyone else) per season: "
               + ", ".join(f"{y}: {'-' if w is None else f'{w:.1f}'}/{p:.1f}" for y, (w, p) in sorted(RECOVERY_WEIGHTS.items())))

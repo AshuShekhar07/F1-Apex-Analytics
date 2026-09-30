@@ -67,8 +67,8 @@ def test_scoreboard_end_to_end(synthetic_db):
         adjust, used = reliability_adjuster(load_starts(db), meta)
         scores = model_scores(rows, meta, rates, start_year=2024, adjusters={"blend_dnf": adjust})
     assert {s.model for s in scores} == {"grid", "blend", "blend_wetq", "blend_track", "blend_wetqw",
-                                         "diag_wetrace", "blend_dnf"}
-    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 7 * 24
+                                         "diag_wetrace", "blend_dnf", "blend_pass"}
+    assert {s.race_id for s in scores} == {5, 6} and len(scores) == 8 * 24
     # synthetic qualifying is dry: the wet-qualifying guard and weight change nothing
     assert summarise(scores, "blend_wetq")["mae"] == summarise(scores, "blend")["mae"]
     assert summarise(scores, "blend_wetqw")["mae"] == summarise(scores, "blend")["mae"]
@@ -211,3 +211,17 @@ def test_recovery_weight_only_moves_out_of_position_drivers():
     races = {k: race(k) for k in range(1, 25)}
     assert choose_recovery_weight(races, 0.0) == 1.0
     assert choose_recovery_weight({1: race(1)}, 0.0) is None               # too few such drivers
+
+
+def test_pass_model_only_passes_clearly_slower_cars():
+    from race_form_signal_v1 import DriverForm, choose_pass_params, pass_predictions
+
+    def row(d, grid, pace, finish):
+        return DriverForm(1, 2024, d, grid, finish, True, pace, 0.0, None)
+    # driver 1 starts 3rd but is 1% faster than the two cars ahead; driver 4 is marginally faster than 3
+    rows = [row(1, 3, 0.000, 1), row(2, 1, 0.010, 2), row(3, 2, 0.011, 3), row(4, 4, 0.0105, 4)]
+    assert pass_predictions(rows, 1.0, 0.002) == [1, 2, 3, 4]        # passes both; 0.05% is not enough
+    assert pass_predictions(rows, 1.0, 0.02) == [3, 1, 2, 4]         # margin too big: grid order
+    races = {k: [row(1, 3, 0.000, 1), row(2, 1, 0.010, 2), row(3, 2, 0.011, 3), row(4, 4, 0.0105, 4)] for k in range(3)}
+    strength, margin = choose_pass_params(races)
+    assert margin < 0.01

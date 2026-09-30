@@ -287,6 +287,34 @@ def predictions(rows: Sequence[DriverForm], weight: float,
     return {"grid": grid, "pace_form": pace, "blend": blend}
 
 
+# Pass model (research): positions change by overtaking, and a car is only passed by one that
+# is clearly faster. Expected position = grid - strength * (cars starting ahead that are slower
+# by more than `margin`) + strength * (cars starting behind that are faster by more than it).
+PASS_STRENGTHS = (0.25, 0.5, 0.75, 1.0)
+PASS_MARGINS = (0.0, 0.001, 0.002, 0.003, 0.005, 0.008)
+
+
+def pass_predictions(rows: Sequence[DriverForm], strength: float, margin: float) -> list[int]:
+    pace = [r.implied_gap + r.form for r in rows]
+    grid = [r.grid for r in rows]
+    scores = []
+    for i in range(len(rows)):
+        gained = sum(1 for j in range(len(rows)) if grid[j] < grid[i] and pace[j] - pace[i] > margin)
+        lost = sum(1 for j in range(len(rows)) if grid[j] > grid[i] and pace[i] - pace[j] > margin)
+        scores.append(grid[i] - strength * (gained - lost))
+    return ranks(scores)
+
+
+def choose_pass_params(races: dict[int, list[DriverForm]]) -> tuple[float, float]:
+    """(strength, margin) minimising finishing MAE on the given (earlier) races."""
+    def mae(params):
+        errors = []
+        for rows in races.values():
+            errors += [abs(p - r.finish) for p, r in zip(pass_predictions(rows, *params), rows)]
+        return mean(errors) if errors else float("inf")
+    return min(((s, m) for s in PASS_STRENGTHS for m in PASS_MARGINS), key=lambda p: (mae(p), p))
+
+
 def choose_recovery_weight(races: dict[int, list[DriverForm]], weight: float, min_drivers: int = 20) -> float | None:
     """Weight for out-of-position drivers minimising THEIR finishing MAE on the given earlier
     races (everyone else keeps `weight`); None with fewer than min_drivers such drivers."""
