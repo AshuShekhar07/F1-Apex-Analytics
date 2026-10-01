@@ -559,7 +559,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     finishes = era_finishes
     if len(era_finishes) < MIN_ERA_FINISHES:
         finishes = all_finishes
-        notes.append(f"win/podium rates and retirement rate: fewer than {MIN_ERA_FINISHES} {era} results, "
+        notes.append(f"grid-slot rates and retirement rate: fewer than {MIN_ERA_FINISHES} {era} results, "
                      "using all earlier eras")
     slot_rates = shrunk_slot_rates(
         [(int(g), int(f)) for g, f, _ in finishes], [(int(g), int(f)) for g, f, _ in all_finishes],

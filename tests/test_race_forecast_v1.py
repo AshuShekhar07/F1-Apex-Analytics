@@ -352,3 +352,14 @@ def test_forecast_endpoint_names_the_predicted_winner(client):
     best = max(body["drivers"], key=lambda d: d["p_win"])
     assert body["predicted_winner"]["driver_id"] == best["driver_id"]
     assert body["predicted_winner"]["p_win"] == best["p_win"]
+
+
+def test_production_check_report_runs(forecast_db, capsys):
+    from production_check_v1 import race_winners, title_history
+
+    with forecast_db.connect() as db:
+        race_winners(db, 2024)
+        title_history(db, 2024)
+    out = capsys.readouterr().out
+    assert "favourite" in out and "not raced yet" in out and "favourite won" in out
+    assert "nothing stored" in out or "round" in out
