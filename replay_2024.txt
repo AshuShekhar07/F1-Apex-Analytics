@@ -1,0 +1,43 @@
+=== REPLAY: 2024 after round 10 (only races before round 11 are used) ===
+
+=== 2024 R11 Spielberg (2024-06-30) ===
+  line-up: entry list; grid: starting_grid
+  evidence: 10 races run this season, 54 under these regulations (established)
+
+  PRE QUALIFYING: predicted winner Max Verstappen (Red Bull Racing) -- win 61.6%, podium 67.8%
+  confidence MEDIUM: in 39 earlier races where the favourite had 60%-100% at this stage, the favourite won 69%; with 7+ races of the season run, the favourite won 43% of 111 earlier races at this stage
+        Max Verstappen           Red Bull Racing      win  61.6%  podium  67.8%
+        Charles Leclerc          Ferrari              win  12.2%  podium  42.9%
+        Sergio Perez             Red Bull Racing      win   8.5%  podium  38.2%
+        Carlos Sainz             Ferrari              win   8.0%  podium  36.0%
+        Lando Norris             McLaren              win   4.5%  podium  27.7%
+        George Russell           Mercedes             win   1.9%  podium  19.1%
+
+  POST QUALIFYING: predicted winner Max Verstappen (Red Bull Racing) -- win 85.6%, podium 85.6%
+  confidence HIGH: in 54 earlier races where the favourite had 60%-100% at this stage, the favourite won 72%; with 7+ races of the season run, the favourite won 57% of 111 earlier races at this stage
+    P1  Max Verstappen           Red Bull Racing      win  85.6%  podium  85.6%
+    P2  Lando Norris             McLaren              win   5.3%  podium  50.2%
+    P4  Carlos Sainz             Ferrari              win   3.1%  podium  39.8%
+    P6  Charles Leclerc          Ferrari              win   2.3%  podium  34.9%
+    P3  George Russell           Mercedes             win   1.5%  podium  27.3%
+    P8  Sergio Perez             Red Bull Racing      win   1.1%  podium  24.2%
+
+  current stage: post_qualifying -> predicted winner Max Verstappen, 85.6%, confidence high
+
+  WHAT HAPPENED: P1 George Russell (Mercedes, from P3), P2 Oscar Piastri (McLaren, from P7), P3 Carlos Sainz (Ferrari, from P4)
+  pre qualifying: we gave the winner 1.9% -- winner was our #6
+  post qualifying: we gave the winner 1.5% -- winner was our #5
+
+  TITLES after round 10 of 24:
+    drivers: confidence HIGH (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 85% of the time; favourites with a 95%-100% title chance became champion 100% of the time (62 projections))
+      Max Verstappen           title  98.9%   points then   219
+      Charles Leclerc          title   0.9%   points then   148
+      Lando Norris             title   0.1%   points then   150
+      Carlos Sainz             title   0.1%   points then   116
+      -> champion: Max Verstappen (437 pts); we gave 98.9% after round 10
+    constructors: confidence MEDIUM (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 80% of the time; favourites with a 40%-95% title chance became champion 68% of the time (66 projections))
+      Red Bull Racing          title  93.0%   points then   330
+      Ferrari                  title   7.0%   points then   270
+      McLaren                  title   0.0%   points then   237
+      Haas F1 Team             title   0.0%   points then     7
+      -> champion: McLaren (666 pts); we gave 0.0% after round 10
