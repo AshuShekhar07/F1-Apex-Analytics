@@ -207,10 +207,10 @@ class RaceProbabilities:
 
 
 def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, int | None]], *, grid_coef: float,
-                       dnf: float, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
-    """entrants: (driver, team, grid slot or None). Strength + grid_coef * -log(grid)."""
+                       dnf: float, scale: float = 1.0, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
+    """entrants: (driver, team, grid slot or None). scale * strength + grid_coef * -log(grid)."""
     field_size = len(entrants)
-    s = np.array([strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
+    s = np.array([scale * strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
     pos = simulate_order(s, dnf, np.random.default_rng(seed), sims)
     drivers = [d for d, _, _ in entrants]
     finished = pos > 0
@@ -219,6 +219,38 @@ def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, 
         {d: float(np.mean(finished[:, i] & (pos[:, i] <= 3))) for i, d in enumerate(drivers)},
         {d: float(np.mean(finished[:, i] & (pos[:, i] <= 10))) for i, d in enumerate(drivers)},
     )
+
+
+def fit_race_scale(weekends: Sequence[Weekend], strengths_for, *, with_grid: bool,
+                   max_races: int = 60) -> tuple[float, float]:
+    """(strength scale, grid coefficient) maximising the PL likelihood of the actual orders of
+    the last max_races raced weekends, each predicted with strengths fitted only on the
+    weekends before it. A scale below 1 means the fitted strengths are overconfident; it is
+    measured out of sample, never tuned on championship outcomes. Without grid (season
+    simulations: future grids are unknown) the grid coefficient is 0."""
+    cases = []
+    raced = [w for w in weekends if w.raced]
+    for idx in range(max(0, len(raced) - max_races), len(raced)):
+        w, before = raced[idx], raced[:idx]
+        if len(before) < 5:
+            continue
+        st = strengths_for(before, w.era)
+        finishers = sorted((r for r in w.race if r.classified and r.finish), key=lambda r: r.finish)
+        if len(finishers) < 5:
+            continue
+        n = len(w.race)
+        cases.append((np.array([st.of(r.driver_id, r.team_id) for r in finishers]),
+                      np.array([-np.log(r.grid or n) for r in finishers])))
+    if not cases:
+        return 1.0, (1.0 if with_grid else 0.0)
+
+    def neg(params):
+        a, b = params[0], (params[1] if with_grid else 0.0)
+        return -sum(pl_loglik_grad(a * base + b * g)[0] for base, g in cases)
+    x0 = [1.0, 1.0] if with_grid else [1.0]
+    bounds = [(0.0, 3.0), (0.0, 5.0)] if with_grid else [(0.0, 3.0)]
+    res = minimize(neg, x0, method="L-BFGS-B", bounds=bounds)
+    return float(res.x[0]), (float(res.x[1]) if with_grid else 0.0)
 
 
 def fit_grid_coef(weekends: Sequence[Weekend], strengths_for, *, max_races: int = 60) -> float:
@@ -270,7 +302,8 @@ def standings(weekends: Iterable[Weekend], season: int) -> tuple[dict[int, float
 
 def project_championship(strengths: Strengths, lineup: dict[int, int], remaining: Sequence[Weekend], *,
                          driver_points: dict[int, float], team_points: dict[int, float], dnf: float,
-                         sims: int = SIMS, seed: int = 11, drift: float = 0.0) -> ChampionshipProjection:
+                         sims: int = SIMS, seed: int = 11, drift: float = 0.0,
+                         scale: float = 1.0) -> ChampionshipProjection:
     """Monte Carlo of every remaining weekend for the current lineup (driver -> team).
 
     drift: car development. Each simulated season every team's car strength takes a random
@@ -282,7 +315,7 @@ def project_championship(strengths: Strengths, lineup: dict[int, int], remaining
     drivers = sorted(set(lineup) | set(driver_points))
     racing = np.array([i for i, d in enumerate(drivers) if d in lineup])
     teams = sorted(set(lineup.values()) | set(team_points))
-    s = np.array([strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
+    s = np.array([scale * strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
     car_teams = sorted({lineup[drivers[i]] for i in racing})
     car_of = np.array([car_teams.index(lineup[drivers[i]]) for i in racing], dtype=int)
     development = np.zeros((sims, len(car_teams)))

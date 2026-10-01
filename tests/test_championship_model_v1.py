@@ -5,8 +5,10 @@ import pytest
 
 from championship_model_v1 import (
     Result,
+    Strengths,
     Weekend,
     fit_grid_coef,
+    fit_race_scale,
     fit_strengths,
     pl_loglik_grad,
     points_for,
@@ -79,6 +81,17 @@ def test_grid_coef_is_learned_from_earlier_races():
         weekends.append(_weekend(i, order, grid={d: p for p, d in enumerate(order, start=1)}))
     coef = fit_grid_coef(weekends, lambda before, era: fit_strengths(before, era=era))
     assert coef > 1.0
+
+
+def test_race_scale_calms_overconfident_strengths():
+    # strengths say driver 1 >> 2 >> ... but the order rotates every race -> scale near 0;
+    # when the order always matches the strengths, the scale stays well above that
+    rotating = [_weekend(i, [((i + k) % 6) + 1 for k in range(6)]) for i in range(1, 25)]
+    steady = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(1, 25)]
+    overconfident = Strengths(car={}, skill={d: -1.5 * d for d in range(1, 7)})
+    a_rot, b_rot = fit_race_scale(rotating, lambda before, era: overconfident, with_grid=False)
+    a_steady, _ = fit_race_scale(steady, lambda before, era: overconfident, with_grid=False)
+    assert b_rot == 0.0 and a_rot < 0.2 < 1.0 < a_steady
 
 
 def test_championship_reflects_lead_and_races_left():
