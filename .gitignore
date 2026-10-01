@@ -26,3 +26,6 @@ circuit-viz-app/pipeline/data/circuits/*.sectors.json
 
 # scheduled pipeline logs (run_pipeline.py)
 logs/
+
+# database dumps (ops/db_dump.sh)
+*.dump
