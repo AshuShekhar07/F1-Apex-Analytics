@@ -77,6 +77,39 @@ def title_history(db, season: int) -> None:
             print(f"  {'':{len(kind)}}   {rnd:5} " + " ".join(f"{chance.get((rnd, e), 0):15.1%}" for e in top))
 
 
+def team_id_changes(db, seasons) -> None:
+    """Drivers whose team id changes within a season for only a few races -- usually a
+    duplicate team row, which splits a team's points in the championship model."""
+    print("\n=== TEAM IDS USED FOR ONLY PART OF A SEASON (possible duplicate team rows) ===")
+    rows = db.execute(text("""
+        WITH entries AS (
+            SELECT r.season_year, r.round_number, re.driver_id, re.team_id
+            FROM race_entries re JOIN races r ON r.id = re.race_id
+            WHERE re.role = 'race_driver' AND r.season_year = ANY(:s)),
+        usage AS (
+            SELECT season_year, driver_id, team_id, COUNT(*) AS races, array_agg(round_number ORDER BY round_number) AS rounds
+            FROM entries GROUP BY season_year, driver_id, team_id),
+        main AS (
+            SELECT DISTINCT ON (season_year, driver_id) season_year, driver_id, team_id AS main_team
+            FROM usage ORDER BY season_year, driver_id, races DESC)
+        SELECT u.season_year, d.name AS driver, t.id AS team_id, t.name AS team, u.rounds,
+               m.main_team, mt.name AS main_team_name
+        FROM usage u JOIN main m USING (season_year, driver_id)
+        JOIN drivers d ON d.id = u.driver_id JOIN teams t ON t.id = u.team_id JOIN teams mt ON mt.id = m.main_team
+        WHERE u.team_id <> m.main_team ORDER BY u.season_year, u.rounds"""), {"s": list(seasons)}).mappings().all()
+    if not rows:
+        print("  none")
+    for r in rows:
+        print(f"  {r['season_year']} {r['driver']:22} team id {r['team_id']} '{r['team']}' in rounds {r['rounds']}; "
+              f"rest of the season team id {r['main_team']} '{r['main_team_name']}'")
+    teams = db.execute(text("""
+        SELECT t.name, array_agg(DISTINCT t.id ORDER BY t.id) AS ids FROM teams t
+        JOIN race_entries re ON re.team_id = t.id JOIN races r ON r.id = re.race_id
+        WHERE r.season_year = ANY(:s) GROUP BY t.name HAVING COUNT(DISTINCT t.id) > 1"""), {"s": list(seasons)}).all()
+    for name, ids in teams:
+        print(f"  team name '{name}' has several ids: {ids}")
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -87,6 +120,7 @@ def main() -> int:
         race_winners(db, args.season)
         for season in args.titles:
             title_history(db, season)
+        team_id_changes(db, sorted({args.season, *args.titles}))
     return 0
 
 
