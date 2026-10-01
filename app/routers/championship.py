@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from championship_model_v1 import MODEL_VERSION, VALIDATION
+from championship_model_v1 import MODEL_VERSION, VALIDATION, title_confidence
 
 router = APIRouter(prefix="/championship", tags=["championship"])
 
@@ -45,23 +45,71 @@ def _numbers(row: dict) -> dict:
             "expected_points": float(row["expected_points"])}
 
 
+_LIVE_CACHE: dict = {}
+
+
+def _season_rounds(db: Session, season: int) -> int:
+    return int(db.execute(text("SELECT COUNT(*) FROM races WHERE season_year = :s"), {"s": season}).scalar() or 0)
+
+
+def _live_projection(db: Session, season: int) -> dict:
+    """Nothing stored yet (e.g. a new season before the pipeline ran): compute it now from the
+    data there is -- before the first race that is earlier seasons only."""
+    from championship_model_v1 import load_weekends, project_season
+    from championship_projection_v1 import first_race_entries
+
+    raced = db.execute(text("SELECT COUNT(*) FROM race_results")).scalar()
+    key = (season, raced)
+    if key not in _LIVE_CACHE:
+        try:
+            sp = project_season(load_weekends(db, start_year=2018, end_year=season), season,
+                                lineup=first_race_entries(db, season) if not _raced_rounds(db, season) else None)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=f"No championship projection for {season}: {exc}")
+        names = {("drivers", int(i)): n for i, n in db.execute(text("SELECT id, name FROM drivers"))}
+        names.update({("constructors", int(i)): n for i, n in db.execute(text("SELECT id, name FROM teams"))})
+        p = sp.projection
+        out = {"after_round": sp.after_round, "weekends_left": p.remaining_weekends, "computed_at": None}
+        for kind, probs, pts, exp in (("drivers", p.p_driver_title, sp.driver_points, p.expected_driver_points),
+                                      ("constructors", p.p_team_title, sp.team_points, p.expected_team_points)):
+            id_key = "driver_id" if kind == "drivers" else "team_id"
+            out[kind] = sorted(({id_key: k, ("driver_name" if kind == "drivers" else "team_name"): names.get((kind, k)),
+                                 "p_title": round(v, 4), "points_now": pts.get(k, 0.0),
+                                 "expected_points": round(exp.get(k, 0.0), 1)} for k, v in probs.items()),
+                               key=lambda r: (-r["p_title"], -r["points_now"]))
+        _LIVE_CACHE.clear()
+        _LIVE_CACHE[key] = out
+    return _LIVE_CACHE[key]
+
+
+def _raced_rounds(db: Session, season: int) -> int:
+    return int(db.execute(text("""
+        SELECT COUNT(DISTINCT s.race_id) FROM sessions s JOIN races r ON r.id = s.race_id
+        JOIN race_results rr ON rr.session_id = s.id WHERE r.season_year = :s AND s.session_type = 'R'"""),
+        {"s": season}).scalar() or 0)
+
+
 @router.get("/{season}")
 def get_championship(season: int = Path(..., ge=2018, le=2100), db: Session = Depends(get_db)):
     """Latest title chances: per driver / team the chance of the title, points now and the
-    expected final points."""
+    expected final points, plus a confidence level measured on earlier seasons at the same
+    stage (before the season, early, mid, late). Works before the first race too."""
     meta = db.execute(text("""
         SELECT after_round, MAX(weekends_left) AS weekends_left, MAX(computed_at) AS computed_at
         FROM championship_projections WHERE season_year = :s AND model_version = :v
         GROUP BY after_round ORDER BY after_round DESC LIMIT 1"""),
         {"s": season, "v": MODEL_VERSION}).mappings().first() if _table_exists(db) else None
-    if meta is None:
-        raise HTTPException(status_code=404, detail="No championship projection for this season yet "
-                                                    "(run championship_projection_v1.py after a race)")
-    params = {"s": season, "r": meta["after_round"], "v": MODEL_VERSION}
-    out = {"season": season, "model_version": MODEL_VERSION, "after_round": meta["after_round"],
-           "weekends_left": meta["weekends_left"], "computed_at": meta["computed_at"]}
-    for kind, sql in _ENTITY_SQL.items():
-        out[kind] = [_numbers(dict(r)) for r in db.execute(text(sql), params).mappings()]
+    if meta is None or meta["after_round"] < _raced_rounds(db, season):
+        body = _live_projection(db, season)
+        out = {"season": season, "model_version": MODEL_VERSION, "stored": False, **body}
+    else:
+        params = {"s": season, "r": meta["after_round"], "v": MODEL_VERSION}
+        out = {"season": season, "model_version": MODEL_VERSION, "stored": True, "after_round": meta["after_round"],
+               "weekends_left": meta["weekends_left"], "computed_at": meta["computed_at"]}
+        for kind, sql in _ENTITY_SQL.items():
+            out[kind] = [_numbers(dict(r)) for r in db.execute(text(sql), params).mappings()]
+    rounds = _season_rounds(db, season)
+    out["confidence"] = {kind: title_confidence(kind, out["after_round"], rounds) for kind in ("drivers", "constructors")}
     out["validation"] = VALIDATION
     return out
 

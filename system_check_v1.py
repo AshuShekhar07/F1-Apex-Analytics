@@ -181,7 +181,7 @@ def api(db) -> None:
 
 def models(db, season: int) -> None:
     import winner_prediction_v1 as wp
-    from championship_model_v1 import load_weekends, project_season
+    from championship_model_v1 import load_weekends, project_season, title_confidence
 
     print(f"\n=== 5 MODELS ===")
     weekends = load_weekends(db, start_year=FIRST_SEASON, end_year=season)
@@ -196,6 +196,8 @@ def models(db, season: int) -> None:
             top = sorted(probs, key=lambda k: -probs[k])[:4]
             print(f"    {label:12} " + ", ".join(f"{names.get(k)} {probs[k]:.1%} ({pts.get(k, 0):.0f} -> {exp[k]:.0f} pts)"
                                                   for k in top))
+            conf = title_confidence(label, sp.after_round, len([w for w in weekends if w.season == season]))
+            print(f"    {'':12} confidence {conf['level'].upper()}: {conf['basis']}")
             if abs(sum(probs.values()) - 1) > 0.01:
                 fail(f"{label} title chances add up to {sum(probs.values()):.3f}")
     except ValueError as exc:

@@ -14,6 +14,12 @@ winner_confidence_v1.json by --backtest:
   medium  35-55%
   low     < 35%
 
+More data = more confidence: the record is also kept by how much of the season has been
+seen (season_start: 0-2 races run this season, early_season: 3-6, established: 7+; races
+under brand-new regulations counted separately when there are enough of them). The level
+shown is the lower of "how did favourites do with this much data" and "how did favourites
+with a similar chance do" -- high only with plenty of data AND a clear favourite.
+
 Win-chance calibration: the strength model learns from whole finishing orders, and the midfield
 is far more random than the fight for the win, so its favourite's chance came out too low
 (backtest: before qualifying said 25%, the favourite won 44%; after, said 42%, won 59%). Each
@@ -51,6 +57,9 @@ MIN_BIN_RACES = 15          # fewer races in a bin: use the stage's overall reco
 HIGH, MEDIUM = 0.55, 0.35
 BACKTEST_SIMS = 4000
 MIN_CALIBRATION_RACES = 20  # earlier races needed to fit the sharpening for a season
+DATA_STAGES = (("season_start", 0, 2), ("early_season", 3, 6), ("established", 7, 99))
+NEW_RULES_RACES = 3         # fewer races than this under the current regulations = new regulations
+LEVEL_ORDER = ("low", "medium", "high")
 POWER_BOUNDS = (0.5, 4.0)
 # championship_backtest_v1, 152 races 2019-2025, until --backtest has been run
 FALLBACK = {"pre_qualifying": {"races": 152, "favourite_won": 0.487, "bins": []},
@@ -96,8 +105,19 @@ def fit_power(cases: Sequence[tuple[dict, int]]) -> float:
     return float(minimize_scalar(neg, bounds=POWER_BOUNDS, method="bounded").x)
 
 
-def confidence(stage: str, favourite_p: float, table: dict | None = None) -> dict:
-    """Measured record of favourites at this stage with a similar chance."""
+def data_stage(weekends: Sequence[cm.Weekend], race_date: date, season: int, era: str | None) -> dict:
+    """How much evidence there is for this race: races run this season and under these rules."""
+    before = [w for w in weekends if w.raced and w.race_date < race_date]
+    this_season = sum(w.season == season for w in before)
+    this_era = sum(w.era == era for w in before) if era else len(before)
+    bucket = next(name for name, lo, hi in DATA_STAGES if lo <= this_season <= hi)
+    return {"races_this_season": this_season, "races_under_these_regulations": this_era,
+            "new_regulations": this_era < NEW_RULES_RACES, "bucket": bucket}
+
+
+def confidence(stage: str, favourite_p: float, table: dict | None = None, data: dict | None = None) -> dict:
+    """Measured record of favourites at this qualifying stage: with a similar chance, and with
+    as much data as now; the level is the lower of the two."""
     rec = (table or load_confidence())[stage]
     match = next((b for b in rec.get("bins", []) if b["lo"] <= favourite_p < b["hi"]), None)
     if match and match["races"] >= MIN_BIN_RACES:
@@ -107,8 +127,25 @@ def confidence(stage: str, favourite_p: float, table: dict | None = None) -> dic
     else:
         rate, n, basis = rec["favourite_won"], rec["races"], (
             f"in {rec['races']} earlier races at this stage, the favourite won {rec['favourite_won']:.0%}")
-    return {"level": level(rate), "favourite_won_historically": round(rate, 3), "races": n, "basis": basis,
-            "stage_record": round(rec["favourite_won"], 3)}
+    out = {"level": level(rate), "favourite_won_historically": round(rate, 3), "races": n, "basis": basis,
+           "stage_record": round(rec["favourite_won"], 3)}
+    if data:
+        by_data = rec.get("by_data_stage", {})
+        drec = by_data.get("new_regulations") if data.get("new_regulations") else None
+        label = "under brand-new regulations"
+        if not drec or drec["races"] < MIN_BIN_RACES:
+            drec, label = by_data.get(data["bucket"]), {
+                "season_start": "in the first races of a season", "early_season": "after 3-6 races of a season",
+                "established": "with 7+ races of the season run"}[data["bucket"]]
+        if drec and drec["races"] >= MIN_BIN_RACES:
+            data_level = level(drec["favourite_won"])
+            out["data_basis"] = (f"{label}, the favourite won {drec['favourite_won']:.0%} of {drec['races']} "
+                                 f"earlier races at this stage")
+            out["data_record"] = drec["favourite_won"]
+            if LEVEL_ORDER.index(data_level) < LEVEL_ORDER.index(out["level"]):
+                out["level"] = data_level
+        out["data"] = data
+    return out
 
 
 # --- data --------------------------------------------------------------------------
@@ -197,6 +234,7 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     driver_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM drivers"))} if names else {})
     team_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM teams"))} if names else {})
     table = load_confidence()
+    evidence = data_stage(weekends, race["race_date"], race["season_year"], race["regulation_era"])
     stages = {}
     for stage in STAGES:
         if stage == "post_qualifying" and not grid:
@@ -209,7 +247,7 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
         stages[stage] = {
             "favourite": {"driver_id": fav, "driver_name": driver_names.get(fav), "team_name": team_names.get(lineup[fav]),
                           "p_win": round(probs.p_win[fav], 4), "p_podium": round(probs.p_podium[fav], 4)},
-            "confidence": confidence(stage, probs.p_win[fav], table),
+            "confidence": confidence(stage, probs.p_win[fav], table, evidence),
             "win_calibration_power": win_power(stage, table),
             "drivers": [{"driver_id": d, "driver_name": driver_names.get(d), "team_name": team_names.get(lineup[d]),
                          "grid": (grid or {}).get(d) if stage == "post_qualifying" else None,
@@ -219,7 +257,7 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     current = "post_qualifying" if "post_qualifying" in stages else "pre_qualifying"
     return {"race_id": race["id"], "season": race["season_year"], "round": race["round_number"],
             "track": race["track"], "race_date": race["race_date"], "stage": current,
-            "grid_source": grid_source, "lineup_source": lineup_source,
+            "grid_source": grid_source, "lineup_source": lineup_source, "evidence": evidence,
             "predicted_winner": stages[current]["favourite"], "confidence": stages[current]["confidence"],
             "stages": stages,
             "method": {"pre_qualifying": "car (per season) + driver skill from earlier finishing orders",
@@ -271,6 +309,7 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
     strengths_for = cm._cached_strengths(cm.RACE_WINTER_SD)
     grid_coef: dict[int, float] = {}
     cases: dict[str, list[tuple[int, int, dict, int]]] = {s: [] for s in STAGES}   # season, race, p_win, winner
+    buckets: dict[int, list[str]] = {}
     for idx, w in enumerate(raced):
         if not (start <= w.season <= end) or idx < cm.MIN_HISTORY:
             continue
@@ -283,6 +322,8 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
         winner = next((r.driver_id for r in w.race if r.finish == 1), None)
         if winner is None:
             continue
+        evidence = data_stage(raced, w.race_date, w.season, w.era)
+        buckets[w.race_id] = [evidence["bucket"]] + (["new_regulations"] if evidence["new_regulations"] else [])
         for stage in STAGES:
             entrants = [(r.driver_id, r.team_id, r.grid if stage == "post_qualifying" else None) for r in w.race]
             p = cm.race_probabilities(st, entrants, grid_coef=grid_coef[w.season], dnf=dnf, sims=sims).p_win
@@ -304,7 +345,12 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
         ece_raw, ece_cal = calibration_error(raw), calibration_error(calibrated)
         promoted = hi < 0 and ece_cal <= ece_raw
         shown = calibrated if promoted else raw
-        out[stage] = {**_summary(_rows(shown)),
+        by_data = {}
+        for name in (*(n for n, _, _ in DATA_STAGES), "new_regulations"):
+            sel = [c for (_, rid, _, _), c in zip(rows, shown) if name in buckets[rid]]
+            if sel:
+                by_data[name] = _summary(_rows(sel))
+        out[stage] = {**_summary(_rows(shown)), "by_data_stage": by_data,
                       "uncalibrated": _summary(_rows(raw)),
                       "walk_forward_calibrated": _summary(_rows(calibrated)),
                       "calibration": {"power": round(fit_power(raw), 3), "promoted": promoted,
@@ -340,11 +386,15 @@ def print_calendar(db: Any) -> None:
 def print_prediction(pred: dict) -> None:
     print(f"=== {pred['season']} R{pred['round']} {pred['track']} ({pred['race_date']}) ===")
     print(f"  line-up: {pred['lineup_source']}; grid: {pred['grid_source'] or 'not known yet (before qualifying)'}")
+    ev = pred["evidence"]
+    print(f"  evidence: {ev['races_this_season']} races run this season, {ev['races_under_these_regulations']} under "
+          f"these regulations ({ev['bucket'].replace('_', ' ')}{', new regulations' if ev['new_regulations'] else ''})")
     for stage, block in pred["stages"].items():
         fav, conf = block["favourite"], block["confidence"]
         print(f"\n  {stage.replace('_', ' ').upper()}: predicted winner {fav['driver_name']} ({fav['team_name']}) "
               f"-- win {fav['p_win']:.1%}, podium {fav['p_podium']:.1%}")
-        print(f"  confidence {conf['level'].upper()}: {conf['basis']}")
+        print(f"  confidence {conf['level'].upper()}: {conf['basis']}"
+              + (f"; {conf['data_basis']}" if conf.get("data_basis") else ""))
         for d in block["drivers"][:6]:
             grid = f"P{d['grid']:<2}" if d["grid"] else "   "
             print(f"    {grid} {d['driver_name'] or d['driver_id']:24} {d['team_name'] or '':20} "
@@ -383,6 +433,9 @@ def main() -> int:
                         print(f"      favourite had {b['lo']:.0%}-{min(b['hi'], 1):.0%}: {b['races']:4} races, "
                               f"said {b['mean_p']:.1%}, won {b['favourite_won']:.1%} -> {level(b['favourite_won'])}")
                 print(f"    sharpening k by season (fitted on earlier seasons): {cal['power_by_season']}; now {cal['power']}")
+                for name, summ in rec["by_data_stage"].items():
+                    print(f"    {name:14} {summ['races']:4} races: favourite won {summ['favourite_won']:.1%} "
+                          f"(average favourite chance {summ['mean_favourite_p']:.1%}) -> {level(summ['favourite_won'])}")
                 print(f"    log loss change {d:+.4f} [{lo:+.4f}, {hi:+.4f}], calibration error "
                       f"{cal['calibration_error']['uncalibrated']:.4f} -> {cal['calibration_error']['calibrated']:.4f}"
                       f"  => {'PROMOTED' if cal['promoted'] else 'not promoted (kept uncalibrated)'}")

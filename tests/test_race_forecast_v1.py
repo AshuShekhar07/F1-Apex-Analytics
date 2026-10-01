@@ -458,3 +458,22 @@ def test_sharpening_keeps_the_order_and_is_fitted_on_winners():
     assert wp.win_power("post_qualifying", table) == 1.0
     table["post_qualifying"]["calibration"]["promoted"] = True
     assert wp.win_power("post_qualifying", table) == 1.8
+
+
+def test_confidence_grows_with_data():
+    import winner_prediction_v1 as wp
+    from test_championship_model_v1 import _weekend
+
+    weekends = [_weekend(i, [1, 2, 3, 4, 5, 6], season=2023 + (i > 12)) for i in range(1, 25)]
+    first = wp.data_stage(weekends, weekends[12].race_date, 2024, "e")
+    late = wp.data_stage(weekends, weekends[23].race_date, 2024, "e")
+    assert first["bucket"] == "season_start" and first["races_this_season"] == 0
+    assert late["bucket"] == "established" and late["races_this_season"] == 11
+    assert wp.data_stage(weekends, weekends[12].race_date, 2024, "brand_new")["new_regulations"]
+    table = {"pre_qualifying": {"races": 100, "favourite_won": 0.6, "bins": [],
+                                "by_data_stage": {"season_start": {"races": 30, "favourite_won": 0.3},
+                                                  "established": {"races": 60, "favourite_won": 0.7}}}}
+    assert wp.confidence("pre_qualifying", 0.4, table, first)["level"] == "low"      # little data
+    assert wp.confidence("pre_qualifying", 0.4, table, late)["level"] == "high"
+    out = wp.backtest(weekends, 2024, 2024, sims=300)
+    assert set(out["pre_qualifying"]["by_data_stage"]) >= {"season_start", "established"}

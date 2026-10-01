@@ -441,27 +441,104 @@ class SeasonProjection:
 
 
 def project_season(weekends: Sequence[Weekend], season: int, *, after_round: int | None = None,
-                   sims: int | None = None) -> SeasonProjection:
-    """Title chances after `after_round` (default: the latest raced round) from the races up
-    to that round only, so a past round's projection is what we would have said then."""
+                   sims: int | None = None, lineup: dict[int, int] | None = None) -> SeasonProjection:
+    """Title chances after `after_round` (default: the latest raced round; 0 = before the
+    season) from the races up to that point only, so a past round's projection is what we
+    would have said then. Before the season, the cars and drivers come from earlier seasons
+    (fit_strengths weighs races under other regulations less), the line-up is `lineup` (the
+    first race's entry list when loaded) or last season's final line-up."""
     season_w = [w for w in weekends if w.season == season]
+    if not season_w:
+        raise ValueError(f"no {season} calendar loaded")
     raced_rounds = [w.round for w in season_w if w.raced]
-    if not raced_rounds:
-        raise ValueError(f"no raced rounds in {season} yet")
-    after_round = max(raced_rounds) if after_round is None else after_round
+    if after_round is None:
+        after_round = max(raced_rounds) if raced_rounds else 0
     done = [w for w in season_w if w.round <= after_round]
-    if not done or not all(w.raced for w in done):
+    if after_round > 0 and (not done or not all(w.raced for w in done)):
         raise ValueError(f"{season} round {after_round} has not been raced")
     remaining = [w for w in season_w if w.round > after_round]
-    cutoff = done[-1].race_date
-    history = [w for w in weekends if w.raced and w.race_date <= cutoff]
+    if done:
+        history = [w for w in weekends if w.raced and w.race_date <= done[-1].race_date]
+    else:
+        history = [w for w in weekends if w.raced and w.race_date < season_w[0].race_date]
+    if not history or (not done and len(history) < MIN_HISTORY):
+        raise ValueError(f"too few races before {season} round {after_round + 1} to project from")
     era = (remaining[0] if remaining else done[-1]).era
     st = fit_strengths(history, era=era, winter_sd=TITLE_WINTER_SD, season=season)
-    lineup = season_lineup(done)
+    if lineup is None:
+        lineup = season_lineup(done) if done else season_lineup([w for w in history if w.season == history[-1].season])
     d_pts, t_pts = standings(done, season)
     proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
                                 dnf=dnf_rate(history, era), sims=sims or SIMS, drift=TITLE_DRIFT)
     return SeasonProjection(season, after_round, proj, d_pts, t_pts, lineup)
+
+
+# --- title confidence: how often the favourite became champion at this stage of a season --
+
+TITLE_CONFIDENCE_FILE = "title_confidence_v1.json"
+TITLE_STAGES = (("pre_season", "before the first race"), ("early", "first quarter of the season"),
+                ("mid", "second and third quarters"), ("late", "last quarter"))
+CONFIDENCE_HIGH, CONFIDENCE_MEDIUM = 0.55, 0.35
+
+
+def title_stage(after_round: int, season_rounds: int) -> str:
+    if after_round == 0:
+        return "pre_season"
+    share = after_round / max(season_rounds, 1)
+    return "early" if share <= 0.25 else "mid" if share <= 0.75 else "late"
+
+
+def confidence_level(rate: float) -> str:
+    return "high" if rate >= CONFIDENCE_HIGH else "medium" if rate >= CONFIDENCE_MEDIUM else "low"
+
+
+def title_backtest(weekends: Sequence[Weekend], start: int, end: int, *, sims: int = 2000) -> dict:
+    """Every completed season start..end projected before every round (production settings,
+    races up to that point only); per stage and title: how often the favourite became champion."""
+    records: dict[tuple[str, str], list[tuple[float, bool]]] = defaultdict(list)
+    for season in range(start, end + 1):
+        season_w = [w for w in weekends if w.season == season]
+        if not season_w or not all(w.raced for w in season_w):
+            continue
+        final_d, final_t = standings(season_w, season)
+        champs = {"drivers": max(final_d, key=final_d.get), "constructors": max(final_t, key=final_t.get)}
+        for k in range(len(season_w)):
+            try:
+                sp = project_season(weekends, season, after_round=k, sims=sims,
+                                    lineup={r.driver_id: r.team_id for r in season_w[k].race} if k == 0 else None)
+            except ValueError:
+                continue
+            stage = title_stage(k, len(season_w))
+            for kind, probs in (("drivers", sp.projection.p_driver_title), ("constructors", sp.projection.p_team_title)):
+                fav = max(probs, key=probs.get)
+                records[(kind, stage)].append((probs[fav], fav == champs[kind]))
+    out: dict = {"drivers": {}, "constructors": {}}
+    for (kind, stage), rows in records.items():
+        out[kind][stage] = {"rounds": len(rows), "favourite_won": round(sum(r[1] for r in rows) / len(rows), 3),
+                            "mean_favourite_p": round(sum(r[0] for r in rows) / len(rows), 3)}
+    return out
+
+
+def title_confidence(kind: str, after_round: int, season_rounds: int, table: dict | None = None) -> dict:
+    """Measured record of title favourites at this stage of earlier seasons."""
+    import json
+    from pathlib import Path
+
+    stage = title_stage(after_round, season_rounds)
+    if table is None:
+        try:
+            table = json.loads((Path(__file__).resolve().parent / TITLE_CONFIDENCE_FILE).read_text())["titles"]
+        except (OSError, ValueError, KeyError):
+            table = {}
+    rec = table.get(kind, {}).get(stage)
+    label = dict(TITLE_STAGES)[stage]
+    if not rec:
+        return {"stage": stage, "level": "low" if stage == "pre_season" else "medium", "measured": False,
+                "basis": f"{label}: not measured yet (run championship_projection_v1.py --backtest)"}
+    return {"stage": stage, "level": confidence_level(rec["favourite_won"]), "measured": True,
+            "favourite_won_historically": rec["favourite_won"], "rounds": rec["rounds"],
+            "basis": f"{label}: in {rec['rounds']} earlier projections at this stage, the favourite became "
+                     f"champion {rec['favourite_won']:.0%} of the time"}
 
 
 def store_projection(db: Any, sp: SeasonProjection) -> int:

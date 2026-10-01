@@ -214,12 +214,19 @@ def test_projection_is_stored_and_served(synthetic_db, monkeypatch):
     try:
         client = TestClient(app)
         body = client.get(f"/championship/{season}").json()
-        assert body["after_round"] == max(written) and body["weekends_left"] == 0
+        assert body["after_round"] == max(written) and body["weekends_left"] == 0 and body["stored"]
+        assert set(body["confidence"]) == {"drivers", "constructors"}
         assert sum(d["p_title"] for d in body["drivers"]) == pytest.approx(1.0, abs=0.01)
         assert body["constructors"][0]["team_name"] and body["validation"]["constructors_title"]
         history = client.get(f"/championship/{season}/history").json()
         assert len(history["drivers"][0]["rounds"]) == len(written)
         assert client.get("/championship/2099").status_code == 404
+        # nothing stored for an earlier season: computed live from the data there is
+        with synthetic_db.begin() as db:
+            db.execute(text("DELETE FROM championship_projections"))
+        live = client.get(f"/championship/{season}").json()
+        assert live["stored"] is False and live["after_round"] == max(written)
+        assert sum(d["p_title"] for d in live["drivers"]) == pytest.approx(1.0, abs=0.01)
     finally:
         if previous is None:
             app.dependency_overrides.pop(get_db, None)
@@ -238,3 +245,48 @@ def test_season_lineup_tops_a_team_up_to_two_cars():
     swapped = _weekend(3, [1, 2, 3, 7, 5, 6], teams={1: 1, 2: 1, 3: 2, 7: 2, 5: 3, 6: 3})
     lineup = season_lineup([full, swapped])
     assert lineup[7] == 2 and 4 not in lineup
+
+
+def _second_season(order, races=8):
+    from dataclasses import replace
+    return [replace(_weekend(12 + i, order, season=2024), round=i) for i in range(1, races + 1)]
+
+
+def _two_seasons():
+    old = [_weekend(i, [1, 2, 3, 4, 5, 6], season=2023) for i in range(1, 13)]
+    new = _second_season([3, 4, 1, 2, 5, 6])
+    for w in new[4:]:
+        w.race.clear()                                   # rounds 5-8 not raced yet
+    return old + new
+
+
+def test_pre_season_projection_uses_earlier_seasons_only():
+    from championship_model_v1 import project_season
+
+    weekends = _two_seasons()
+    pre = project_season(weekends, 2024, after_round=0, sims=3000)
+    assert pre.after_round == 0 and pre.driver_points == {} and pre.projection.remaining_weekends == 8
+    # last season's dominant team is the pre-season favourite...
+    assert max(pre.projection.p_team_title, key=pre.projection.p_team_title.get) == 1
+    # ...and four races of the new pecking order move the chances the other way
+    now = project_season(weekends, 2024, sims=3000)
+    assert now.after_round == 4 and now.projection.p_team_title[2] > pre.projection.p_team_title[2]
+    lineup = {d: (d + 1) // 2 for d in range(1, 7)}
+    assert project_season(weekends, 2024, after_round=0, lineup=lineup, sims=500).lineup == lineup
+    with pytest.raises(ValueError):
+        project_season(weekends, 2030)
+
+
+def test_title_confidence_by_stage():
+    from championship_model_v1 import title_backtest, title_confidence, title_stage
+
+    assert [title_stage(r, 20) for r in (0, 3, 5, 10, 15, 16, 20)] == \
+        ["pre_season", "early", "early", "mid", "mid", "late", "late"]
+    table = {"drivers": {"pre_season": {"rounds": 8, "favourite_won": 0.5, "mean_favourite_p": 0.4},
+                         "late": {"rounds": 60, "favourite_won": 0.95, "mean_favourite_p": 0.9}}}
+    assert title_confidence("drivers", 0, 20, table)["level"] == "medium"
+    assert title_confidence("drivers", 19, 20, table)["level"] == "high"
+    assert title_confidence("constructors", 5, 20, table)["measured"] is False
+    weekends = [w for w in _two_seasons() if w.season == 2023] + _second_season([1, 2, 3, 4, 5, 6])
+    out = title_backtest(weekends, 2024, 2024, sims=300)
+    assert out["drivers"]["late"]["favourite_won"] == 1.0 and out["constructors"]["pre_season"]["rounds"] == 1
