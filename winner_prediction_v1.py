@@ -98,6 +98,37 @@ def win_power(stage: str, table: dict | None = None) -> float:
     return float(cal["power"]) if cal.get("promoted") else 1.0
 
 
+def sharpen_podium(p_podium: dict, k: float) -> dict:
+    """Podium chances p^k rescaled to the same expected number of podium places (each capped
+    at 1). Front-runners finished on the podium more often than said (77% -> 84%), back-markers
+    less often (1.8% -> 0.6%)."""
+    if k == 1.0 or not p_podium:
+        return dict(p_podium)
+    target = sum(p_podium.values())
+    powered = {d: max(p, 0.0) ** k for d, p in p_podium.items()}
+    lo, hi = 0.0, 1e6
+    for _ in range(80):                                   # scale so the capped sum hits the target
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if sum(min(1.0, mid * v) for v in powered.values()) < target else (lo, mid)
+    return {d: min(1.0, hi * v) for d, v in powered.items()}
+
+
+def podium_power(stage: str, table: dict | None = None) -> float:
+    cal = (table or load_confidence()).get(stage, {}).get("podium_calibration") or {}
+    return float(cal["power"]) if cal.get("promoted") else 1.0
+
+
+def _podium_loss(p: dict, podium: set) -> float:
+    return mean(-math.log(max(q if d in podium else 1 - q, 1e-4)) for d, q in p.items())
+
+
+def fit_podium_power(cases: Sequence[tuple[dict, set]]) -> float:
+    from scipy.optimize import minimize_scalar
+
+    return float(minimize_scalar(lambda k: sum(_podium_loss(sharpen_podium(p, k), pod) for p, pod in cases),
+                                 bounds=POWER_BOUNDS, method="bounded").x)
+
+
 def fit_power(cases: Sequence[tuple[dict, int]]) -> float:
     """k maximising the log chance given to the actual winners."""
     from scipy.optimize import minimize_scalar
@@ -200,6 +231,14 @@ def known_grid(db: Any, race_id: int) -> tuple[dict[int, int], str | None]:
     return (quali, "qualifying") if quali else ({}, None)
 
 
+def quali_positions(db: Any, race_id: int) -> dict[int, int]:
+    return {int(d): int(p) for d, p in db.execute(text("""
+        SELECT re.driver_id, q.final_position FROM qualifying_results q
+        JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+        JOIN race_entries re ON re.id = q.race_entry_id
+        WHERE s.race_id = :r AND q.final_position IS NOT NULL"""), {"r": race_id})}
+
+
 def entry_list(db: Any, race: dict, weekends: Sequence[cm.Weekend]) -> tuple[dict[int, int], str]:
     """driver -> team: the race's own entry list when loaded, else the current line-up."""
     entries = {int(d): int(t) for d, t in db.execute(text("""
@@ -218,10 +257,10 @@ def entry_list(db: Any, race: dict, weekends: Sequence[cm.Weekend]) -> tuple[dic
 # --- prediction --------------------------------------------------------------------
 
 def stage_probabilities(weekends: Sequence[cm.Weekend], race: dict, lineup: dict[int, int],
-                        grid: dict[int, int] | None) -> cm.RaceProbabilities:
+                        grid: dict[int, int] | None, quali: dict[int, int] | None = None) -> cm.RaceProbabilities:
     entrants = [(d, t, (grid or {}).get(d)) for d, t in sorted(lineup.items())]
     out = cm.race_win_chances(weekends, race_date=race["race_date"], era=race["regulation_era"],
-                              season=race["season_year"], entrants=entrants)
+                              season=race["season_year"], entrants=entrants, quali=quali if grid else None)
     if out is None:
         raise PredictionError("too few earlier races for the strength model")
     return out[0]
@@ -233,6 +272,7 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     weekends = cm.load_weekends(db, start_year=2018, end_year=race["season_year"])
     lineup, lineup_source = entry_list(db, race, weekends)
     grid, grid_source = known_grid(db, race_id)
+    quali = quali_positions(db, race_id)
     driver_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM drivers"))} if names else {})
     team_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM teams"))} if names else {})
     table = load_confidence()
@@ -241,9 +281,10 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     for stage in STAGES:
         if stage == "post_qualifying" and not grid:
             continue
-        raw = stage_probabilities(weekends, race, lineup, grid if stage == "post_qualifying" else None)
+        raw = stage_probabilities(weekends, race, lineup, grid if stage == "post_qualifying" else None, quali)
         p_win = sharpen(raw.p_win, win_power(stage, table))
-        probs = cm.RaceProbabilities(p_win, {d: max(raw.p_podium[d], p_win[d]) for d in raw.p_podium}, raw.p_points)
+        p_pod = sharpen_podium(raw.p_podium, podium_power(stage, table))
+        probs = cm.RaceProbabilities(p_win, {d: max(p_pod[d], p_win[d]) for d in p_pod}, raw.p_points)
         ranked = sorted(lineup, key=lambda d: (-probs.p_win[d], (grid or {}).get(d, 99)))
         fav = ranked[0]
         stages[stage] = {
@@ -302,7 +343,37 @@ def _rows(cases: Sequence[tuple[dict, int]]) -> list[tuple[float, bool, float]]:
     return out
 
 
-def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int = BACKTEST_SIMS) -> dict:
+def _podium_ece(cases: Sequence[tuple[dict, set]]) -> float:
+    pairs = [(q, d in pod) for p, pod in cases for d, q in p.items()]
+    total = 0.0
+    for lo, hi in ((0, .05), (.05, .15), (.15, .3), (.3, .5), (.5, .7), (.7, 1.01)):
+        sel = [(q, y) for q, y in pairs if lo <= q < hi]
+        if sel:
+            total += len(sel) * abs(mean(q for q, _ in sel) - mean(y for _, y in sel))
+    return total / len(pairs) if pairs else 0.0
+
+
+def _podium_calibration(rows: Sequence[tuple[int, int, dict, set]]) -> dict:
+    """Walk-forward podium sharpening (k per season from earlier seasons) and its verdict."""
+    from race_form_signal_v1 import race_clustered
+
+    calibrated, power_by_season = [], {}
+    for season in sorted({r[0] for r in rows}):
+        earlier = [(p, pod) for s_, _, p, pod in rows if s_ < season]
+        k = fit_podium_power(earlier) if len(earlier) >= MIN_CALIBRATION_RACES else 1.0
+        power_by_season[season] = round(k, 3)
+        calibrated += [(sharpen_podium(p, k), pod) for s_, _, p, pod in rows if s_ == season]
+    raw = [(p, pod) for _, _, p, pod in rows]
+    diffs = {rid: [_podium_loss(c[0], c[1]) - _podium_loss(p, pod)] for (_, rid, p, pod), c in zip(rows, calibrated)}
+    d, lo, hi = race_clustered(diffs) if diffs else (0.0, 0.0, 0.0)
+    ece_raw, ece_cal = _podium_ece(raw), _podium_ece(calibrated)
+    return {"power": round(fit_podium_power(raw), 3) if raw else 1.0, "promoted": bool(hi < 0 and ece_cal <= ece_raw),
+            "power_by_season": power_by_season, "log_loss_change": [round(d, 4), round(lo, 4), round(hi, 4)],
+            "calibration_error": {"uncalibrated": round(ece_raw, 4), "calibrated": round(ece_cal, 4)}}
+
+
+def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int = BACKTEST_SIMS,
+             quali: dict[int, dict[int, int]] | None = None) -> dict:
     """Every race of start..end predicted at both stages from the races before it only; then
     the win-chance sharpening for season S fitted on the races before S and judged on S."""
     from race_form_signal_v1 import race_clustered
@@ -312,6 +383,7 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
     grid_coef: dict[int, float] = {}
     cases: dict[str, list[tuple[int, int, dict, int]]] = {s: [] for s in STAGES}   # season, race, p_win, winner
     buckets: dict[int, list[str]] = {}
+    podiums: dict[str, list[tuple[int, int, dict, set]]] = {s: [] for s in STAGES}   # season, race, p_podium, podium
     for idx, w in enumerate(raced):
         if not (start <= w.season <= end) or idx < cm.MIN_HISTORY:
             continue
@@ -326,10 +398,14 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
             continue
         evidence = data_stage(raced, w.race_date, w.season, w.era)
         buckets[w.race_id] = [evidence["bucket"]] + (["new_regulations"] if evidence["new_regulations"] else [])
+        podium = {r.driver_id for r in w.race if r.finish in (1, 2, 3)}
         for stage in STAGES:
-            entrants = [(r.driver_id, r.team_id, r.grid if stage == "post_qualifying" else None) for r in w.race]
-            p = cm.race_probabilities(st, entrants, grid_coef=grid_coef[w.season], dnf=dnf, sims=sims).p_win
-            cases[stage].append((w.season, w.race_id, p, winner))
+            post = stage == "post_qualifying"
+            entrants = [(r.driver_id, r.team_id, r.grid if post else None) for r in w.race]
+            probs = cm.race_probabilities(st, entrants, grid_coef=grid_coef[w.season], dnf=dnf, sims=sims,
+                                          quali=(quali or {}).get(w.race_id) if post else None)
+            cases[stage].append((w.season, w.race_id, probs.p_win, winner))
+            podiums[stage].append((w.season, w.race_id, probs.p_podium, podium))
     out = {}
     for stage, rows in cases.items():
         if not rows:
@@ -353,6 +429,7 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
             if sel:
                 by_data[name] = _summary(_rows(sel))
         out[stage] = {**_summary(_rows(shown)), "by_data_stage": by_data,
+                      "podium_calibration": _podium_calibration(podiums[stage]),
                       "uncalibrated": _summary(_rows(raw)),
                       "walk_forward_calibrated": _summary(_rows(calibrated)),
                       "calibration": {"power": round(fit_power(raw), 3), "promoted": promoted,
@@ -480,7 +557,13 @@ def main() -> int:
         if args.backtest:
             weekends = cm.load_weekends(db, start_year=2018)
             end = max(w.season for w in weekends if w.raced)
-            stages = backtest(weekends, args.start_year, end)
+            quali: dict[int, dict[int, int]] = {}
+            for rid, d, p in db.execute(text("""
+                SELECT s.race_id, re.driver_id, q.final_position FROM qualifying_results q
+                JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+                JOIN race_entries re ON re.id = q.race_entry_id WHERE q.final_position IS NOT NULL""")):
+                quali.setdefault(int(rid), {})[int(d)] = int(p)
+            stages = backtest(weekends, args.start_year, end, quali=quali)
             CONFIDENCE_FILE.write_text(json.dumps({"source": f"winner_prediction_v1 --backtest, {args.start_year}-{end}, "
                                                              "walk-forward", "stages": stages}, indent=2))
             print(f"=== WINNER BACKTEST {args.start_year}-{end} (each race from the races before it) ===")
@@ -502,6 +585,11 @@ def main() -> int:
                 print(f"    log loss change {d:+.4f} [{lo:+.4f}, {hi:+.4f}], calibration error "
                       f"{cal['calibration_error']['uncalibrated']:.4f} -> {cal['calibration_error']['calibrated']:.4f}"
                       f"  => {'PROMOTED' if cal['promoted'] else 'not promoted (kept uncalibrated)'}")
+                pc = rec["podium_calibration"]
+                d, lo, hi = pc["log_loss_change"]
+                print(f"    podium sharpening k {pc['power']} (by season {pc['power_by_season']}): log loss {d:+.4f} "
+                      f"[{lo:+.4f}, {hi:+.4f}], calibration error {pc['calibration_error']['uncalibrated']:.4f} -> "
+                      f"{pc['calibration_error']['calibrated']:.4f}  => {'PROMOTED' if pc['promoted'] else 'not promoted'}")
             print(f"  saved {CONFIDENCE_FILE.name}")
         if args.calendar:
             print_calendar(db)

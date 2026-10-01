@@ -18,6 +18,10 @@ PART 2  CANDIDATE FIXES, each judged against production on the same races
                                  with 2%
           practice pace          strength + beta x practice long-run pace (FP2, else FP1),
                                  beta chosen on earlier seasons
+          same-weekend sprint    on sprint weekends the sprint has been run before the Grand
+                                 Prix: include its order in the strengths after qualifying
+        Run 1 (2026-10): out-of-position w=0.5 PASSED and is now production (the baseline here);
+        half-life 4/6/12 and practice pace did not. --all reruns every candidate.
         Each variant gets its own walk-forward win calibration, then winner log loss, win
         Brier and favourite-won are compared with production, CI resampling races.
         Promote only BETTER somewhere and WORSE nowhere.
@@ -105,8 +109,9 @@ def probabilities(s: np.ndarray, drivers: list[int], dnf: float, *, sims: int = 
 class Model:
     """Production strength model with switchable fixes; raw (uncalibrated) probabilities."""
 
-    def __init__(self, raced, *, half_life=None, recovery=None, practice=False):
+    def __init__(self, raced, *, half_life=None, recovery=cm.RECOVERY_WEIGHT, practice=False, sprint=False):
         self.raced, self.half_life, self.recovery, self.practice = raced, half_life, recovery, practice
+        self.sprint = sprint
         self.strengths_for = cm._cached_strengths(cm.RACE_WINTER_SD, half_life)
         self.grid_coef: dict[int, float] = {}
         self.beta: dict[int, float] = {}
@@ -120,7 +125,13 @@ class Model:
         return self.grid_coef[season]
 
     def base(self, case: Case, stage: str) -> tuple[list[int], np.ndarray]:
-        st = self.strengths_for(self.raced[:case.idx], case.w)
+        if self.sprint and stage == "post_qualifying" and case.w.sprint:
+            from dataclasses import replace
+            # this weekend's sprint (already run before the Grand Prix) as the newest result
+            st = cm.fit_strengths([*self.raced[:case.idx], replace(case.w, race=[])], era=case.w.era,
+                                  winter_sd=cm.RACE_WINTER_SD, season=case.w.season, half_life=self.half_life)
+        else:
+            st = self.strengths_for(self.raced[:case.idx], case.w)
         drivers = [r.driver_id for r in case.w.race]
         s = np.array([st.of(r.driver_id, r.team_id) for r in case.w.race])
         if stage == "post_qualifying":
@@ -268,6 +279,7 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--start-year", type=int, default=2019)
+    parser.add_argument("--all", action="store_true", help="rerun every candidate, not only the open ones")
     args = parser.parse_args()
     engine = create_engine(os.environ["DATABASE_URL"])
     with engine.connect() as db:
@@ -285,10 +297,14 @@ def main() -> int:
 
     print("\n=== PART 2: CANDIDATE FIXES vs PRODUCTION (same races, walk-forward, own win calibration) ===")
     print("  metric mean (difference to production [90% CI]); log loss / Brier lower = better")
-    variants = [(f"half-life {hl:g} races", Model(raced, half_life=hl), STAGES, None) for hl in HALF_LIVES]
-    variants += [(f"out-of-position grid w={w}", Model(raced, recovery=w), ("post_qualifying",), "oop")
-                 for w in RECOVERY_WEIGHTS]
-    variants += [("practice pace", Model(raced, practice=True), STAGES, "practice")]
+    variants = [("same-weekend sprint", Model(raced, sprint=True), ("post_qualifying",), "sprint")]
+    if args.all:
+        variants += [(f"half-life {hl:g} races", Model(raced, half_life=hl), STAGES, None) for hl in HALF_LIVES]
+        variants += [("no out-of-position grid (previous production)", Model(raced, recovery=None),
+                      ("post_qualifying",), "oop")]
+        variants += [(f"out-of-position grid w={w}", Model(raced, recovery=w), ("post_qualifying",), "oop")
+                     for w in RECOVERY_WEIGHTS if w != cm.RECOVERY_WEIGHT]
+        variants += [("practice pace", Model(raced, practice=True), STAGES, "practice")]
     for label, model, stages, subgroup in variants:
         print(f"\n  {label}:")
         for stage in stages:
@@ -300,6 +316,9 @@ def main() -> int:
                 for line in compare(rows, base[stage], f"{stage}, races with an out-of-position starter",
                                     only=lambda c: any(g - c.quali.get(d, g) >= OUT_OF_POSITION
                                                        for d, g in c.grid.items())):
+                    print(line)
+            if subgroup == "sprint":
+                for line in compare(rows, base[stage], f"{stage}, sprint weekends only", only=lambda c: bool(c.w.sprint)):
                     print(line)
             if subgroup == "practice":
                 betas = sorted({(r["case"].w.season, r["beta"]) for r in rows})

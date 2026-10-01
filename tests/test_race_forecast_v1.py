@@ -509,10 +509,33 @@ def test_winner_diagnostics_run(forecast_db, capsys, monkeypatch):
     for rows in base.values():
         wd.calibrate(rows)
     wd.part1(base)
-    rows = wd.evaluate(wd.Model(raced, recovery=0.5), cases, "post_qualifying")
+    rows = wd.evaluate(wd.Model(raced, sprint=True), cases, "post_qualifying")
     wd.calibrate(rows)
     lines = wd.compare(rows, base["post_qualifying"], "post")
     prac = wd.evaluate(wd.Model(raced, practice=True), cases, "pre_qualifying")
     out = capsys.readouterr().out
     assert "WHERE THE MISSES COME FROM" in out and "favourite's record by situation" in out
     assert lines[0].startswith("    post (") and all(r["beta"] == 0.0 for r in prac)   # too few races to fit beta
+
+
+def test_podium_sharpening_keeps_the_expected_places():
+    import winner_prediction_v1 as wp
+
+    p = {1: 0.8, 2: 0.7, 3: 0.6, 4: 0.4, 5: 0.3, 6: 0.15, 7: 0.05}
+    q = wp.sharpen_podium(p, 2.0)
+    assert sum(q.values()) == pytest.approx(sum(p.values()), abs=1e-6) and max(q.values()) <= 1.0
+    assert q[1] > p[1] and q[7] < p[7] and sorted(q, key=q.get) == sorted(p, key=p.get)
+    assert wp.sharpen_podium(p, 1.0) == p
+    # the top three always finish on the podium -> sharpen; finishes spread like p -> about 1
+    assert wp.fit_podium_power([(p, {1, 2, 3})] * 30) > 1.5
+
+
+def test_out_of_position_starter_counts_part_of_the_way_back():
+    import championship_model_v1 as cm
+
+    assert cm.effective_grid(18, 2) == 10.0 and cm.effective_grid(4, 2) == 4 and cm.effective_grid(5, None) == 5
+    st = cm.Strengths({1: 0.0}, {1: 0.0, 2: 0.0})
+    entrants = [(1, 1, 18), (2, 1, 10)]
+    plain = cm.race_probabilities(st, entrants, grid_coef=1.0, dnf=0.0, sims=4000)
+    with_quali = cm.race_probabilities(st, entrants, grid_coef=1.0, dnf=0.0, sims=4000, quali={1: 2, 2: 10})
+    assert with_quali.p_win[1] > plain.p_win[1]

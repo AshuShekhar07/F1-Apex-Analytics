@@ -644,7 +644,8 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         from championship_model_v1 import load_weekends, race_win_chances
         team_of = {int(f["driver_id"]): int(f["team_id"]) for f in field}
         out = race_win_chances(load_weekends(db, start_year=2018, end_year=season), race_date=as_of, era=era,
-                               season=season, entrants=[(r.driver_id, team_of[r.driver_id], r.grid) for r in rows])
+                               season=season, entrants=[(r.driver_id, team_of[r.driver_id], r.grid) for r in rows],
+                               quali={int(f["driver_id"]): int(f["final_position"]) for f in field if f["final_position"]})
         if out is None:
             notes.append("win/podium chances: too few earlier races for the strength model, "
                          "using the grid-slot rates")
@@ -652,13 +653,13 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             chances, grid_coef = out
             notes.append(f"win/podium chances: strength model, grid effect {grid_coef:.2f}")
             from championship_model_v1 import RaceProbabilities
-            from winner_prediction_v1 import sharpen, win_power
-            k = win_power("post_qualifying")
-            if k != 1.0:      # same calibration as the winner prediction (passed its backtest)
+            from winner_prediction_v1 import podium_power, sharpen, sharpen_podium, win_power
+            k, kp = win_power("post_qualifying"), podium_power("post_qualifying")
+            if k != 1.0 or kp != 1.0:   # same calibration as the winner prediction (passed its backtest)
                 p_win = sharpen(chances.p_win, k)
-                chances = RaceProbabilities(p_win, {d: max(chances.p_podium[d], p_win[d]) for d in p_win},
-                                            chances.p_points)
-                notes.append(f"win chances calibrated on earlier winners (sharpening {k:.2f})")
+                p_pod = sharpen_podium(chances.p_podium, kp)
+                chances = RaceProbabilities(p_win, {d: max(p_pod[d], p_win[d]) for d in p_win}, chances.p_points)
+                notes.append(f"win / podium chances calibrated on earlier results (sharpening {k:.2f} / {kp:.2f})")
 
     drivers = []
     for r, position in zip(rows, predicted):

@@ -233,11 +233,29 @@ class RaceProbabilities:
         return max(self.p_win, key=self.p_win.get)
 
 
+# A driver starting OUT_OF_POSITION+ places behind his qualifying slot (grid penalty, pit lane)
+# counts as starting RECOVERY_WEIGHT of the way back: his car is faster than the slot says.
+# winner_diagnostics_v1 (167 races 2019-2026): log loss and win Brier better, worse nowhere
+# (w = 0.5; 0.25 no clear difference); in the 95 races with such a starter log loss -0.015.
+OUT_OF_POSITION = 3
+RECOVERY_WEIGHT = 0.5
+
+
+def effective_grid(grid: int | None, quali: int | None) -> int | float | None:
+    if grid and quali and grid - quali >= OUT_OF_POSITION:
+        return quali + RECOVERY_WEIGHT * (grid - quali)
+    return grid
+
+
 def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, int | None]], *, grid_coef: float,
-                       dnf: float, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
-    """entrants: (driver, team, grid slot or None). Strength + grid_coef * -log(grid)."""
+                       dnf: float, sims: int = SIMS, seed: int = 7,
+                       quali: dict[int, int] | None = None) -> RaceProbabilities:
+    """entrants: (driver, team, grid slot or None). Strength + grid_coef * -log(grid), the grid
+    of an out-of-position starter taken part of the way back to his qualifying slot."""
     field_size = len(entrants)
-    s = np.array([strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
+    quali = quali or {}
+    s = np.array([strengths.of(d, t) - grid_coef * np.log(effective_grid(g, quali.get(d)) or field_size)
+                  for d, t, g in entrants])
     pos = simulate_order(s, dnf, np.random.default_rng(seed), sims)
     drivers = [d for d, _, _ in entrants]
     finished = pos > 0
@@ -403,8 +421,8 @@ def _cached_strengths(winter_sd: float | None, half_life: float | None = None):
 
 
 def race_win_chances(weekends: Sequence[Weekend], *, race_date: date, era: str | None, season: int,
-                     entrants: Sequence[tuple[int, int, int | None]], sims: int = SIMS
-                     ) -> tuple[RaceProbabilities, float] | None:
+                     entrants: Sequence[tuple[int, int, int | None]], sims: int = SIMS,
+                     quali: dict[int, int] | None = None) -> tuple[RaceProbabilities, float] | None:
     """Production P(win/podium/points) for one race from the weekends raced before its date,
     or None with too little history. The grid effect is fitted on the races before the
     season started (as in the backtest). Returns (probabilities, grid effect)."""
@@ -414,7 +432,8 @@ def race_win_chances(weekends: Sequence[Weekend], *, race_date: date, era: str |
     pre_season = [w for w in before if w.season < season] or before
     grid_coef = fit_grid_coef(pre_season, _cached_strengths(RACE_WINTER_SD))
     st = fit_strengths(before, era=era, winter_sd=RACE_WINTER_SD, season=season)
-    return race_probabilities(st, entrants, grid_coef=grid_coef, dnf=dnf_rate(before, era), sims=sims), grid_coef
+    return (race_probabilities(st, entrants, grid_coef=grid_coef, dnf=dnf_rate(before, era), sims=sims, quali=quali),
+            grid_coef)
 
 
 def season_lineup(done: Sequence[Weekend], cars_per_team: int = 2) -> dict[int, int]:
