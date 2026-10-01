@@ -70,6 +70,7 @@ def _jsonable(value):
 
 @router.get("/about")
 def about():
+    from championship_model_v1 import VALIDATION as CHAMPIONSHIP_VALIDATION
     from race_forecast_v1 import VALIDATION
     from strategy_service_v7 import VALIDATION as STRATEGY_VALIDATION
 
@@ -85,5 +86,9 @@ def about():
                                        "and worse on none. Forecasts made before a race are also frozen and "
                                        "scored as the live record."),
         "finishing_order": VALIDATION.get("predicted_position"),
+        "race_winner": CHAMPIONSHIP_VALIDATION["race_winner"],
+        "drivers_title": CHAMPIONSHIP_VALIDATION["drivers_title"],
+        "constructors_title": CHAMPIONSHIP_VALIDATION["constructors_title"],
+        "championship_caveat": CHAMPIONSHIP_VALIDATION["caveat"],
         "strategy": STRATEGY_VALIDATION.get("dry"),
     }

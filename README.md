@@ -127,8 +127,21 @@ results, sprint/race sessions kept separate).
 team seasons, comparisons, records, overtaking index, wet-weather ranking,
 Predict & Compete, prediction endpoints, circuit visualizer.
 
-**Blocked:** publishing new season predictions (`simulate_season.py`) is
-fail-closed until a validated pre-qualifying finishing-position model exists.
+**Championship and race-winner chances** (`championship_model_v1.py`): one strength per
+car (per season) and per driver, learned from race finishing orders, simulated
+race by race with the real points systems. Walk-forward on 2018-2025
+(`championship_backtest_v1.py`):
+- race winner: favourite won 57% vs 52% for the grid-slot rates; the race forecast's
+  P(win)/P(podium) and its predicted winner (highest P(win)) come from this model;
+- drivers' title: calibrated (90%+ calls all came true), chances move ~6.6% a round;
+- constructors' title: clearly better than "points leader wins", but 90%+ calls came
+  true ~86% of the time (2021 and 2024 surprised it).
+
+Title chances are stored after every round (`championship_projection_v1.py`, run by
+`update_latest_races.py`) and served at `/championship/{season}` and
+`/championship/{season}/history`. The older `/predictions/...` endpoints read
+`season_predictions` from `simulate_season.py`, which stays blocked (fail-closed);
+use `/championship` instead.
 
 **Research only:** strategy simulators v1 and v2 (neither exposed by the API; v2
 must beat v1 and simple baselines in a walk-forward backtest first), tyre

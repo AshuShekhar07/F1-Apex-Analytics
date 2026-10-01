@@ -167,7 +167,7 @@ def list_races(
             LEFT JOIN race_entries re ON re.race_id = r.id AND re.driver_id = fd.driver_id
             LEFT JOIN teams tm ON tm.id = re.team_id
             WHERE fd.forecast_id = f.id
-            ORDER BY fd.predicted_position, fd.grid
+            ORDER BY fd.p_win DESC, fd.grid          -- predicted winner = highest win chance
             LIMIT 1
         ) pw ON TRUE
     """

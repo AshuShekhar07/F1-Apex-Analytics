@@ -353,3 +353,118 @@ def current_lineup(weekends: Sequence[Weekend]) -> dict[int, int]:
     """driver -> team from the latest raced weekend (race drivers who started)."""
     last = next((w for w in reversed(weekends) if w.race), None)
     return {r.driver_id: r.team_id for r in last.race} if last else {}
+
+
+# --- production ------------------------------------------------------------------
+# Settings chosen by championship_backtest_v1 (walk-forward, 2018-2025):
+#   race winner  season cars, winter 0.3: win log loss 1.322 vs 1.330 shared cars (CI excludes
+#                0), nothing worse; vs the grid-slot rates Brier 0.0305 vs 0.0335, log loss
+#                1.32 vs 1.53, favourite won 57% vs 52% (152 races)
+#   titles       shared cars + drift 0.15 (chosen walk-forward in 6 of 8 seasons). Season cars
+#                were worse for constructors (0.851 vs 0.837), so they stay off here.
+MODEL_VERSION = "championship_v1"
+RACE_WINTER_SD = 0.3
+TITLE_WINTER_SD: float | None = None
+TITLE_DRIFT = 0.15
+MIN_HISTORY = 10            # raced weekends needed before any strength is fitted
+VALIDATION = {
+    "source": "championship_backtest_v1: every race and every round of 2018-2025, each predicted "
+              "only from the races before it",
+    "race_winner": {"races": 152, "favourite_won": 0.572, "brier_win": 0.0305, "brier_podium": 0.0681,
+                    "log_loss_win": 1.322, "grid_slot_rates": {"favourite_won": 0.520, "brier_win": 0.0335,
+                                                               "brier_podium": 0.0691, "log_loss_win": 1.531}},
+    "drivers_title": {"log_loss": 0.428, "points_leader_wins_log_loss": 1.660,
+                      "favourite_right_by_quarter": [0.596, 0.976, 0.795, 0.951],
+                      "when_we_said_90_plus": {"rounds": 80, "said": 0.982, "happened": 1.0},
+                      "champions_chance_moves_per_round": 0.066},
+    "constructors_title": {"log_loss": 0.837, "points_leader_wins_log_loss": 1.388,
+                           "favourite_right_by_quarter": [0.702, 0.707, 0.864, 1.0],
+                           "when_we_said_90_plus": {"rounds": 114, "said": 0.976, "happened": 0.86},
+                           "champions_chance_moves_per_round": 0.055},
+    "caveat": "Very confident constructors' calls (90%+) came true about 86% of the time: the misses "
+              "are 2021 and 2024, when a team's car or second driver changed course mid-season. "
+              "Crashes, rain and reliability are chance events; the model gives probabilities, not results.",
+}
+
+
+def _cached_strengths(winter_sd: float | None):
+    cache: dict = {}
+
+    def strengths_for(before: Sequence[Weekend], w: Weekend) -> Strengths:
+        key = (len(before), w.era, w.season)
+        if key not in cache:
+            cache[key] = fit_strengths(before, era=w.era, winter_sd=winter_sd, season=w.season)
+        return cache[key]
+    return strengths_for
+
+
+def race_win_chances(weekends: Sequence[Weekend], *, race_date: date, era: str | None, season: int,
+                     entrants: Sequence[tuple[int, int, int | None]], sims: int = SIMS
+                     ) -> tuple[RaceProbabilities, float] | None:
+    """Production P(win/podium/points) for one race from the weekends raced before its date,
+    or None with too little history. The grid effect is fitted on the races before the
+    season started (as in the backtest). Returns (probabilities, grid effect)."""
+    before = [w for w in weekends if w.raced and w.race_date < race_date]
+    if len(before) < MIN_HISTORY:
+        return None
+    pre_season = [w for w in before if w.season < season] or before
+    grid_coef = fit_grid_coef(pre_season, _cached_strengths(RACE_WINTER_SD))
+    st = fit_strengths(before, era=era, winter_sd=RACE_WINTER_SD, season=season)
+    return race_probabilities(st, entrants, grid_coef=grid_coef, dnf=dnf_rate(before, era), sims=sims), grid_coef
+
+
+@dataclass(frozen=True)
+class SeasonProjection:
+    season: int
+    after_round: int
+    projection: ChampionshipProjection
+    driver_points: dict[int, float]
+    team_points: dict[int, float]
+    lineup: dict[int, int]
+
+
+def project_season(weekends: Sequence[Weekend], season: int, *, after_round: int | None = None,
+                   sims: int | None = None) -> SeasonProjection:
+    """Title chances after `after_round` (default: the latest raced round) from the races up
+    to that round only, so a past round's projection is what we would have said then."""
+    season_w = [w for w in weekends if w.season == season]
+    raced_rounds = [w.round for w in season_w if w.raced]
+    if not raced_rounds:
+        raise ValueError(f"no raced rounds in {season} yet")
+    after_round = max(raced_rounds) if after_round is None else after_round
+    done = [w for w in season_w if w.round <= after_round]
+    if not done or not all(w.raced for w in done):
+        raise ValueError(f"{season} round {after_round} has not been raced")
+    remaining = [w for w in season_w if w.round > after_round]
+    cutoff = done[-1].race_date
+    history = [w for w in weekends if w.raced and w.race_date <= cutoff]
+    era = (remaining[0] if remaining else done[-1]).era
+    st = fit_strengths(history, era=era, winter_sd=TITLE_WINTER_SD, season=season)
+    lineup = {r.driver_id: r.team_id for r in done[-1].race}
+    d_pts, t_pts = standings(done, season)
+    proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
+                                dnf=dnf_rate(history, era), sims=sims or SIMS, drift=TITLE_DRIFT)
+    return SeasonProjection(season, after_round, proj, d_pts, t_pts, lineup)
+
+
+def store_projection(db: Any, sp: SeasonProjection) -> int:
+    """Replace the stored projection for (season, round); returns rows written."""
+    from pathlib import Path
+
+    db.execute(text((Path(__file__).resolve().parent / "migration_championship_projections_v1.sql").read_text()))
+    db.execute(text("""DELETE FROM championship_projections
+                       WHERE season_year = :s AND after_round = :r AND model_version = :v"""),
+               {"s": sp.season, "r": sp.after_round, "v": MODEL_VERSION})
+    p = sp.projection
+    rows = [("drivers", k, prob, sp.driver_points.get(k, 0.0), p.expected_driver_points.get(k, 0.0))
+            for k, prob in p.p_driver_title.items()]
+    rows += [("constructors", k, prob, sp.team_points.get(k, 0.0), p.expected_team_points.get(k, 0.0))
+             for k, prob in p.p_team_title.items()]
+    for kind, entity, prob, now, expected in rows:
+        db.execute(text("""
+            INSERT INTO championship_projections (season_year, after_round, model_version, kind, entity_id,
+                                                  p_title, points_now, expected_points, weekends_left)
+            VALUES (:s, :r, :v, :k, :e, :p, :now, :exp, :left)"""),
+            {"s": sp.season, "r": sp.after_round, "v": MODEL_VERSION, "k": kind, "e": entity,
+             "p": round(prob, 4), "now": now, "exp": round(expected, 1), "left": p.remaining_weekends})
+    return len(rows)

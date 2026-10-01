@@ -324,3 +324,31 @@ def test_practice_correction_is_reported_even_without_practice_data(forecast_db)
         forecast = compute_forecast(db, 7)
     notes = forecast["inputs"]["data_notes"]
     assert any(n.startswith("practice: no usable long runs") for n in notes)   # synthetic: no FP sessions
+
+
+def test_win_chances_fall_back_to_grid_slots_with_little_history(forecast_db):
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    assert forecast["inputs"]["win_method"] == "grid_slot"
+    assert any("too few earlier races for the strength model" in n for n in forecast["inputs"]["data_notes"])
+
+
+def test_win_chances_from_the_strength_model(forecast_db, monkeypatch):
+    import championship_model_v1
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    with forecast_db.connect() as db:
+        forecast = compute_forecast(db, 7)
+    assert forecast["inputs"]["win_method"] == "strength"
+    assert any(n.startswith("win/podium chances: strength model") for n in forecast["inputs"]["data_notes"])
+    p_win = {d["driver_id"]: d["p_win"] for d in forecast["drivers"]}
+    assert sum(p_win.values()) == pytest.approx(1.0, abs=0.01)
+    assert all(d["p_podium"] >= d["p_win"] for d in forecast["drivers"])
+    assert forecast["predicted_winner"] == max(p_win, key=p_win.get)
+
+
+def test_forecast_endpoint_names_the_predicted_winner(client):
+    body = client.get("/races/7/forecast").json()
+    best = max(body["drivers"], key=lambda d: d["p_win"])
+    assert body["predicted_winner"]["driver_id"] == best["driver_id"]
+    assert body["predicted_winner"]["p_win"] == best["p_win"]

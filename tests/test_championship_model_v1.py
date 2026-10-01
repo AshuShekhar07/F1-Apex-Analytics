@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 import numpy as np
 import pytest
+from sqlalchemy import text
 
 from championship_model_v1 import (
     Result,
@@ -157,3 +158,70 @@ def test_season_cars_let_a_new_car_overtake_last_years_dominant_one():
     # season cars change nothing within one season
     one = fit_strengths(old, winter_sd=0.5, season=2023)
     assert one.car[1] == pytest.approx(fit_strengths(old).car[1], abs=1e-3)
+
+
+def test_project_season_uses_only_rounds_up_to_the_projection(synthetic_db):
+    from championship_model_v1 import load_weekends, project_season
+
+    with synthetic_db.connect() as db:
+        weekends = load_weekends(db, start_year=2018)
+    season = max(w.season for w in weekends if w.raced)
+    rounds = sorted(w.round for w in weekends if w.season == season and w.raced)
+    first = project_season(weekends, season, after_round=rounds[0], sims=2000)
+    last = project_season(weekends, season, sims=2000)
+    assert last.after_round == rounds[-1] and first.after_round == rounds[0]
+    assert sum(first.projection.p_driver_title.values()) == pytest.approx(1.0)
+    assert last.projection.remaining_weekends == 0
+    # season over: the title goes to the points leader(s) with certainty
+    top = max(last.driver_points.values())
+    leaders = [d for d, p in last.driver_points.items() if p == top]
+    assert sum(last.projection.p_driver_title[d] for d in leaders) == pytest.approx(1.0)
+    with pytest.raises(ValueError):
+        project_season(weekends, 2099)
+
+
+def test_projection_is_stored_and_served(synthetic_db, monkeypatch):
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+
+    import championship_model_v1
+    from championship_projection_v1 import update
+
+    monkeypatch.setattr(championship_model_v1, "SIMS", 2000)
+    with synthetic_db.begin() as db:
+        season = db.execute(text("SELECT MAX(season_year) FROM races")).scalar()
+        written = update(db, season, all_rounds=True)
+        assert written and update(db, season, all_rounds=True) == []          # nothing left to do
+        n = db.execute(text("SELECT COUNT(*) FROM championship_projections")).scalar()
+        assert n > 0
+
+    import os
+    os.environ.setdefault("DATABASE_URL", synthetic_db.url.render_as_string(hide_password=False))
+    from app.database import get_db
+    from app.main import app
+
+    Session = sessionmaker(bind=synthetic_db)
+
+    def override():
+        db = Session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    previous = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = override
+    try:
+        client = TestClient(app)
+        body = client.get(f"/championship/{season}").json()
+        assert body["after_round"] == max(written) and body["weekends_left"] == 0
+        assert sum(d["p_title"] for d in body["drivers"]) == pytest.approx(1.0, abs=0.01)
+        assert body["constructors"][0]["team_name"] and body["validation"]["constructors_title"]
+        history = client.get(f"/championship/{season}/history").json()
+        assert len(history["drivers"][0]["rounds"]) == len(written)
+        assert client.get("/championship/2099").status_code == 404
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:                                   # other modules share the app: put theirs back
+            app.dependency_overrides[get_db] = previous

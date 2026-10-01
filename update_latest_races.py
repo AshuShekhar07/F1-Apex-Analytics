@@ -10,7 +10,9 @@ One command instead of a dozen scripts in the right order:
               forecast yet (race_forecast_v1; uses only races before its date); a pre-race
               forecast made from the qualifying order is redone once the provisional grid
               (fetch_starting_grid_v1, penalties applied) is in
-  5. score    optional (--score): the prediction scoreboard vs the saved baseline
+  5. titles   drivers' and constructors' title chances after the latest round, if not stored
+              yet (championship_projection_v1)
+  6. score    optional (--score): the prediction scoreboard vs the saved baseline
 
     python update_latest_races.py                     # current season
     python update_latest_races.py --season 2026
@@ -149,6 +151,15 @@ def main() -> int:
               f"view: python show_forecast.py --race {c.race_id}")
     if not made and not blocked:
         print("  nothing new to forecast")
+
+    print(f"\n=== CHAMPIONSHIP {args.season} ===")
+    from championship_projection_v1 import update as update_championship
+    try:
+        with engine.begin() as db:
+            rounds = update_championship(db, args.season)
+        print(f"  title chances stored after round(s) {rounds}" if rounds else "  nothing new to project")
+    except ValueError as exc:
+        print(f"  not projectable yet ({exc})")
 
     if args.score:
         print(f"\n=== SCOREBOARD vs {args.score} ===", flush=True)

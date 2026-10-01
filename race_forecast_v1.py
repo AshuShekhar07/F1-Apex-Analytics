@@ -3,7 +3,10 @@
 What is shown, and why (each chose by the walk-forward backtest, see VALIDATION):
   predicted position   grid/pace blend: half grid rank, half race-pace rank where
                        race pace = qualifying-implied gap + recent team race form
-  P(win), P(podium)    historical rate for the driver's grid slot (same era)
+  P(win), P(podium)    championship_model_v1 strength model: car (per season) + driver skill
+                       from earlier race orders, plus a grid effect, simulated 20,000 times;
+                       the predicted winner is the driver with the highest P(win). Falls back
+                       to the historical rate of the grid slot with too little history
   strategy             the era's most common dry strategy with typical stop laps
   confidence           race_confidence_v1: how far off the prediction usually is in earlier
                        races with the same conditions (dry / wet qualifying / rain forecast),
@@ -121,6 +124,11 @@ RECOVERY_METHOD = "own_weight"
 RECOVERY_SEASONS = 3
 OPTIMISER_ENABLED = False
 WET_SWITCH = True
+# Win/podium chances: "strength" (championship_model_v1, see VALIDATION) or "grid_slot" (the
+# historical rate of the grid slot). championship_backtest_v1, 152 races 2019-2025: win
+# Brier 0.0305 vs 0.0335 and log loss 1.32 vs 1.53 (both CIs exclude 0), favourite won 57%
+# vs 52%, podium Brier 0.0681 vs 0.0691 (no clear difference) -> worse nowhere.
+WIN_METHOD = "strength"
 
 VALIDATION = {
     "source": "prediction_scoreboard_v1 walk-forward, all races 2018-2026, 3621 drivers in 180 races",
@@ -129,8 +137,12 @@ VALIDATION = {
                            "mean_abs_error_places": 3.314, "grid_only_mean_abs_error_places": 3.490,
                            "finishers_mean_abs_error_places": 2.715, "finishers_off_by_10_or_more": 0.019,
                            "winner_correct": 0.572},
-    "p_win": {"method": "historical rate for grid slot", "brier_score": 0.033},
-    "p_podium": {"method": "historical rate for grid slot", "brier_score": 0.069},
+    "p_win": {"method": "strength model (car per season + driver skill) + grid effect",
+              "source": "championship_backtest_v1 walk-forward, 152 races 2019-2025",
+              "brier_score": 0.0305, "log_loss": 1.322, "favourite_won": 0.572,
+              "grid_slot_rate": {"brier_score": 0.0335, "log_loss": 1.531, "favourite_won": 0.520}},
+    "p_podium": {"method": "strength model (car per season + driver skill) + grid effect",
+                 "brier_score": 0.0681, "grid_slot_rate": {"brier_score": 0.0691}},
     "strategy": {"method": "era's most common dry strategy",
                  "truth": "real stints (same-compound stops count); race_strategy_prediction_backtest_v1, "
                           "dry races 2024-2025, 670 cars in 37 races",
@@ -627,9 +639,23 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         confidence = None
         notes.append(f"confidence: {exc}")
 
+    chances = None
+    if WIN_METHOD == "strength":
+        from championship_model_v1 import load_weekends, race_win_chances
+        team_of = {int(f["driver_id"]): int(f["team_id"]) for f in field}
+        out = race_win_chances(load_weekends(db, start_year=2018, end_year=season), race_date=as_of, era=era,
+                               season=season, entrants=[(r.driver_id, team_of[r.driver_id], r.grid) for r in rows])
+        if out is None:
+            notes.append("win/podium chances: too few earlier races for the strength model, "
+                         "using the grid-slot rates")
+        else:
+            chances, grid_coef = out
+            notes.append(f"win/podium chances: strength model, grid effect {grid_coef:.2f}")
+
     drivers = []
     for r, position in zip(rows, predicted):
-        rate = slot_rates.get(r.grid, (0.0, 0.0))
+        rate = ((chances.p_win.get(r.driver_id, 0.0), chances.p_podium.get(r.driver_id, 0.0)) if chances
+                else slot_rates.get(r.grid, (0.0, 0.0)))
         drivers.append({
             "driver_id": r.driver_id, "grid": r.grid, "predicted_position": position,
             "p_win": round(rate[0], 4), "p_podium": round(rate[1], 4),
@@ -644,6 +670,7 @@ def compute_forecast(db: Any, race_id: int) -> dict:
     return {
         "race_id": race_id, "as_of_date": as_of, "grid_source": grid_source,
         "drivers": drivers, "strategy": strategy_payload,
+        "predicted_winner": predicted_winner(drivers),
         "inputs": {
             "total_laps": total_laps, "blend_weight": weight, "drivers": drivers,
             "strategy_options": [strategy_to_json(s, w) for s, w in options],
@@ -652,9 +679,16 @@ def compute_forecast(db: Any, race_id: int) -> dict:
             "hazards": {k: float(v) for k, v in hazards.items()}, "dnf_probability": dnf,
             "overtake_threshold": WHAT_IF_THRESHOLD, "noise_scale": WHAT_IF_NOISE_SCALE,
             "confidence": {k: v for k, v in confidence.items() if k != "ranges"} if confidence else None,
+            "win_method": "strength" if chances else "grid_slot",
+            "predicted_winner": predicted_winner(drivers),
             "data_notes": notes,
         },
     }
+
+
+def predicted_winner(drivers: Sequence[dict]) -> int | None:
+    """The driver with the highest P(win) (ties: better grid slot)."""
+    return min(drivers, key=lambda d: (-d["p_win"], d["grid"]))["driver_id"] if drivers else None
 
 
 def record_live(db: Any, forecast: dict) -> bool:

@@ -67,13 +67,20 @@ def get_forecast(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
         ORDER BY fd.predicted_position, fd.grid
     """), {"f": forecast["id"], "r": race_id}).mappings().all()
     inputs = forecast["inputs"]
+    rows = [{**dict(d), "p_win": float(d["p_win"]), "p_podium": float(d["p_podium"])} for d in drivers]
+    favourite = min(rows, key=lambda d: (-d["p_win"], d["grid"])) if rows else None
     return {
         "race_id": race_id,
         "model_version": forecast["model_version"],
         "as_of_date": forecast["as_of_date"],
         "grid_source": forecast["grid_source"],
         "computed_at": forecast["computed_at"],
-        "drivers": [{**dict(d), "p_win": float(d["p_win"]), "p_podium": float(d["p_podium"])} for d in drivers],
+        "drivers": rows,
+        # the driver with the highest win chance (not necessarily predicted_position 1: the
+        # finishing order and the win chances come from separately validated models)
+        "predicted_winner": ({"driver_id": favourite["driver_id"], "driver_name": favourite["driver_name"],
+                              "team_name": favourite["team_name"], "p_win": favourite["p_win"]}
+                             if favourite else None),
         "total_laps": inputs.get("total_laps"),
         "strategy_alternatives": inputs.get("strategy_options", []),
         # method used, plus optional weather / wet / model_optimal blocks (race_forecast_v1 switches)

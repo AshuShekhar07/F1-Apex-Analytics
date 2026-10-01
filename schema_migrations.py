@@ -22,6 +22,7 @@ SCHEMA_FILES = (
     "migration_provisional_grid_v1.sql",
     "migration_race_forecast_live_v1.sql",
     "migration_pipeline_runs_v1.sql",
+    "migration_championship_projections_v1.sql",
 )
 
 
