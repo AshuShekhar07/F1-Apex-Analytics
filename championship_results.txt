@@ -1,0 +1,94 @@
+=== CHECK: champions from the stored points vs the real ones ===
+  2018: drivers Lewis Hamilton, constructors Mercedes  ok
+  2019: drivers Lewis Hamilton, constructors Mercedes  ok
+  2020: drivers Lewis Hamilton, constructors Mercedes  ok
+  2021: drivers Max Verstappen, constructors Mercedes  ok
+  2022: drivers Max Verstappen, constructors Red Bull Racing  ok
+  2023: drivers Max Verstappen, constructors Red Bull Racing  ok
+  2024: drivers Max Verstappen, constructors McLaren  ok
+  2025: drivers Lando Norris, constructors McLaren  ok
+
+=== RACE WINNER (each race, grid known; lower Brier / log loss = better) ===
+  152 races; grid effect per season: 2019: 1.27, 2020: 0.83, 2021: 0.68, 2022: 0.58, 2023: 0.75, 2024: 0.99, 2025: 1.07
+  strength + grid          favourite_won 57.9%  brier_win 0.0304  brier_podium 0.0681  log_loss_win 1.3183
+      vs production brier_win      -0.0031 [-0.0049, -0.0013]  BETTER
+      vs production brier_podium   -0.0010 [-0.0038, +0.0017]  no clear difference
+      vs production log_loss_win   -0.2130 [-0.3287, -0.1002]  BETTER
+      vs production favourite_won  +0.0592 [+0.0000, +0.1118]  no clear difference
+  strength only            favourite_won 48.7%  brier_win 0.0375  brier_podium 0.0860  log_loss_win 1.7957
+      vs production brier_win      +0.0040 [+0.0015, +0.0066]  WORSE
+      vs production brier_podium   +0.0169 [+0.0127, +0.0212]  WORSE
+      vs production log_loss_win   +0.2643 [+0.0973, +0.4281]  WORSE
+      vs production favourite_won  -0.0329 [-0.1250, +0.0592]  no clear difference
+  grid slot (production)   favourite_won 52.0%  brier_win 0.0335  brier_podium 0.0691  log_loss_win 1.5314
+  pole sitter              favourite_won 52.6%
+      vs production favourite_won  +0.0066 [+0.0000, +0.0197]  no clear difference
+
+=== DRIVERS CHAMPIONSHIP (2018-2025, every round) ===
+  stage            model                       chance given to champion  favourite right  log loss   Brier
+  first quarter    model                                          52.4%            63.8%     0.932   0.502
+  first quarter    points leader wins                             45.5%            44.7%     3.155   0.928
+  first quarter    in proportion to points                        16.3%            44.7%     2.015   0.792
+  second quarter   model                                          82.1%            97.6%     0.224   0.111
+  second quarter   points leader wins                             78.0%            78.0%     1.516   0.439
+  second quarter   in proportion to points                        19.5%            78.0%     1.644   0.729
+  third quarter    model                                          79.8%            79.5%     0.312   0.225
+  third quarter    points leader wins                             79.5%            79.5%     1.413   0.409
+  third quarter    in proportion to points                        19.0%            79.5%     1.667   0.732
+  last quarter     model                                          90.6%            92.7%     0.130   0.085
+  last quarter     points leader wins                             93.9%            95.1%     0.354   0.110
+  last quarter     in proportion to points                        18.9%            95.1%     1.670   0.732
+  consistency, model                    champion's chance moves 6.7% per round on average (largest 52%)
+  consistency, points leader wins       champion's chance moves 12.5% per round on average (largest 100%)
+  consistency, in proportion to points  champion's chance moves 1.6% per round on average (largest 20%)
+  calibration (model): when we said X, they became champion Y
+        0%-2%  n= 3194  said   0.0%  happened   0.0%
+       2%-10%  n=  125  said   5.1%  happened   4.0%
+      10%-25%  n=   62  said  16.1%  happened   9.7%
+      25%-50%  n=   52  said  36.5%  happened  48.1%
+      50%-75%  n=   47  said  62.9%  happened  61.7%
+      75%-90%  n=   33  said  82.9%  happened  81.8%
+     90%-100%  n=   81  said  98.5%  happened 100.0%
+
+=== CONSTRUCTORS CHAMPIONSHIP (2018-2025, every round) ===
+  stage            model                       chance given to champion  favourite right  log loss   Brier
+  first quarter    model                                          64.3%            70.2%     1.348   0.505
+  first quarter    points leader wins                             53.8%            57.4%     2.464   0.760
+  first quarter    in proportion to points                        27.3%            57.4%     1.511   0.668
+  second quarter   model                                          70.6%            70.7%     1.344   0.501
+  second quarter   points leader wins                             68.3%            68.3%     2.190   0.634
+  second quarter   in proportion to points                        31.8%            68.3%     1.169   0.586
+  third quarter    model                                          82.6%            86.4%     0.664   0.251
+  third quarter    points leader wins                             88.6%            88.6%     0.785   0.227
+  third quarter    in proportion to points                        31.7%            88.6%     1.160   0.576
+  last quarter     model                                          92.1%           100.0%     0.096   0.048
+  last quarter     points leader wins                            100.0%           100.0%     0.000   0.000
+  last quarter     in proportion to points                        31.5%           100.0%     1.160   0.577
+  consistency, model                    champion's chance moves 5.4% per round on average (largest 70%)
+  consistency, points leader wins       champion's chance moves 8.4% per round on average (largest 100%)
+  consistency, in proportion to points  champion's chance moves 2.1% per round on average (largest 33%)
+  calibration (model): when we said X, they became champion Y
+        0%-2%  n= 1460  said   0.0%  happened   1.1%
+       2%-10%  n=   52  said   5.4%  happened  15.4%
+      10%-25%  n=   32  said  15.6%  happened   6.2%
+      25%-50%  n=   26  said  36.1%  happened  26.9%
+      50%-75%  n=   22  said  64.6%  happened  86.4%
+      75%-90%  n=   16  said  82.9%  happened  81.2%
+     90%-100%  n=  130  said  98.5%  happened  83.1%
+
+=== 2026 PROJECTION (data up to today) ===
+  after round 15, 8 weekends left
+  drivers:
+    Kimi Antonelli           title  96.3%   points now   302   expected final   388
+    George Russell           title   3.6%   points now   236   expected final   325
+    Lewis Hamilton           title   0.1%   points now   199   expected final   281
+    Lando Norris             title   0.0%   points now   186   expected final   272
+    Charles Leclerc          title   0.0%   points now   179   expected final   265
+    Pierre Gasly             title   0.0%   points now    50   expected final    77
+  constructors:
+    Mercedes                 title 100.0%   points now   538   expected final   712
+    Ferrari                  title   0.0%   points now   378   expected final   546
+    McLaren                  title   0.0%   points now   304   expected final   448
+    Red Bull Racing          title   0.0%   points now   260   expected final   388
+    Haas F1 Team             title   0.0%   points now    27   expected final    58
+    Williams                 title   0.0%   points now    12   expected final    34
