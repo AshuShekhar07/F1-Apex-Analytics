@@ -102,3 +102,13 @@
                     13           96.4%            3.5%            0.1%            0.0%
                     14           99.3%            0.7%            0.0%            0.0%
                     15           99.9%            0.1%            0.0%            0.0%
+
+=== TEAM IDS USED FOR ONLY PART OF A SEASON (possible duplicate team rows) ===
+  2025 Yuki Tsunoda           team id 21 'Racing Bulls' in rounds [1, 2]; rest of the season team id 2 'Red Bull Racing'
+  2025 Liam Lawson            team id 2 'Red Bull Racing' in rounds [1, 2]; rest of the season team id 21 'Racing Bulls'
+  2025 Ryo Hirakawa           team id 18 'Alpine' in rounds [3]; rest of the season team id 4 'Haas F1 Team'
+  2025 Ayumu Iwasa            team id 2 'Red Bull Racing' in rounds [4]; rest of the season team id 21 'Racing Bulls'
+  2025 Paul Aron              team id 20 'Kick Sauber' in rounds [12, 14]; rest of the season team id 18 'Alpine'
+  2026 Ayumu Iwasa            team id 21 'Racing Bulls' in rounds [8]; rest of the season team id 2 'Red Bull Racing'
+  2026 Paul Aron              team id 22 'Audi' in rounds [8]; rest of the season team id 18 'Alpine'
+  2026 Liam Lawson            team id 2 'Red Bull Racing' in rounds [12, 13, 14]; rest of the season team id 21 'Racing Bulls'
