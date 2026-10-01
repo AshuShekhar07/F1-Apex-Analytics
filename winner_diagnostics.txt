@@ -1,0 +1,86 @@
+167 races from 2019, 132 with practice long runs, 37 wet
+
+=== PART 1: WHERE THE MISSES COME FROM (production model, walk-forward) ===
+
+  PRE_QUALIFYING: 167 races, favourite won 44.3%, winner in our top 3 70.7%, winner log loss 1.648
+  93 misses by cause:
+    another team was faster on the day         45 (48.4%)   chance we gave the winner 10.7%
+    wet race                                   18 (19.4%)   chance we gave the winner 15.3%
+    favourite's teammate won                   15 (16.1%)   chance we gave the winner 18.3%
+    favourite retired / did not finish          9 ( 9.7%)   chance we gave the winner 10.4%
+    winner came from P6 or further back         3 ( 3.2%)   chance we gave the winner 12.6%
+    first races under new rules                 3 ( 3.2%)   chance we gave the winner  9.1%
+  favourite's record by situation:
+    dry race                                130 races: favourite won 43.1%, winner in top 3 66.9%
+    wet race                                 37 races: favourite won 48.6%, winner in top 3 83.8%
+    sprint weekend                           29 races: favourite won 34.5%, winner in top 3 58.6%
+    normal weekend                          138 races: favourite won 46.4%, winner in top 3 73.2%
+    first 3 races under new rules             6 races: favourite won  0.0%, winner in top 3 16.7%
+    practice long runs available            132 races: favourite won 43.2%, winner in top 3 67.4%
+    no usable practice                       35 races: favourite won 48.6%, winner in top 3 82.9%
+    out-of-position starter in the race      95 races: favourite won 44.2%, winner in top 3 72.6%
+
+  POST_QUALIFYING: 167 races, favourite won 58.1%, winner in our top 3 91.6%, winner log loss 1.234
+  70 misses by cause:
+    another team was faster on the day         30 (42.9%)   chance we gave the winner 17.0%
+    wet race                                   14 (20.0%)   chance we gave the winner 14.6%
+    favourite's teammate won                   10 (14.3%)   chance we gave the winner 24.5%
+    favourite retired / did not finish          9 (12.9%)   chance we gave the winner 17.2%
+    winner came from P6 or further back         7 (10.0%)   chance we gave the winner 10.5%
+  favourite's record by situation:
+    dry race                                130 races: favourite won 57.7%, winner in top 3 92.3%
+    wet race                                 37 races: favourite won 59.5%, winner in top 3 89.2%
+    sprint weekend                           29 races: favourite won 41.4%, winner in top 3 86.2%
+    normal weekend                          138 races: favourite won 61.6%, winner in top 3 92.8%
+    first 3 races under new rules             6 races: favourite won 50.0%, winner in top 3 100.0%
+    practice long runs available            132 races: favourite won 53.8%, winner in top 3 89.4%
+    no usable practice                       35 races: favourite won 74.3%, winner in top 3 100.0%
+    out-of-position starter in the race      95 races: favourite won 57.9%, winner in top 3 91.6%
+  podium chances (every driver): when we said X, they finished on the podium Y
+      0%-  5%  n= 1892  said  1.8%  happened  0.6%
+      5%- 15%  n=  508  said  8.8%  happened  7.1%
+     15%- 30%  n=  340  said 21.6%  happened 21.5%
+     30%- 50%  n=  264  said 39.4%  happened 41.3%
+     50%- 70%  n=  205  said 59.6%  happened 67.3%
+     70%-100%  n=  159  said 77.3%  happened 84.3%
+
+=== PART 2: CANDIDATE FIXES vs PRODUCTION (same races, walk-forward, own win calibration) ===
+  metric mean (difference to production [90% CI]); log loss / Brier lower = better
+
+  half-life 4 races:
+    pre_qualifying (167 races): FAIL -- worse somewhere
+      log_loss 1.6966 (+0.0489 [+0.0022, +0.0946])  brier 0.0356 (+0.0007 [+0.0000, +0.0014])  favourite_won 0.4192 (-0.0240 [-0.0419, -0.0060])  winner_top3 0.7186 (+0.0120 [-0.0240, +0.0479])
+    post_qualifying (167 races): no clear difference
+      log_loss 1.2528 (+0.0189 [-0.0086, +0.0464])  brier 0.0290 (+0.0004 [-0.0001, +0.0010])  favourite_won 0.5629 (-0.0180 [-0.0539, +0.0180])  winner_top3 0.9042 (-0.0120 [-0.0240, +0.0000])
+
+  half-life 6 races:
+    pre_qualifying (167 races): FAIL -- worse somewhere
+      log_loss 1.6564 (+0.0088 [-0.0090, +0.0262])  brier 0.0350 (+0.0002 [-0.0001, +0.0004])  favourite_won 0.4251 (-0.0180 [-0.0359, -0.0060])  winner_top3 0.7126 (+0.0060 [-0.0120, +0.0240])
+    post_qualifying (167 races): no clear difference
+      log_loss 1.2387 (+0.0048 [-0.0067, +0.0165])  brier 0.0287 (+0.0001 [-0.0001, +0.0003])  favourite_won 0.5808 (+0.0000 [-0.0180, +0.0180])  winner_top3 0.9162 (+0.0000 [+0.0000, +0.0000])
+
+  half-life 12 races:
+    pre_qualifying (167 races): no clear difference
+      log_loss 1.6439 (-0.0037 [-0.0218, +0.0153])  brier 0.0347 (-0.0001 [-0.0004, +0.0002])  favourite_won 0.4611 (+0.0180 [+0.0000, +0.0419])  winner_top3 0.7126 (+0.0060 [-0.0180, +0.0299])
+    post_qualifying (167 races): no clear difference
+      log_loss 1.2309 (-0.0031 [-0.0168, +0.0107])  brier 0.0285 (-0.0001 [-0.0004, +0.0002])  favourite_won 0.5868 (+0.0060 [-0.0120, +0.0240])  winner_top3 0.9102 (-0.0060 [-0.0299, +0.0180])
+
+  out-of-position grid w=0.25:
+    post_qualifying (167 races): no clear difference
+      log_loss 1.2221 (-0.0118 [-0.0292, +0.0031])  brier 0.0284 (-0.0002 [-0.0005, +0.0000])  favourite_won 0.5868 (+0.0060 [+0.0000, +0.0180])  winner_top3 0.9042 (-0.0120 [-0.0299, +0.0000])
+    post_qualifying, races with an out-of-position starter (95 races): no clear difference
+      log_loss 1.2733 (-0.0212 [-0.0510, +0.0038])  brier 0.0295 (-0.0004 [-0.0009, +0.0001])  favourite_won 0.5895 (+0.0105 [+0.0000, +0.0316])  winner_top3 0.8947 (-0.0211 [-0.0421, +0.0000])
+
+  out-of-position grid w=0.5:
+    post_qualifying (167 races): PASS -- better somewhere, worse nowhere
+      log_loss 1.2258 (-0.0081 [-0.0174, +0.0000])  brier 0.0284 (-0.0001 [-0.0003, -0.0000])  favourite_won 0.5868 (+0.0060 [+0.0000, +0.0180])  winner_top3 0.9042 (-0.0120 [-0.0299, +0.0000])
+    post_qualifying, races with an out-of-position starter (95 races): PASS -- better somewhere, worse nowhere
+      log_loss 1.2800 (-0.0145 [-0.0306, -0.0012])  brier 0.0296 (-0.0002 [-0.0005, -0.0000])  favourite_won 0.5895 (+0.0105 [+0.0000, +0.0316])  winner_top3 0.8947 (-0.0211 [-0.0421, +0.0000])
+
+  practice pace:
+    pre_qualifying (167 races): FAIL -- worse somewhere
+      log_loss 1.7071 (+0.0595 [-0.0155, +0.1387])  brier 0.0363 (+0.0015 [+0.0001, +0.0029])  favourite_won 0.4072 (-0.0359 [-0.0778, +0.0000])  winner_top3 0.7365 (+0.0299 [-0.0120, +0.0719])
+      practice beta chosen per season: {2019: 0.0, 2020: 0.0, 2021: 100.0, 2022: 100.0, 2023: 50.0, 2024: 50.0, 2025: 50.0, 2026: 50.0}
+    post_qualifying (167 races): FAIL -- worse somewhere
+      log_loss 1.2545 (+0.0206 [-0.0037, +0.0466])  brier 0.0291 (+0.0005 [-0.0001, +0.0011])  favourite_won 0.5629 (-0.0180 [-0.0359, -0.0060])  winner_top3 0.9162 (+0.0000 [-0.0180, +0.0180])
+      practice beta chosen per season: {2019: 0.0, 2020: 0.0, 2021: 50.0, 2022: 50.0, 2023: 50.0, 2024: 25.0, 2025: 25.0, 2026: 25.0}
