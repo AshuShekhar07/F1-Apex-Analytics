@@ -120,10 +120,14 @@ def test_backtest_runs_on_the_synthetic_database(synthetic_db):
     assert [c[0] for c in out["checks"]] == [2022, 2023, 2024]
     from championship_backtest_v1 import DEFAULT_SETTING, SETTINGS
     assert out["chosen"][2022] == DEFAULT_SETTING and out["setting_now"] in SETTINGS
-    assert out["chosen_drift"][2022] == DEFAULT_SETTING and out["fixed_log_loss"]
+    assert out["chosen_drift"][2022] == DEFAULT_SETTING and len(out["fixed_log_loss"]) == len(SETTINGS)
+    from championship_backtest_v1 import lowest_chance_for_champion, versus_production
+    d, lo, hi = versus_production(out["rounds"], "drivers", "model, extended drift")
+    assert lo <= d <= hi
+    assert set(lowest_chance_for_champion(out["rounds"], "constructors", "production (drift 0.15)")) == {2022, 2023, 2024}
     from championship_backtest_v1 import summarise_titles
     summary = summarise_titles(out["rounds"], "drivers")
-    assert summary["records"]["model, season cars + drift"] and summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
+    assert summary["records"]["model, extended drift"] and summary["records"]["production (drift 0.15)"] and summary["records"]["model, drift up to 0.15"] and summary["records"]["points leader wins"]
 
 
 from test_race_strategy_backtest_v2 import synthetic_db  # noqa: E402,F401  (fixture)
