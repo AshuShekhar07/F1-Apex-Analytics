@@ -1,0 +1,316 @@
+"""Race-win and championship probabilities from one strength model.
+
+Every driver has a strength  s = car[team] + skill[driver], fitted on race results with the
+Plackett-Luce (PL) ranking model: the chance a driver finishes ahead of the rest of the
+remaining field is exp(s) / sum(exp(s) of everyone still to be placed). Finishing ahead of
+others race after race raises a strength; it is the standard model for ranked outcomes.
+
+  * only CLASSIFIED finishers are ranked -- a retirement is a separate, equal per-driver
+    chance (team reliability did not predict retirements: race_reliability_v1), so one DNF
+    costs the points of that race, not the driver's strength
+  * recent races weigh more (half-life HALF_LIFE races), sprints half a race, races of another
+    regulation era OTHER_ERA_WEIGHT; nothing after the as-of date is used
+  * car and skill are shrunk toward 0 (normal priors), cars more freely than drivers, so a
+    driver changing teams keeps their skill and takes the new car
+
+Race probabilities: s + grid effect (fitted on earlier races), DNFs sampled, the finishing
+order sampled from PL (Gumbel trick: sort s + Gumbel noise) -> P(win), P(podium), P(points).
+
+Championships: current points (race + sprint, from the database) plus Monte Carlo of every
+remaining weekend with the season's points system -> P(drivers' title), P(constructors'
+title), expected final points. All constants are set a priori; championship_backtest_v1.py
+judges them on 2018-2025.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Any, Iterable, Sequence
+
+import numpy as np
+from scipy.optimize import minimize
+from sqlalchemy import text
+
+HALF_LIFE = 8.0             # races until an observation counts half
+SPRINT_WEIGHT = 0.5
+OTHER_ERA_WEIGHT = 0.3
+MAX_HISTORY = 48            # weekends looked back (weights beyond are negligible)
+CAR_PRIOR_SD = 1.0
+SKILL_PRIOR_SD = 0.4
+SIMS = 20000
+
+RACE_POINTS = (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
+
+
+def sprint_points(season: int) -> tuple[int, ...]:
+    return (3, 2, 1) if season == 2021 else (8, 7, 6, 5, 4, 3, 2, 1) if season >= 2022 else ()
+
+
+def fastest_lap_point(season: int) -> bool:
+    return 2019 <= season <= 2024
+
+
+# --- data ------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Result:
+    driver_id: int
+    team_id: int
+    grid: int | None
+    finish: int | None
+    classified: bool
+    points: float
+
+
+@dataclass
+class Weekend:
+    race_id: int
+    season: int
+    round: int
+    race_date: date
+    era: str | None
+    sprint_weekend: bool
+    race: list[Result] = field(default_factory=list)
+    sprint: list[Result] = field(default_factory=list)
+
+    @property
+    def raced(self) -> bool:
+        return bool(self.race)
+
+
+def load_weekends(db: Any, *, start_year: int = 2018, end_year: int = 2100) -> list[Weekend]:
+    """Every scheduled weekend (raced or not) with its race and sprint classification."""
+    from race_status import is_classified
+
+    weekends = {}
+    for rid, season, rnd, when, era, fmt in db.execute(text("""
+        SELECT id, season_year, round_number, race_date, regulation_era, COALESCE(weekend_format, 'conventional')
+        FROM races WHERE season_year BETWEEN :a AND :b AND race_date IS NOT NULL
+        ORDER BY race_date, round_number"""), {"a": start_year, "b": end_year}):
+        weekends[int(rid)] = Weekend(int(rid), int(season), int(rnd), when, era, fmt != "conventional")
+    for rid, kind, driver, team, grid, finish, status, points in db.execute(text("""
+        SELECT s.race_id, s.session_type, re.driver_id, re.team_id, rr.starting_grid_position,
+               rr.finishing_position, rr.status, COALESCE(rr.points, 0)
+        FROM race_results rr
+        JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
+        JOIN race_entries re ON re.id = rr.race_entry_id
+        JOIN races r ON r.id = s.race_id
+        WHERE r.season_year BETWEEN :a AND :b"""), {"a": start_year, "b": end_year}):
+        w = weekends.get(int(rid))
+        if w is None:
+            continue
+        result = Result(int(driver), int(team), int(grid) if grid and grid > 0 else None,
+                        int(finish) if finish else None, is_classified(status), float(points))
+        (w.race if kind == "R" else w.sprint).append(result)
+    return sorted(weekends.values(), key=lambda w: (w.race_date, w.round))
+
+
+# --- Plackett-Luce strengths ------------------------------------------------------
+
+@dataclass(frozen=True)
+class Strengths:
+    car: dict[int, float]
+    skill: dict[int, float]
+
+    def of(self, driver_id: int, team_id: int) -> float:
+        return self.car.get(team_id, 0.0) + self.skill.get(driver_id, 0.0)
+
+
+def _orders(weekends: Sequence[Weekend], era: str | None) -> list[tuple[float, list[tuple[int, int]]]]:
+    """(weight, [(driver, team) in finishing order]) for every race/sprint, newest first."""
+    out = []
+    for age, w in enumerate(reversed(weekends[-MAX_HISTORY:])):
+        base = 0.5 ** (age / HALF_LIFE) * (1.0 if (era is None or w.era == era) else OTHER_ERA_WEIGHT)
+        for results, factor in ((w.race, 1.0), (w.sprint, SPRINT_WEIGHT)):
+            finishers = sorted((r for r in results if r.classified and r.finish), key=lambda r: r.finish)
+            if len(finishers) >= 2:
+                out.append((base * factor, [(r.driver_id, r.team_id) for r in finishers]))
+    return out
+
+
+def pl_loglik_grad(s: np.ndarray) -> tuple[float, np.ndarray]:
+    """Plackett-Luce log-likelihood of the order s[0] > s[1] > ... and its gradient."""
+    lse = np.logaddexp.accumulate(s[::-1])[::-1]          # log sum_{j >= k} exp(s_j)
+    loglik = float(np.sum(s - lse))
+    grad = 1.0 - np.exp(s) * np.cumsum(np.exp(-lse))
+    return loglik, grad
+
+
+def fit_strengths(weekends: Sequence[Weekend], *, era: str | None = None) -> Strengths:
+    """MAP car and skill strengths from the given (earlier) weekends."""
+    orders = _orders(weekends, era)
+    teams = sorted({t for _, o in orders for _, t in o})
+    drivers = sorted({d for _, o in orders for d, _ in o})
+    if not orders:
+        return Strengths({}, {})
+    ti = {t: i for i, t in enumerate(teams)}
+    di = {d: len(teams) + i for i, d in enumerate(drivers)}
+    index = [(w, np.array([ti[t] for _, t in o]), np.array([di[d] for d, _ in o])) for w, o in orders]
+    n = len(teams) + len(drivers)
+    prior = np.concatenate([np.full(len(teams), 1 / CAR_PRIOR_SD ** 2), np.full(len(drivers), 1 / SKILL_PRIOR_SD ** 2)])
+
+    def objective(theta):
+        value = 0.5 * float(np.sum(prior * theta ** 2))
+        grad = prior * theta
+        for w, t_idx, d_idx in index:
+            ll, g = pl_loglik_grad(theta[t_idx] + theta[d_idx])
+            value -= w * ll
+            np.add.at(grad, t_idx, -w * g)
+            np.add.at(grad, d_idx, -w * g)
+        return value, grad
+
+    theta = minimize(objective, np.zeros(n), jac=True, method="L-BFGS-B").x
+    return Strengths({t: float(theta[ti[t]]) for t in teams}, {d: float(theta[di[d]]) for d in drivers})
+
+
+def dnf_rate(weekends: Sequence[Weekend], era: str | None) -> float:
+    """Share of race starters not classified, this era's earlier races (all eras if few)."""
+    def rate(ws):
+        rows = [r for w in ws for r in w.race]
+        return (sum(not r.classified for r in rows) + 1) / (len(rows) + 2), len(rows)
+    in_era, n = rate([w for w in weekends if w.era == era])
+    return in_era if n >= 200 else rate(weekends)[0]
+
+
+# --- simulation --------------------------------------------------------------------
+
+def simulate_order(strength: np.ndarray, dnf: float, rng: np.random.Generator, sims: int) -> np.ndarray:
+    """(sims, n) finishing positions 1..n; retirements placed behind every finisher."""
+    n = len(strength)
+    score = strength[None, :] + rng.gumbel(size=(sims, n))
+    retired = rng.random((sims, n)) < dnf
+    score = np.where(retired, -1e9 + score, score)
+    order = np.argsort(-score, axis=1)
+    positions = np.empty_like(order)
+    np.put_along_axis(positions, order, np.arange(1, n + 1)[None, :], axis=1)
+    return np.where(retired, 0, positions)                 # 0 = did not finish (no points)
+
+
+def points_for(positions: np.ndarray, table: Sequence[int]) -> np.ndarray:
+    lookup = np.zeros(max(len(table), positions.max(initial=0)) + 2)
+    lookup[1:len(table) + 1] = table
+    return lookup[positions]
+
+
+@dataclass(frozen=True)
+class RaceProbabilities:
+    p_win: dict[int, float]
+    p_podium: dict[int, float]
+    p_points: dict[int, float]
+
+    @property
+    def favourite(self) -> int:
+        return max(self.p_win, key=self.p_win.get)
+
+
+def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, int | None]], *, grid_coef: float,
+                       dnf: float, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
+    """entrants: (driver, team, grid slot or None). Strength + grid_coef * -log(grid)."""
+    field_size = len(entrants)
+    s = np.array([strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
+    pos = simulate_order(s, dnf, np.random.default_rng(seed), sims)
+    drivers = [d for d, _, _ in entrants]
+    finished = pos > 0
+    return RaceProbabilities(
+        {d: float(np.mean(pos[:, i] == 1)) for i, d in enumerate(drivers)},
+        {d: float(np.mean(finished[:, i] & (pos[:, i] <= 3))) for i, d in enumerate(drivers)},
+        {d: float(np.mean(finished[:, i] & (pos[:, i] <= 10))) for i, d in enumerate(drivers)},
+    )
+
+
+def fit_grid_coef(weekends: Sequence[Weekend], strengths_for, *, max_races: int = 60) -> float:
+    """Grid effect maximising the PL likelihood of the actual orders of the last max_races
+    raced weekends, each with strengths fitted only on the weekends before it."""
+    from scipy.optimize import minimize_scalar
+
+    cases = []
+    raced = [w for w in weekends if w.raced]
+    for idx in range(max(0, len(raced) - max_races), len(raced)):
+        w, before = raced[idx], raced[:idx]
+        if len(before) < 5:
+            continue
+        st = strengths_for(before, w.era)
+        finishers = sorted((r for r in w.race if r.classified and r.finish), key=lambda r: r.finish)
+        if len(finishers) < 5:
+            continue
+        n = len(w.race)
+        cases.append((np.array([st.of(r.driver_id, r.team_id) for r in finishers]),
+                      np.array([-np.log(r.grid or n) for r in finishers])))
+    if not cases:
+        return 1.0
+
+    def neg(coef):
+        return -sum(pl_loglik_grad(base + coef * g)[0] for base, g in cases)
+    return float(minimize_scalar(neg, bounds=(0.0, 5.0), method="bounded").x)
+
+
+@dataclass(frozen=True)
+class ChampionshipProjection:
+    p_driver_title: dict[int, float]
+    p_team_title: dict[int, float]
+    expected_driver_points: dict[int, float]
+    expected_team_points: dict[int, float]
+    remaining_weekends: int
+
+
+def standings(weekends: Iterable[Weekend], season: int) -> tuple[dict[int, float], dict[int, float]]:
+    """Points so far (race + sprint, as stored) per driver and per team."""
+    drivers, teams = defaultdict(float), defaultdict(float)
+    for w in weekends:
+        if w.season != season:
+            continue
+        for r in (*w.race, *w.sprint):
+            drivers[r.driver_id] += r.points
+            teams[r.team_id] += r.points
+    return dict(drivers), dict(teams)
+
+
+def project_championship(strengths: Strengths, lineup: dict[int, int], remaining: Sequence[Weekend], *,
+                         driver_points: dict[int, float], team_points: dict[int, float], dnf: float,
+                         sims: int = SIMS, seed: int = 11) -> ChampionshipProjection:
+    """Monte Carlo of every remaining weekend for the current lineup (driver -> team)."""
+    rng = np.random.default_rng(seed)
+    # everyone with points stays in the table (a dropped driver keeps theirs); only the
+    # current lineup races the remaining weekends
+    drivers = sorted(set(lineup) | set(driver_points))
+    racing = np.array([i for i, d in enumerate(drivers) if d in lineup])
+    teams = sorted(set(lineup.values()) | set(team_points))
+    s = np.array([strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
+    pts = np.tile(np.array([driver_points.get(d, 0.0) for d in drivers]), (sims, 1))
+    wins = np.zeros_like(pts)
+    for w in remaining if len(racing) else ():
+        if w.sprint_weekend and sprint_points(w.season):
+            pos = simulate_order(s, dnf * 0.5, rng, sims)
+            pts[:, racing] += points_for(pos, sprint_points(w.season))
+        pos = simulate_order(s, dnf, rng, sims)
+        pts[:, racing] += points_for(pos, RACE_POINTS)
+        wins[:, racing] += pos == 1
+        if fastest_lap_point(w.season):
+            # +1 to one top-10 finisher, drawn by strength (the fastest cars set it most)
+            fl = np.where((pos >= 1) & (pos <= 10), s[None, :] + rng.gumbel(size=pos.shape), -np.inf)
+            has = np.isfinite(fl).any(axis=1)
+            pts[np.arange(sims)[has], racing[np.argmax(fl[has], axis=1)]] += 1
+    # ties: more wins first, then a coin flip (count-back rules beyond wins are rare)
+    tiebreak = pts + 1e-3 * wins + 1e-6 * rng.random(pts.shape)
+    champion = np.argmax(tiebreak, axis=1)
+    team_index = {t: i for i, t in enumerate(teams)}
+    team_pts = np.tile(np.array([team_points.get(t, 0.0) for t in teams]), (sims, 1))
+    for i in racing:
+        d = drivers[i]
+        team_pts[:, team_index[lineup[d]]] += pts[:, i] - driver_points.get(d, 0.0)
+    team_champion = np.argmax(team_pts + 1e-6 * rng.random(team_pts.shape), axis=1)
+    return ChampionshipProjection(
+        {d: float(np.mean(champion == i)) for i, d in enumerate(drivers)},
+        {t: float(np.mean(team_champion == i)) for i, t in enumerate(teams)},
+        {d: float(pts[:, i].mean()) for i, d in enumerate(drivers)},
+        {t: float(team_pts[:, i].mean()) for i, t in enumerate(teams)},
+        len(remaining),
+    )
+
+
+def current_lineup(weekends: Sequence[Weekend]) -> dict[int, int]:
+    """driver -> team from the latest raced weekend (race drivers who started)."""
+    last = next((w for w in reversed(weekends) if w.race), None)
+    return {r.driver_id: r.team_id for r in last.race} if last else {}
