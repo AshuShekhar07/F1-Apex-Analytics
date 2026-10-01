@@ -1,0 +1,77 @@
+{
+  "source": "winner_prediction_v1 --backtest, 2019-2026, walk-forward",
+  "stages": {
+    "pre_qualifying": {
+      "races": 167,
+      "favourite_won": 0.443,
+      "mean_favourite_p": 0.249,
+      "log_loss_winner": 1.809,
+      "bins": [
+        {
+          "lo": 0.0,
+          "hi": 0.25,
+          "races": 97,
+          "mean_p": 0.196,
+          "favourite_won": 0.278
+        },
+        {
+          "lo": 0.25,
+          "hi": 0.35,
+          "races": 51,
+          "mean_p": 0.297,
+          "favourite_won": 0.667
+        },
+        {
+          "lo": 0.35,
+          "hi": 0.45,
+          "races": 19,
+          "mean_p": 0.387,
+          "favourite_won": 0.684
+        }
+      ]
+    },
+    "post_qualifying": {
+      "races": 167,
+      "favourite_won": 0.593,
+      "mean_favourite_p": 0.419,
+      "log_loss_winner": 1.315,
+      "bins": [
+        {
+          "lo": 0.0,
+          "hi": 0.25,
+          "races": 7,
+          "mean_p": 0.228,
+          "favourite_won": 0.429
+        },
+        {
+          "lo": 0.25,
+          "hi": 0.35,
+          "races": 48,
+          "mean_p": 0.309,
+          "favourite_won": 0.479
+        },
+        {
+          "lo": 0.35,
+          "hi": 0.45,
+          "races": 54,
+          "mean_p": 0.403,
+          "favourite_won": 0.593
+        },
+        {
+          "lo": 0.45,
+          "hi": 0.6,
+          "races": 40,
+          "mean_p": 0.504,
+          "favourite_won": 0.7
+        },
+        {
+          "lo": 0.6,
+          "hi": 1.01,
+          "races": 18,
+          "mean_p": 0.644,
+          "favourite_won": 0.722
+        }
+      ]
+    }
+  }
+}

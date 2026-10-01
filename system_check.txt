@@ -1,0 +1,121 @@
+=== WINNER BACKTEST 2019-2026 (each race from the races before it) ===
+  pre_qualifying: 167 races, favourite won 44.3% (average favourite chance 24.9%), winner log loss 1.809
+    favourite had 0%-25%:   97 races, said 19.6%, won 27.8% -> low
+    favourite had 25%-35%:   51 races, said 29.7%, won 66.7% -> high
+    favourite had 35%-45%:   19 races, said 38.7%, won 68.4% -> high
+  post_qualifying: 167 races, favourite won 59.3% (average favourite chance 41.9%), winner log loss 1.315
+    favourite had 0%-25%:    7 races, said 22.8%, won 42.9% -> medium
+    favourite had 25%-35%:   48 races, said 30.9%, won 47.9% -> medium
+    favourite had 35%-45%:   54 races, said 40.3%, won 59.3% -> high
+    favourite had 45%-60%:   40 races, said 50.4%, won 70.0% -> high
+    favourite had 60%-100%:   18 races, said 64.4%, won 72.2% -> high
+  saved winner_confidence_v1.json
+/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+2026-10-01 13:10:58,751 INFO httpx HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,753 INFO httpx HTTP Request: GET http://testserver/about "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,764 INFO httpx HTTP Request: GET http://testserver/races?season=2026 "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,774 INFO httpx HTTP Request: GET http://testserver/races/188 "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,780 INFO httpx HTTP Request: GET http://testserver/races/188/qualifying "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,786 INFO httpx HTTP Request: GET http://testserver/races/188/strategy "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,796 INFO httpx HTTP Request: GET http://testserver/races/188/position-battle "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,811 INFO httpx HTTP Request: GET http://testserver/races/188/practice/FP1 "HTTP/1.1 200 OK"
+2026-10-01 13:10:58,817 INFO httpx HTTP Request: GET http://testserver/races/188/forecast "HTTP/1.1 200 OK"
+2026-10-01 13:10:59,046 INFO httpx HTTP Request: POST http://testserver/races/188/what-if "HTTP/1.1 200 OK"
+2026-10-01 13:11:03,377 INFO httpx HTTP Request: GET http://testserver/races/188/winner-prediction "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,679 INFO httpx HTTP Request: GET http://testserver/races/next/winner-prediction "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,704 INFO httpx HTTP Request: GET http://testserver/drivers/29/history "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,722 INFO httpx HTTP Request: GET http://testserver/drivers/29/season/2026 "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,906 INFO httpx HTTP Request: GET http://testserver/drivers/29/profile "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,957 INFO httpx HTTP Request: GET http://testserver/drivers/wet-weather-ranking "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,974 INFO httpx HTTP Request: GET http://testserver/compare/29/7 "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,983 INFO httpx HTTP Request: GET http://testserver/teams/10/season/2026 "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,988 INFO httpx HTTP Request: GET http://testserver/tracks/4/stats "HTTP/1.1 200 OK"
+2026-10-01 13:11:05,994 INFO httpx HTTP Request: GET http://testserver/tracks/4/overtaking-index "HTTP/1.1 200 OK"
+2026-10-01 13:11:06,057 INFO httpx HTTP Request: GET http://testserver/records/all-time "HTTP/1.1 200 OK"
+2026-10-01 13:11:07,094 INFO httpx HTTP Request: GET http://testserver/strategy/predict?track_id=4&race_date=2026-09-26 "HTTP/1.1 200 OK"
+2026-10-01 13:11:07,102 INFO httpx HTTP Request: GET http://testserver/championship/2026 "HTTP/1.1 200 OK"
+2026-10-01 13:11:07,109 INFO httpx HTTP Request: GET http://testserver/championship/2026/history "HTTP/1.1 200 OK"
+2026-10-01 13:11:07,115 INFO httpx HTTP Request: GET http://testserver/predict-and-compete/2026/15 "HTTP/1.1 200 OK"
+=== 1 DATA COVERAGE (raced = race results loaded) ===
+  season races raced quali results per race   sprints laps ok pit stops stints weather no era
+    2018    21    21    21     420     20.0    0/0         20         0     20      21      0
+  note 2018: 1 raced races with laps for fewer than 90% of starters
+    2019    21    21    21     420     20.0    0/0         21         0     21      21      0
+    2020    17    17    17     340     20.0    0/0         17         0     17      17      0
+    2021    22    22    22     440     20.0    3/3         22         0     22      22      0
+    2022    22    22    22     440     20.0    3/3         22         0     22      22      0
+    2023    22    22    22     440     20.0    6/6         22        22     22      22      0
+    2024    24    24    24     479     20.0    6/6         24        24     24      24      0
+    2025    24    24    24     479     20.0    6/6         24        24     24      24      0
+    2026    23    15    15     330     22.0    5/6         14        15     15      15      0
+  note 2026: 1 raced races with laps for fewer than 90% of starters
+
+=== 2 DATA QUALITY (data_quality_v1, identity check off) ===
+  2018: 21 races checked, 0 FAIL, 1 warn
+  2019: 21 races checked, 0 FAIL, 0 warn
+  2020: 17 races checked, 0 FAIL, 1 warn
+  2021: 22 races checked, 0 FAIL, 0 warn
+  2022: 22 races checked, 0 FAIL, 0 warn
+  2023: 22 races checked, 0 FAIL, 0 warn
+  2024: 24 races checked, 0 FAIL, 0 warn
+  2025: 24 races checked, 0 FAIL, 0 warn
+  2026: 15 races checked, 0 FAIL, 0 warn
+
+=== 3 KNOWN FACTS: champions from the stored points ===
+  2018: Lewis Hamilton 408 pts, Mercedes 655 pts  ok
+  2019: Lewis Hamilton 413 pts, Mercedes 739 pts  ok
+  2020: Lewis Hamilton 347 pts, Mercedes 573 pts  ok
+  2021: Max Verstappen 396 pts, Mercedes 614 pts  ok
+  2022: Max Verstappen 454 pts, Red Bull Racing 759 pts  ok
+  2023: Max Verstappen 575 pts, Red Bull Racing 860 pts  ok
+  2024: Max Verstappen 437 pts, McLaren 666 pts  ok
+  2025: Lando Norris 423 pts, McLaren 833 pts  ok
+
+=== 4 API: every endpoint on this database ===
+  GET  /health                                                       200       31 ms  ok
+  GET  /about                                                        200        3 ms  ok
+  GET  /races?season=2026                                            200       11 ms  ok
+  GET  /races/188                                                    200        9 ms  ok
+  GET  /races/188/qualifying                                         200        6 ms  ok
+  GET  /races/188/strategy                                           200        6 ms  ok
+  GET  /races/188/position-battle                                    200       10 ms  ok
+  GET  /races/188/practice/FP1                                       200       15 ms  ok
+  GET  /races/188/forecast                                           200        6 ms  ok
+  POST /races/188/what-if                                            200      229 ms  ok
+  GET  /races/188/winner-prediction                                  200     4331 ms  ok
+  GET  /races/next/winner-prediction                                 200     2302 ms  ok
+  GET  /drivers/29/history                                           200       26 ms  ok
+  GET  /drivers/29/season/2026                                       200       17 ms  ok
+  GET  /drivers/29/profile                                           200      184 ms  ok
+  GET  /drivers/wet-weather-ranking                                  200       51 ms  ok
+  GET  /compare/29/7                                                 200       17 ms  ok
+  GET  /teams/10/season/2026                                         200       10 ms  ok
+  GET  /tracks/4/stats                                               200        5 ms  ok
+  GET  /tracks/4/overtaking-index                                    200        6 ms  ok
+  GET  /records/all-time                                             200       63 ms  ok
+  GET  /strategy/predict?track_id=4&race_date=2026-09-26             200     1037 ms  ok
+  GET  /championship/2026                                            200        8 ms  ok
+  GET  /championship/2026/history                                    200        7 ms  ok
+  GET  /predict-and-compete/2026/15                                  200        6 ms  ok
+
+=== 5 MODELS ===
+  2026 titles after round 15, 8 weekends left:
+    drivers      Kimi Antonelli 95.9% (302 -> 387 pts), George Russell 3.8% (236 -> 324 pts), Lewis Hamilton 0.2% (199 -> 281 pts), Lando Norris 0.1% (186 -> 271 pts)
+    constructors Mercedes 99.9% (538 -> 711 pts), Ferrari 0.1% (378 -> 545 pts), McLaren 0.0% (304 -> 447 pts), Red Bull Racing 0.0% (260 -> 387 pts)
+
+=== 2026 R16 Kuala Lumpur (2026-10-04) ===
+  line-up: line-up of round 15 (entry list not loaded yet); grid: not known yet (before qualifying)
+
+  PRE QUALIFYING: predicted winner George Russell (Mercedes) -- win 13.8%, podium 38.7%
+  confidence LOW: in 97 earlier races where the favourite had 0%-25% at this stage, the favourite won 28%
+        George Russell           Mercedes             win  13.8%  podium  38.7%
+        Charles Leclerc          Ferrari              win  13.5%  podium  36.5%
+        Kimi Antonelli           Mercedes             win  12.8%  podium  36.9%
+        Lando Norris             McLaren              win  12.0%  podium  34.4%
+        Lewis Hamilton           Ferrari              win  11.5%  podium  33.6%
+        Max Verstappen           Red Bull Racing      win   9.9%  podium  29.2%
+
+  current stage: pre_qualifying -> predicted winner George Russell, 13.8%, confidence low
+
+=== 0 FAIL(S) ===
