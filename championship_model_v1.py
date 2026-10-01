@@ -535,6 +535,21 @@ def title_backtest(weekends: Sequence[Weekend], start: int, end: int, *, sims: i
     return out
 
 
+def monotone_bins(bins: Sequence[dict]) -> list[dict]:
+    """A bigger title chance never gets a worse record: adjacent bins that break the order are
+    pooled (weighted by projections). With seven seasons one surprise season can otherwise make
+    80-95% favourites look less reliable than 60-80% ones."""
+    blocks: list[list] = []                  # [rate, weight, member bins]
+    for b in sorted(bins, key=lambda b: b["lo"]):
+        blocks.append([b["favourite_won"], b["rounds"], [b]])
+        while len(blocks) > 1 and blocks[-2][0] > blocks[-1][0]:
+            (r2, w2, m2), (r1, w1, m1) = blocks.pop(), blocks.pop()
+            blocks.append([(r1 * w1 + r2 * w2) / (w1 + w2), w1 + w2, m1 + m2])
+    return [{**b, "favourite_won": round(rate, 3), "favourite_won_raw": b["favourite_won"], "rounds": weight,
+             "range_lo": members[0]["lo"], "range_hi": members[-1]["hi"]}
+            for rate, weight, members in blocks for b in members]
+
+
 def title_confidence(kind: str, after_round: int, season_rounds: int, table: dict | None = None,
                      favourite_p: float | None = None) -> dict:
     """Measured record of title favourites in earlier seasons: at this stage, and with a
@@ -558,11 +573,11 @@ def title_confidence(kind: str, after_round: int, season_rounds: int, table: dic
            "favourite_won_historically": rec["favourite_won"], "rounds": rec["rounds"],
            "basis": f"{label}: in {rec['rounds']} earlier projections at this stage, the favourite became "
                     f"champion {rec['favourite_won']:.0%} of the time"}
-    match = next((b for b in table.get(kind, {}).get("by_chance", [])
+    match = next((b for b in monotone_bins(table.get(kind, {}).get("by_chance", []))
                   if favourite_p is not None and b["lo"] <= favourite_p < b["hi"]), None)
     if match and match["rounds"] >= MIN_TITLE_BIN:
-        out["chance_basis"] = (f"favourites with a {match['lo']:.0%}-{min(match['hi'], 1):.0%} title chance became "
-                               f"champion {match['favourite_won']:.0%} of the time ({match['rounds']} projections)")
+        out["chance_basis"] = (f"favourites with a {match['range_lo']:.0%}-{min(match['range_hi'], 1):.0%} title chance "
+                               f"became champion {match['favourite_won']:.0%} of the time ({match['rounds']} projections)")
         out["chance_record"] = match["favourite_won"]
         if LEVELS.index(title_level(match["favourite_won"])) < LEVELS.index(out["level"]):
             out["level"] = title_level(match["favourite_won"])

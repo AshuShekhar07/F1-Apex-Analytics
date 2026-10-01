@@ -298,3 +298,17 @@ def test_title_confidence_by_stage():
     assert out["drivers"]["late"]["favourite_won"] == 1.0 and out["constructors"]["pre_season"]["rounds"] == 1
     assert sum(b["rounds"] for b in out["drivers"]["by_chance"]) == sum(
         rec["rounds"] for stage, rec in out["drivers"].items() if stage != "by_chance")
+
+
+def test_title_chance_bins_never_reward_a_smaller_chance():
+    from championship_model_v1 import monotone_bins, title_confidence
+
+    bins = [{"lo": 0.6, "hi": 0.8, "rounds": 17, "mean_p": 0.68, "favourite_won": 0.882},
+            {"lo": 0.8, "hi": 0.95, "rounds": 39, "mean_p": 0.88, "favourite_won": 0.59},
+            {"lo": 0.95, "hi": 1.01, "rounds": 84, "mean_p": 0.99, "favourite_won": 0.952}]
+    pooled = monotone_bins(bins)
+    rates = [b["favourite_won"] for b in pooled]
+    assert rates == sorted(rates) and rates[0] == rates[1] == pytest.approx((17 * 0.882 + 39 * 0.59) / 56, abs=1e-3)
+    table = {"constructors": {"mid": {"rounds": 75, "favourite_won": 0.8, "mean_favourite_p": 0.9}, "by_chance": bins}}
+    close = title_confidence("constructors", 10, 22, table, favourite_p=0.605)
+    assert close["level"] == "medium" and close["chance_basis"].startswith("favourites with a 60%-95%")
