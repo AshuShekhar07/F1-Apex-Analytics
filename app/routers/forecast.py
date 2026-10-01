@@ -1,3 +1,5 @@
+import json
+from collections import OrderedDict
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -6,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.settings import settings
 from race_forecast_v1 import MODEL_VERSION, WHAT_IF_NOISE_SCALE, WHAT_IF_THRESHOLD, Scenario, run_what_if
 
 router = APIRouter(prefix="/races", tags=["forecast"])
@@ -22,6 +25,22 @@ class WhatIfRequest(BaseModel):
     strategies: dict[int, StrategyPlan] = Field(default_factory=dict,
                                                 description="driver_id -> strategy that driver runs instead")
     simulations: int = Field(1000, ge=100, le=5000)
+
+
+_WHAT_IF_CACHE: "OrderedDict[tuple, list]" = OrderedDict()
+WHAT_IF_CACHE_SIZE = 256
+
+
+def _cached_what_if(key: tuple, inputs: dict, scenario: Scenario, sims: int) -> list:
+    """Same race, same stored forecast, same scenario -> same answer (fixed seed): reuse it."""
+    if key in _WHAT_IF_CACHE:
+        _WHAT_IF_CACHE.move_to_end(key)
+        return _WHAT_IF_CACHE[key]
+    results = run_what_if(inputs, scenario, sims=sims)
+    _WHAT_IF_CACHE[key] = results
+    if len(_WHAT_IF_CACHE) > WHAT_IF_CACHE_SIZE:
+        _WHAT_IF_CACHE.popitem(last=False)
+    return results
 
 
 def _load_forecast(db: Session, race_id: int) -> Optional[dict]:
@@ -74,8 +93,10 @@ def what_if(request: WhatIfRequest, race_id: int = Path(..., ge=1), db: Session 
         vsc_laps=tuple(request.vsc_laps),
         strategies=tuple((driver_id, plan.model_dump()) for driver_id, plan in request.strategies.items()),
     )
+    sims = min(request.simulations, settings.what_if_max_sims)
+    key = (race_id, str(forecast["computed_at"]), json.dumps(request.model_dump(mode="json"), sort_keys=True), sims)
     try:
-        results = run_what_if(forecast["inputs"], scenario, sims=request.simulations)
+        results = _cached_what_if(key, forecast["inputs"], scenario, sims)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     names = {row["driver_id"]: row for row in db.execute(text("""
