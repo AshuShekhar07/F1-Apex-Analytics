@@ -177,9 +177,10 @@ def dnf_rate(weekends: Sequence[Weekend], era: str | None) -> float:
 # --- simulation --------------------------------------------------------------------
 
 def simulate_order(strength: np.ndarray, dnf: float, rng: np.random.Generator, sims: int) -> np.ndarray:
-    """(sims, n) finishing positions 1..n; retirements placed behind every finisher."""
-    n = len(strength)
-    score = strength[None, :] + rng.gumbel(size=(sims, n))
+    """(sims, n) finishing positions 1..n; retirements placed behind every finisher.
+    strength: (n,) or per simulation (sims, n)."""
+    n = strength.shape[-1]
+    score = (strength if strength.ndim == 2 else strength[None, :]) + rng.gumbel(size=(sims, n))
     retired = rng.random((sims, n)) < dnf
     score = np.where(retired, -1e9 + score, score)
     order = np.argsort(-score, axis=1)
@@ -269,8 +270,12 @@ def standings(weekends: Iterable[Weekend], season: int) -> tuple[dict[int, float
 
 def project_championship(strengths: Strengths, lineup: dict[int, int], remaining: Sequence[Weekend], *,
                          driver_points: dict[int, float], team_points: dict[int, float], dnf: float,
-                         sims: int = SIMS, seed: int = 11) -> ChampionshipProjection:
-    """Monte Carlo of every remaining weekend for the current lineup (driver -> team)."""
+                         sims: int = SIMS, seed: int = 11, drift: float = 0.0) -> ChampionshipProjection:
+    """Monte Carlo of every remaining weekend for the current lineup (driver -> team).
+
+    drift: car development. Each simulated season every team's car strength takes a random
+    walk with this standard deviation per weekend, so a team that is fastest now is not
+    assumed fastest until the end (static strengths were overconfident: 2024 constructors)."""
     rng = np.random.default_rng(seed)
     # everyone with points stays in the table (a dropped driver keeps theirs); only the
     # current lineup races the remaining weekends
@@ -278,18 +283,25 @@ def project_championship(strengths: Strengths, lineup: dict[int, int], remaining
     racing = np.array([i for i, d in enumerate(drivers) if d in lineup])
     teams = sorted(set(lineup.values()) | set(team_points))
     s = np.array([strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
+    car_teams = sorted({lineup[drivers[i]] for i in racing})
+    car_of = np.array([car_teams.index(lineup[drivers[i]]) for i in racing], dtype=int)
+    development = np.zeros((sims, len(car_teams)))
     pts = np.tile(np.array([driver_points.get(d, 0.0) for d in drivers]), (sims, 1))
     wins = np.zeros_like(pts)
     for w in remaining if len(racing) else ():
+        if drift > 0:
+            development += rng.normal(0.0, drift, size=development.shape)
+        s_now = s[None, :] + development[:, car_of] if drift > 0 else s
         if w.sprint_weekend and sprint_points(w.season):
-            pos = simulate_order(s, dnf * 0.5, rng, sims)
+            pos = simulate_order(s_now, dnf * 0.5, rng, sims)
             pts[:, racing] += points_for(pos, sprint_points(w.season))
-        pos = simulate_order(s, dnf, rng, sims)
+        pos = simulate_order(s_now, dnf, rng, sims)
         pts[:, racing] += points_for(pos, RACE_POINTS)
         wins[:, racing] += pos == 1
         if fastest_lap_point(w.season):
             # +1 to one top-10 finisher, drawn by strength (the fastest cars set it most)
-            fl = np.where((pos >= 1) & (pos <= 10), s[None, :] + rng.gumbel(size=pos.shape), -np.inf)
+            fl = np.where((pos >= 1) & (pos <= 10), np.broadcast_to(s_now, pos.shape) + rng.gumbel(size=pos.shape),
+                          -np.inf)
             has = np.isfinite(fl).any(axis=1)
             pts[np.arange(sims)[has], racing[np.argmax(fl[has], axis=1)]] += 1
     # ties: more wins first, then a coin flip (count-back rules beyond wins are rare)

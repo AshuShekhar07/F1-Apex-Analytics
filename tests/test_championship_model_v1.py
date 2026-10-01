@@ -117,7 +117,24 @@ def test_backtest_runs_on_the_synthetic_database(synthetic_db):
     assert len(raced) == 6 and all(len(w.race) == 12 for w in raced)
     out = championship_backtest(weekends, StrengthCache(raced), 2022, 2024)
     assert [c[0] for c in out["checks"]] == [2022, 2023, 2024]
-    assert out["records"][("drivers", "model")]
+    assert out["chosen_drift"][2022] == 0.06 and out["drift_now"] in (0.0, 0.03, 0.06, 0.1, 0.15)
+    from championship_backtest_v1 import summarise_titles
+    summary = summarise_titles(out["rounds"], "drivers")
+    assert summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
 
 
 from test_race_strategy_backtest_v2 import synthetic_db  # noqa: E402,F401  (fixture)
+
+
+def test_development_drift_lowers_overconfidence_far_from_the_end():
+    weekends = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(1, 9)]
+    st = fit_strengths(weekends)
+    lineup = {d: (d + 1) // 2 for d in range(1, 7)}
+    remaining = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(9, 25)]
+    pts = {1: 60, 3: 40}
+    static = project_championship(st, lineup, remaining, driver_points=pts, team_points={1: 60, 2: 40}, dnf=0.1,
+                                  sims=4000, drift=0.0)
+    drifting = project_championship(st, lineup, remaining, driver_points=pts, team_points={1: 60, 2: 40}, dnf=0.1,
+                                    sims=4000, drift=0.15)
+    assert drifting.p_team_title[1] < static.p_team_title[1]
+    assert sum(drifting.p_team_title.values()) == pytest.approx(1.0)

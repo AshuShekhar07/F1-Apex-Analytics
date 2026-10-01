@@ -39,7 +39,7 @@ from championship_model_v1 import (
     standings,
 )
 
-BACKTEST_SIMS = 4000
+BACKTEST_SIMS = 3000
 # Real champions, used only to CHECK the points stored in the database (never as input).
 KNOWN_CHAMPIONS = {
     2018: ("hamilton", "mercedes"), 2019: ("hamilton", "mercedes"), 2020: ("hamilton", "mercedes"),
@@ -138,12 +138,17 @@ def race_backtest(weekends: list[Weekend], cache: StrengthCache, rates, start: i
     return out
 
 
+DRIFTS = (0.0, 0.03, 0.06, 0.1, 0.15)     # car development per weekend tried walk-forward
+DEFAULT_DRIFT = 0.06                       # first season (no earlier season to choose on)
+
+
 def championship_backtest(weekends: list[Weekend], cache: StrengthCache, start: int, end: int) -> dict:
+    """Title chances before every round of every completed season, for each drift size and
+    the baselines; then 'development drift (walk-forward)' uses, for season S, the drift that
+    gave the best log score on the seasons before S."""
     raced = cache.raced
     position = {w.race_id: i for i, w in enumerate(raced)}
-    records = defaultdict(list)                     # (kind, model) -> [(season, stage share, p_champ, fav_right, brier)]
-    trajectories = defaultdict(list)                # (kind, model, season) -> [p_champ by round]
-    calibration = defaultdict(list)                 # kind -> [(model chance, became champion)]
+    rounds = []          # dicts: season, share, kind, champ, candidates, probs {model: {entity: p}}
     checks = []
     for season in range(start, end + 1):
         season_w = [w for w in weekends if w.season == season]
@@ -160,22 +165,52 @@ def championship_backtest(weekends: list[Weekend], cache: StrengthCache, start: 
             dnf = dnf_rate(raced[:history_n], nxt.era)
             lineup = {r.driver_id: r.team_id for r in nxt.race}        # entry list of the next race
             d_pts, t_pts = standings(season_w[:k], season)
-            proj = project_championship(st, lineup, season_w[k:], driver_points=d_pts, team_points=t_pts,
-                                        dnf=dnf, sims=BACKTEST_SIMS)
-            share = k / n
-            for kind, model_p, pts, champ, candidates in (
-                ("drivers", proj.p_driver_title, d_pts, champ_d, sorted(set(lineup) | set(d_pts))),
-                ("constructors", proj.p_team_title, t_pts, champ_t, sorted(set(lineup.values()) | set(t_pts))),
+            by_drift = {d: project_championship(st, lineup, season_w[k:], driver_points=d_pts, team_points=t_pts,
+                                                dnf=dnf, sims=BACKTEST_SIMS, drift=d) for d in DRIFTS}
+            for kind, pts, champ, candidates in (
+                ("drivers", d_pts, champ_d, sorted(set(lineup) | set(d_pts))),
+                ("constructors", t_pts, champ_t, sorted(set(lineup.values()) | set(t_pts))),
             ):
                 leader, share_p = baseline_probs({c: pts.get(c, 0.0) for c in candidates}, candidates)
-                for name, probs in (("model", model_p), ("points leader wins", leader), ("in proportion to points", share_p)):
-                    p = probs.get(champ, 0.0)
-                    fav = max(probs, key=probs.get) if probs else None
-                    brier = sum((probs.get(c, 0.0) - (c == champ)) ** 2 for c in set(probs) | {champ})
-                    records[(kind, name)].append((season, share, p, float(fav == champ), brier))
-                    trajectories[(kind, name, season)].append(p)
-                calibration[kind] += [(model_p.get(c, 0.0), c == champ) for c in candidates]
-    return {"records": records, "trajectories": trajectories, "checks": checks, "calibration": calibration}
+                probs = {f"drift {d}": (p.p_driver_title if kind == "drivers" else p.p_team_title)
+                         for d, p in by_drift.items()}
+                probs.update({"points leader wins": leader, "in proportion to points": share_p})
+                rounds.append({"season": season, "share": k / n, "kind": kind, "champ": champ,
+                               "candidates": candidates, "probs": probs})
+    # walk-forward drift choice: best total log score (both titles) on earlier seasons
+    seasons = sorted({r["season"] for r in rounds})
+    chosen = {}
+    for season in seasons:
+        earlier = [r for r in rounds if r["season"] < season]
+        chosen[season] = (DEFAULT_DRIFT if not earlier else
+                          min(DRIFTS, key=lambda d: sum(log_loss(r["probs"][f"drift {d}"].get(r["champ"], 0.0))
+                                                        for r in earlier)))
+    for r in rounds:
+        r["probs"]["model, static cars"] = r["probs"]["drift 0.0"]
+        r["probs"]["model, development drift"] = r["probs"][f"drift {chosen[r['season']]}"]
+    all_seasons_best = min(DRIFTS, key=lambda d: sum(log_loss(r["probs"][f"drift {d}"].get(r["champ"], 0.0))
+                                                     for r in rounds)) if rounds else DEFAULT_DRIFT
+    return {"rounds": rounds, "checks": checks, "chosen_drift": chosen, "drift_now": all_seasons_best}
+
+
+MODELS = ("model, development drift", "model, static cars", "points leader wins", "in proportion to points")
+
+
+def summarise_titles(rounds: list[dict], kind: str) -> dict:
+    """records / trajectories / calibration per model for one title."""
+    records, trajectories, calibration = defaultdict(list), defaultdict(list), defaultdict(list)
+    for r in rounds:
+        if r["kind"] != kind:
+            continue
+        for name in MODELS:
+            probs, champ = r["probs"][name], r["champ"]
+            p = probs.get(champ, 0.0)
+            fav = max(probs, key=probs.get) if probs else None
+            brier = sum((probs.get(c, 0.0) - (c == champ)) ** 2 for c in set(probs) | {champ})
+            records[name].append((r["season"], r["share"], p, float(fav == champ), brier))
+            trajectories[(name, r["season"])].append(p)
+            calibration[name] += [(probs.get(c, 0.0), c == champ) for c in r["candidates"]]
+    return {"records": records, "trajectories": trajectories, "calibration": calibration}
 
 
 CALIBRATION_BINS = (0.0, 0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0001)
@@ -244,25 +279,29 @@ def main() -> int:
                            "WORSE" if (lo > 0 if lower_better else hi < 0) else "no clear difference")
                 print(f"      vs production {metric:14} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  {verdict}")
 
+    print("\n  car-development drift chosen walk-forward per season: "
+          + ", ".join(f"{k}: {v}" for k, v in sorted(champ["chosen_drift"].items()))
+          + f"; for the projection: {champ['drift_now']}")
     for kind in ("drivers", "constructors"):
+        summary = summarise_titles(champ["rounds"], kind)
         print(f"\n=== {kind.upper()} CHAMPIONSHIP ({args.start_year}-{args.end_year}, every round) ===")
         print(f"  {'stage':16} {'model':26} {'chance given to champion':>25} {'favourite right':>16} {'log loss':>9} {'Brier':>7}")
         for lo_s, hi_s, label in STAGES:
-            for name in ("model", "points leader wins", "in proportion to points"):
-                rows = [r for r in champ["records"][(kind, name)] if lo_s <= r[1] < hi_s]
+            for name in MODELS:
+                rows = [r for r in summary["records"][name] if lo_s <= r[1] < hi_s]
                 if rows:
                     print(f"  {label:16} {name:26} {mean(r[2] for r in rows):>25.1%} {mean(r[3] for r in rows):>16.1%} "
                           f"{mean(log_loss(r[2]) for r in rows):>9.3f} {mean(r[4] for r in rows):>7.3f}")
-        for name in ("model", "points leader wins", "in proportion to points"):
-            moves = [abs(b - a) for (k, n, s), traj in champ["trajectories"].items() if k == kind and n == name
+        for name in MODELS:
+            rows = summary["records"][name]
+            moves = [abs(b - a) for (n, s), traj in summary["trajectories"].items() if n == name
                      for a, b in zip(traj, traj[1:])]
-            if moves:
-                print(f"  consistency, {name:24} champion's chance moves {mean(moves):.1%} per round on average "
-                      f"(largest {max(moves):.0%})")
-        # calibration of the model's title chances (every candidate, every round)
-        print("  calibration (model): when we said X, they became champion Y")
-        for label, n, said, happened in calibration_rows(champ["calibration"][kind]):
-            print(f"    {label:>9}  n={n:5}  said {said:6.1%}  happened {happened:6.1%}")
+            print(f"  all rounds   {name:26} log loss {mean(log_loss(r[2]) for r in rows):.3f}  Brier "
+                  f"{mean(r[4] for r in rows):.3f}  champion's chance moves {mean(moves):.1%}/round (largest {max(moves):.0%})")
+        for name in MODELS[:2]:
+            print(f"  calibration ({name}): when we said X, they became champion Y")
+            for label, n, said, happened in calibration_rows(summary["calibration"][name]):
+                print(f"    {label:>9}  n={n:5}  said {said:6.1%}  happened {happened:6.1%}")
 
     print(f"\n=== {args.season} PROJECTION (data up to today) ===")
     season_w = [w for w in weekends if w.season == args.season]
@@ -273,8 +312,8 @@ def main() -> int:
         lineup = {r.driver_id: r.team_id for r in done[-1].race}
         d_pts, t_pts = standings(done, args.season)
         proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
-                                    dnf=dnf_rate(raced, done[-1].era))
-        print(f"  after round {done[-1].round}, {len(remaining)} weekends left")
+                                    dnf=dnf_rate(raced, done[-1].era), drift=champ["drift_now"])
+        print(f"  after round {done[-1].round}, {len(remaining)} weekends left (car-development drift {champ['drift_now']})")
         for label, probs, now, exp, nm in (("drivers", proj.p_driver_title, d_pts, proj.expected_driver_points, driver_names),
                                            ("constructors", proj.p_team_title, t_pts, proj.expected_team_points, team_names)):
             print(f"  {label}:")
