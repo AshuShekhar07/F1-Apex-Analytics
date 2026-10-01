@@ -441,3 +441,20 @@ def test_system_check_runs_on_a_small_database(forecast_db, client, capsys, monk
     assert "DATA COVERAGE" in out and "API" in out
     api_fails = [p for p in sc.problems if p.startswith("API")]
     assert api_fails == [], api_fails
+
+
+def test_sharpening_keeps_the_order_and_is_fitted_on_winners():
+    import winner_prediction_v1 as wp
+
+    p = {1: 0.3, 2: 0.25, 3: 0.2, 4: 0.15, 5: 0.1}
+    q = wp.sharpen(p, 2.0)
+    assert sum(q.values()) == pytest.approx(1.0) and q[1] > p[1] and q[5] < p[5]
+    assert sorted(q, key=q.get) == sorted(p, key=p.get) and wp.sharpen(p, 1.0) == p
+    # the favourite always wins -> k well above 1; winners spread like p -> k near 1
+    assert wp.fit_power([(p, 1)] * 30) > 3
+    spread = [(p, d) for d, n in ((1, 6), (2, 5), (3, 4), (4, 3), (5, 2)) for _ in range(n)]
+    assert wp.fit_power(spread) == pytest.approx(1.0, abs=0.35)
+    table = {"post_qualifying": {"calibration": {"power": 1.8, "promoted": False}}}
+    assert wp.win_power("post_qualifying", table) == 1.0
+    table["post_qualifying"]["calibration"]["promoted"] = True
+    assert wp.win_power("post_qualifying", table) == 1.8

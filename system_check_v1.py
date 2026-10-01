@@ -201,6 +201,8 @@ def models(db, season: int) -> None:
     except ValueError as exc:
         fail(f"title projection: {exc}")
     print()
+    wp.print_calendar(db)
+    print()
     try:
         wp.print_prediction(wp.predict(db, wp.next_race_id(db)))
     except wp.PredictionError as exc:

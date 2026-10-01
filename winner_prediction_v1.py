@@ -14,9 +14,18 @@ winner_confidence_v1.json by --backtest:
   medium  35-55%
   low     < 35%
 
+Win-chance calibration: the strength model learns from whole finishing orders, and the midfield
+is far more random than the fight for the win, so its favourite's chance came out too low
+(backtest: before qualifying said 25%, the favourite won 44%; after, said 42%, won 59%). Each
+stage's P(win) is therefore sharpened, p^k / sum p^k, with k fitted on which drivers actually
+won earlier races. The ranking (and so the predicted winner) never changes, only the chance.
+Used only when the walk-forward backtest passes: winner log loss better (race-clustered CI
+excludes 0) and calibration error not worse; the verdict is stored with the table.
+
     python winner_prediction_v1.py --next                 # the next race, both stages if the grid is known
     python winner_prediction_v1.py --race-id 189
     python winner_prediction_v1.py --backtest             # (re)measure the confidence table, 2019 onwards
+    python winner_prediction_v1.py --calendar             # remaining races and their ids
 """
 
 from __future__ import annotations
@@ -41,6 +50,8 @@ BINS = ((0.0, 0.25), (0.25, 0.35), (0.35, 0.45), (0.45, 0.6), (0.6, 1.01))
 MIN_BIN_RACES = 15          # fewer races in a bin: use the stage's overall record instead
 HIGH, MEDIUM = 0.55, 0.35
 BACKTEST_SIMS = 4000
+MIN_CALIBRATION_RACES = 20  # earlier races needed to fit the sharpening for a season
+POWER_BOUNDS = (0.5, 4.0)
 # championship_backtest_v1, 152 races 2019-2025, until --backtest has been run
 FALLBACK = {"pre_qualifying": {"races": 152, "favourite_won": 0.487, "bins": []},
             "post_qualifying": {"races": 152, "favourite_won": 0.572, "bins": []}}
@@ -59,6 +70,30 @@ def load_confidence() -> dict:
         return json.loads(CONFIDENCE_FILE.read_text())["stages"]
     except (OSError, ValueError, KeyError):
         return FALLBACK
+
+
+def sharpen(p_win: dict, k: float) -> dict:
+    """p^k / sum p^k: k > 1 makes favourites likelier, k = 1 changes nothing."""
+    if k == 1.0:
+        return dict(p_win)
+    powered = {d: max(p, 0.0) ** k for d, p in p_win.items()}
+    total = sum(powered.values()) or 1.0
+    return {d: v / total for d, v in powered.items()}
+
+
+def win_power(stage: str, table: dict | None = None) -> float:
+    """The promoted sharpening for this stage, 1.0 when none passed the backtest."""
+    cal = (table or load_confidence()).get(stage, {}).get("calibration") or {}
+    return float(cal["power"]) if cal.get("promoted") else 1.0
+
+
+def fit_power(cases: Sequence[tuple[dict, int]]) -> float:
+    """k maximising the log chance given to the actual winners."""
+    from scipy.optimize import minimize_scalar
+
+    def neg(k):
+        return -sum(math.log(max(sharpen(p, k).get(w, 0.0), 1e-6)) for p, w in cases)
+    return float(minimize_scalar(neg, bounds=POWER_BOUNDS, method="bounded").x)
 
 
 def confidence(stage: str, favourite_p: float, table: dict | None = None) -> dict:
@@ -166,13 +201,16 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     for stage in STAGES:
         if stage == "post_qualifying" and not grid:
             continue
-        probs = stage_probabilities(weekends, race, lineup, grid if stage == "post_qualifying" else None)
+        raw = stage_probabilities(weekends, race, lineup, grid if stage == "post_qualifying" else None)
+        p_win = sharpen(raw.p_win, win_power(stage, table))
+        probs = cm.RaceProbabilities(p_win, {d: max(raw.p_podium[d], p_win[d]) for d in raw.p_podium}, raw.p_points)
         ranked = sorted(lineup, key=lambda d: (-probs.p_win[d], (grid or {}).get(d, 99)))
         fav = ranked[0]
         stages[stage] = {
             "favourite": {"driver_id": fav, "driver_name": driver_names.get(fav), "team_name": team_names.get(lineup[fav]),
                           "p_win": round(probs.p_win[fav], 4), "p_podium": round(probs.p_podium[fav], 4)},
             "confidence": confidence(stage, probs.p_win[fav], table),
+            "win_calibration_power": win_power(stage, table),
             "drivers": [{"driver_id": d, "driver_name": driver_names.get(d), "team_name": team_names.get(lineup[d]),
                          "grid": (grid or {}).get(d) if stage == "post_qualifying" else None,
                          "p_win": round(probs.p_win[d], 4), "p_podium": round(probs.p_podium[d], 4)}
@@ -192,12 +230,47 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
 
 # --- backtest -------------------------------------------------------------------------
 
+def _summary(rows: Sequence[tuple[float, bool, float]]) -> dict:
+    """rows: (favourite's chance, favourite won, winner's chance)."""
+    bins = []
+    for lo, hi in BINS:
+        sel = [r for r in rows if lo <= r[0] < hi]
+        if sel:
+            bins.append({"lo": lo, "hi": hi, "races": len(sel), "mean_p": round(mean(r[0] for r in sel), 3),
+                         "favourite_won": round(mean(r[1] for r in sel), 3)})
+    return {"races": len(rows), "favourite_won": round(mean(r[1] for r in rows), 3),
+            "mean_favourite_p": round(mean(r[0] for r in rows), 3),
+            "log_loss_winner": round(mean(-math.log(max(r[2], 1e-3)) for r in rows), 3), "bins": bins}
+
+
+def calibration_error(cases: Sequence[tuple[dict, int]]) -> float:
+    """Every driver's P(win) binned; average |said - happened| weighted by drivers."""
+    pairs = [(p, d == w) for probs, w in cases for d, p in probs.items()]
+    total = 0.0
+    for lo, hi in ((0, .02), (.02, .05), (.05, .1), (.1, .2), (.2, .35), (.35, .5), (.5, .7), (.7, 1.01)):
+        sel = [(p, y) for p, y in pairs if lo <= p < hi]
+        if sel:
+            total += len(sel) * abs(mean(p for p, _ in sel) - mean(y for _, y in sel))
+    return total / len(pairs) if pairs else 0.0
+
+
+def _rows(cases: Sequence[tuple[dict, int]]) -> list[tuple[float, bool, float]]:
+    out = []
+    for p, w in cases:
+        fav = max(p, key=p.get)
+        out.append((p[fav], fav == w, p.get(w, 0.0)))
+    return out
+
+
 def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int = BACKTEST_SIMS) -> dict:
-    """Every race of start..end predicted at both stages from the races before it only."""
+    """Every race of start..end predicted at both stages from the races before it only; then
+    the win-chance sharpening for season S fitted on the races before S and judged on S."""
+    from race_form_signal_v1 import race_clustered
+
     raced = [w for w in weekends if w.raced]
     strengths_for = cm._cached_strengths(cm.RACE_WINTER_SD)
     grid_coef: dict[int, float] = {}
-    records: dict[str, list[tuple[float, bool, float]]] = {s: [] for s in STAGES}
+    cases: dict[str, list[tuple[int, int, dict, int]]] = {s: [] for s in STAGES}   # season, race, p_win, winner
     for idx, w in enumerate(raced):
         if not (start <= w.season <= end) or idx < cm.MIN_HISTORY:
             continue
@@ -213,26 +286,56 @@ def backtest(weekends: Sequence[cm.Weekend], start: int, end: int, *, sims: int 
         for stage in STAGES:
             entrants = [(r.driver_id, r.team_id, r.grid if stage == "post_qualifying" else None) for r in w.race]
             p = cm.race_probabilities(st, entrants, grid_coef=grid_coef[w.season], dnf=dnf, sims=sims).p_win
-            fav = max(p, key=p.get)
-            records[stage].append((p[fav], fav == winner, p.get(winner, 0.0)))
+            cases[stage].append((w.season, w.race_id, p, winner))
     out = {}
-    for stage, rows in records.items():
+    for stage, rows in cases.items():
         if not rows:
             continue
-        bins = []
-        for lo, hi in BINS:
-            sel = [r for r in rows if lo <= r[0] < hi]
-            if sel:
-                bins.append({"lo": lo, "hi": hi, "races": len(sel), "mean_p": round(mean(r[0] for r in sel), 3),
-                             "favourite_won": round(mean(r[1] for r in sel), 3)})
-        out[stage] = {"races": len(rows), "favourite_won": round(mean(r[1] for r in rows), 3),
-                      "mean_favourite_p": round(mean(r[0] for r in rows), 3),
-                      "log_loss_winner": round(mean(-math.log(max(r[2], 1e-3)) for r in rows), 3),
-                      "bins": bins}
+        raw = [(p, wn) for _, _, p, wn in rows]
+        calibrated, power_by_season = [], {}
+        for season in sorted({c[0] for c in rows}):
+            earlier = [(p, wn) for s_, _, p, wn in rows if s_ < season]
+            k = fit_power(earlier) if len(earlier) >= MIN_CALIBRATION_RACES else 1.0
+            power_by_season[season] = round(k, 3)
+            calibrated += [(sharpen(p, k), wn) for s_, _, p, wn in rows if s_ == season]
+        diffs = {rid: [-math.log(max(c[0].get(c[1], 0), 1e-3)) + math.log(max(p.get(wn, 0), 1e-3))]
+                 for (_, rid, p, wn), c in zip(rows, calibrated)}
+        d, lo, hi = race_clustered(diffs)
+        ece_raw, ece_cal = calibration_error(raw), calibration_error(calibrated)
+        promoted = hi < 0 and ece_cal <= ece_raw
+        shown = calibrated if promoted else raw
+        out[stage] = {**_summary(_rows(shown)),
+                      "uncalibrated": _summary(_rows(raw)),
+                      "walk_forward_calibrated": _summary(_rows(calibrated)),
+                      "calibration": {"power": round(fit_power(raw), 3), "promoted": promoted,
+                                      "power_by_season": power_by_season,
+                                      "log_loss_change": [round(d, 4), round(lo, 4), round(hi, 4)],
+                                      "calibration_error": {"uncalibrated": round(ece_raw, 4),
+                                                            "calibrated": round(ece_cal, 4)}}}
     return out
 
 
 # --- CLI ---------------------------------------------------------------------------
+
+def remaining_races(db: Any, today: date | None = None) -> list[dict]:
+    today = today or date.today()
+    return [dict(r) for r in db.execute(text("""
+        SELECT r.id, r.season_year, r.round_number, r.race_date, t.name AS track,
+               EXISTS (SELECT 1 FROM sessions s JOIN qualifying_results q ON q.session_id = s.id
+                       WHERE s.race_id = r.id AND s.session_type = 'Q') AS qualifying_loaded
+        FROM races r JOIN tracks t ON t.id = r.track_id
+        WHERE r.race_date >= :d
+          AND NOT EXISTS (SELECT 1 FROM sessions s JOIN race_results rr ON rr.session_id = s.id
+                          WHERE s.race_id = r.id AND s.session_type = 'R')
+        ORDER BY r.race_date"""), {"d": today - timedelta(days=2)}).mappings()]
+
+
+def print_calendar(db: Any) -> None:
+    print("=== REMAINING RACES ===")
+    for r in remaining_races(db):
+        print(f"  race id {r['id']:4}  {r['season_year']} R{r['round_number']:<2} {r['track']:24} {r['race_date']}"
+              f"  {'qualifying loaded' if r['qualifying_loaded'] else 'before qualifying'}")
+
 
 def print_prediction(pred: dict) -> None:
     print(f"=== {pred['season']} R{pred['round']} {pred['track']} ({pred['race_date']}) ===")
@@ -256,6 +359,7 @@ def main() -> int:
     parser.add_argument("--next", action="store_true")
     parser.add_argument("--race-id", type=int)
     parser.add_argument("--backtest", action="store_true")
+    parser.add_argument("--calendar", action="store_true", help="list the remaining races and their ids")
     parser.add_argument("--start-year", type=int, default=2019)
     args = parser.parse_args()
     engine = create_engine(os.environ["DATABASE_URL"])
@@ -268,12 +372,23 @@ def main() -> int:
                                                              "walk-forward", "stages": stages}, indent=2))
             print(f"=== WINNER BACKTEST {args.start_year}-{end} (each race from the races before it) ===")
             for stage, rec in stages.items():
-                print(f"  {stage}: {rec['races']} races, favourite won {rec['favourite_won']:.1%} "
-                      f"(average favourite chance {rec['mean_favourite_p']:.1%}), winner log loss {rec['log_loss_winner']}")
-                for b in rec["bins"]:
-                    print(f"    favourite had {b['lo']:.0%}-{min(b['hi'], 1):.0%}: {b['races']:4} races, "
-                          f"said {b['mean_p']:.1%}, won {b['favourite_won']:.1%} -> {level(b['favourite_won'])}")
+                cal = rec["calibration"]
+                d, lo, hi = cal["log_loss_change"]
+                print(f"\n  {stage.upper()}: {rec['races']} races")
+                for label, summ in (("uncalibrated", rec["uncalibrated"]),
+                                    ("calibrated (walk-forward)", rec["walk_forward_calibrated"])):
+                    print(f"    {label:26} favourite won {summ['favourite_won']:.1%}, average favourite chance "
+                          f"{summ['mean_favourite_p']:.1%}, winner log loss {summ['log_loss_winner']}")
+                    for b in summ["bins"]:
+                        print(f"      favourite had {b['lo']:.0%}-{min(b['hi'], 1):.0%}: {b['races']:4} races, "
+                              f"said {b['mean_p']:.1%}, won {b['favourite_won']:.1%} -> {level(b['favourite_won'])}")
+                print(f"    sharpening k by season (fitted on earlier seasons): {cal['power_by_season']}; now {cal['power']}")
+                print(f"    log loss change {d:+.4f} [{lo:+.4f}, {hi:+.4f}], calibration error "
+                      f"{cal['calibration_error']['uncalibrated']:.4f} -> {cal['calibration_error']['calibrated']:.4f}"
+                      f"  => {'PROMOTED' if cal['promoted'] else 'not promoted (kept uncalibrated)'}")
             print(f"  saved {CONFIDENCE_FILE.name}")
+        if args.calendar:
+            print_calendar(db)
         if args.next or args.race_id:
             try:
                 print_prediction(predict(db, args.race_id or next_race_id(db)))

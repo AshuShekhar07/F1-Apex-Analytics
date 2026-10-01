@@ -651,6 +651,14 @@ def compute_forecast(db: Any, race_id: int) -> dict:
         else:
             chances, grid_coef = out
             notes.append(f"win/podium chances: strength model, grid effect {grid_coef:.2f}")
+            from championship_model_v1 import RaceProbabilities
+            from winner_prediction_v1 import sharpen, win_power
+            k = win_power("post_qualifying")
+            if k != 1.0:      # same calibration as the winner prediction (passed its backtest)
+                p_win = sharpen(chances.p_win, k)
+                chances = RaceProbabilities(p_win, {d: max(chances.p_podium[d], p_win[d]) for d in p_win},
+                                            chances.p_points)
+                notes.append(f"win chances calibrated on earlier winners (sharpening {k:.2f})")
 
     drivers = []
     for r, position in zip(rows, predicted):
