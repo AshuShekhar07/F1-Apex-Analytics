@@ -365,6 +365,9 @@ def current_lineup(weekends: Sequence[Weekend]) -> dict[int, int]:
 MODEL_VERSION = "championship_v1"
 RACE_WINTER_SD = 0.3
 TITLE_WINTER_SD: float | None = None
+# Drift test (championship_backtest_v1 --titles-only): choosing 0-0.4 walk-forward was WORSE
+# than 0.15 for both titles (log loss +0.028 / +0.027, CIs resampling seasons exclude 0). A
+# larger drift only pays in hindsight of 2024; chosen before it, it hurts the other seasons.
 TITLE_DRIFT = 0.15
 MIN_HISTORY = 10            # raced weekends needed before any strength is fitted
 VALIDATION = {
