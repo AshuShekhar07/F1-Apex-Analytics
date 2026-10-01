@@ -284,9 +284,17 @@ def test_title_confidence_by_stage():
         ["pre_season", "early", "early", "mid", "mid", "late", "late"]
     table = {"drivers": {"pre_season": {"rounds": 8, "favourite_won": 0.5, "mean_favourite_p": 0.4},
                          "late": {"rounds": 60, "favourite_won": 0.95, "mean_favourite_p": 0.9}}}
-    assert title_confidence("drivers", 0, 20, table)["level"] == "medium"
+    assert title_confidence("drivers", 0, 20, table)["level"] == "low"            # 50% < 55%
     assert title_confidence("drivers", 19, 20, table)["level"] == "high"
+    # a close fight is not 'high' just because it is late in the season
+    table["drivers"]["by_chance"] = [{"lo": 0.6, "hi": 0.8, "rounds": 40, "mean_p": 0.7, "favourite_won": 0.65},
+                                     {"lo": 0.95, "hi": 1.01, "rounds": 50, "mean_p": 0.99, "favourite_won": 1.0}]
+    close = title_confidence("drivers", 19, 20, table, favourite_p=0.68)
+    assert close["level"] == "medium" and "65%" in close["chance_basis"]
+    assert title_confidence("drivers", 19, 20, table, favourite_p=0.99)["level"] == "high"
     assert title_confidence("constructors", 5, 20, table)["measured"] is False
     weekends = [w for w in _two_seasons() if w.season == 2023] + _second_season([1, 2, 3, 4, 5, 6])
     out = title_backtest(weekends, 2024, 2024, sims=300)
     assert out["drivers"]["late"]["favourite_won"] == 1.0 and out["constructors"]["pre_season"]["rounds"] == 1
+    assert sum(b["rounds"] for b in out["drivers"]["by_chance"]) == sum(
+        rec["rounds"] for stage, rec in out["drivers"].items() if stage != "by_chance")

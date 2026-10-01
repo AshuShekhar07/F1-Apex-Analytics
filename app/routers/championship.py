@@ -109,7 +109,9 @@ def get_championship(season: int = Path(..., ge=2018, le=2100), db: Session = De
         for kind, sql in _ENTITY_SQL.items():
             out[kind] = [_numbers(dict(r)) for r in db.execute(text(sql), params).mappings()]
     rounds = _season_rounds(db, season)
-    out["confidence"] = {kind: title_confidence(kind, out["after_round"], rounds) for kind in ("drivers", "constructors")}
+    out["confidence"] = {kind: title_confidence(kind, out["after_round"], rounds,
+                                                favourite_p=max((r["p_title"] for r in out[kind]), default=None))
+                         for kind in ("drivers", "constructors")}
     out["validation"] = VALIDATION
     return out
 

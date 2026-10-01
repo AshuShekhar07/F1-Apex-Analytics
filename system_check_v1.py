@@ -196,8 +196,10 @@ def models(db, season: int) -> None:
             top = sorted(probs, key=lambda k: -probs[k])[:4]
             print(f"    {label:12} " + ", ".join(f"{names.get(k)} {probs[k]:.1%} ({pts.get(k, 0):.0f} -> {exp[k]:.0f} pts)"
                                                   for k in top))
-            conf = title_confidence(label, sp.after_round, len([w for w in weekends if w.season == season]))
-            print(f"    {'':12} confidence {conf['level'].upper()}: {conf['basis']}")
+            conf = title_confidence(label, sp.after_round, len([w for w in weekends if w.season == season]),
+                                    favourite_p=max(probs.values()))
+            print(f"    {'':12} confidence {conf['level'].upper()}: {conf['basis']}"
+                  + (f"; {conf['chance_basis']}" if conf.get("chance_basis") else ""))
             if abs(sum(probs.values()) - 1) > 0.01:
                 fail(f"{label} title chances add up to {sum(probs.values()):.3f}")
     except ValueError as exc:

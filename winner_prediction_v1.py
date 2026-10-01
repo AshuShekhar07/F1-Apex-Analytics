@@ -433,8 +433,9 @@ def print_replay(db: Any, season: int, after_round: int) -> None:
     print(f"\n  TITLES after round {after_round} of {len(season_w)}:")
     for i, (kind, probs, pts, names) in enumerate((("drivers", sp.projection.p_driver_title, sp.driver_points, dn),
                                                     ("constructors", sp.projection.p_team_title, sp.team_points, tn))):
-        conf = title_confidence(kind, after_round, len(season_w))
-        print(f"    {kind}: confidence {conf['level'].upper()} ({conf['basis']})")
+        conf = title_confidence(kind, after_round, len(season_w), favourite_p=max(probs.values()))
+        print(f"    {kind}: confidence {conf['level'].upper()} ({conf['basis']}"
+              + (f"; {conf['chance_basis']}" if conf.get("chance_basis") else "") + ")")
         for k in sorted(probs, key=lambda k: -probs[k])[:4]:
             print(f"      {names.get(k, k):24} title {probs[k]:6.1%}   points then {pts.get(k, 0):5.0f}")
         if final:

@@ -479,6 +479,12 @@ TITLE_CONFIDENCE_FILE = "title_confidence_v1.json"
 TITLE_STAGES = (("pre_season", "before the first race"), ("early", "first quarter of the season"),
                 ("mid", "second and third quarters"), ("late", "last quarter"))
 CONFIDENCE_HIGH, CONFIDENCE_MEDIUM = 0.55, 0.35
+# Titles are usually a fight between two or three, not twenty: a favourite right 60% of the
+# time is ordinary there. high: the favourite became champion >= 80% of the time, medium >= 55%.
+TITLE_HIGH, TITLE_MEDIUM = 0.80, 0.55
+TITLE_CHANCE_BINS = ((0.0, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 0.95), (0.95, 1.01))
+MIN_TITLE_BIN = 10          # projections needed in a chance bin to use it
+LEVELS = ("low", "medium", "high")
 
 
 def title_stage(after_round: int, season_rounds: int) -> str:
@@ -490,6 +496,10 @@ def title_stage(after_round: int, season_rounds: int) -> str:
 
 def confidence_level(rate: float) -> str:
     return "high" if rate >= CONFIDENCE_HIGH else "medium" if rate >= CONFIDENCE_MEDIUM else "low"
+
+
+def title_level(rate: float) -> str:
+    return "high" if rate >= TITLE_HIGH else "medium" if rate >= TITLE_MEDIUM else "low"
 
 
 def title_backtest(weekends: Sequence[Weekend], start: int, end: int, *, sims: int = 2000) -> dict:
@@ -516,11 +526,20 @@ def title_backtest(weekends: Sequence[Weekend], start: int, end: int, *, sims: i
     for (kind, stage), rows in records.items():
         out[kind][stage] = {"rounds": len(rows), "favourite_won": round(sum(r[1] for r in rows) / len(rows), 3),
                             "mean_favourite_p": round(sum(r[0] for r in rows) / len(rows), 3)}
+    for kind in out:
+        rows = [r for (k, _), rs in records.items() if k == kind for r in rs]
+        out[kind]["by_chance"] = [
+            {"lo": lo, "hi": hi, "rounds": len(sel), "mean_p": round(sum(r[0] for r in sel) / len(sel), 3),
+             "favourite_won": round(sum(r[1] for r in sel) / len(sel), 3)}
+            for lo, hi in TITLE_CHANCE_BINS for sel in [[r for r in rows if lo <= r[0] < hi]] if sel]
     return out
 
 
-def title_confidence(kind: str, after_round: int, season_rounds: int, table: dict | None = None) -> dict:
-    """Measured record of title favourites at this stage of earlier seasons."""
+def title_confidence(kind: str, after_round: int, season_rounds: int, table: dict | None = None,
+                     favourite_p: float | None = None) -> dict:
+    """Measured record of title favourites in earlier seasons: at this stage, and with a
+    similar title chance; the level is the lower of the two, so a close fight is never 'high'
+    just because it is mid-season."""
     import json
     from pathlib import Path
 
@@ -535,10 +554,19 @@ def title_confidence(kind: str, after_round: int, season_rounds: int, table: dic
     if not rec:
         return {"stage": stage, "level": "low" if stage == "pre_season" else "medium", "measured": False,
                 "basis": f"{label}: not measured yet (run championship_projection_v1.py --backtest)"}
-    return {"stage": stage, "level": confidence_level(rec["favourite_won"]), "measured": True,
-            "favourite_won_historically": rec["favourite_won"], "rounds": rec["rounds"],
-            "basis": f"{label}: in {rec['rounds']} earlier projections at this stage, the favourite became "
-                     f"champion {rec['favourite_won']:.0%} of the time"}
+    out = {"stage": stage, "level": title_level(rec["favourite_won"]), "measured": True,
+           "favourite_won_historically": rec["favourite_won"], "rounds": rec["rounds"],
+           "basis": f"{label}: in {rec['rounds']} earlier projections at this stage, the favourite became "
+                    f"champion {rec['favourite_won']:.0%} of the time"}
+    match = next((b for b in table.get(kind, {}).get("by_chance", [])
+                  if favourite_p is not None and b["lo"] <= favourite_p < b["hi"]), None)
+    if match and match["rounds"] >= MIN_TITLE_BIN:
+        out["chance_basis"] = (f"favourites with a {match['lo']:.0%}-{min(match['hi'], 1):.0%} title chance became "
+                               f"champion {match['favourite_won']:.0%} of the time ({match['rounds']} projections)")
+        out["chance_record"] = match["favourite_won"]
+        if LEVELS.index(title_level(match["favourite_won"])) < LEVELS.index(out["level"]):
+            out["level"] = title_level(match["favourite_won"])
+    return out
 
 
 def store_projection(db: Any, sp: SeasonProjection) -> int:

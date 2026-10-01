@@ -94,12 +94,17 @@ def main() -> int:
         path.write_text(json.dumps({"source": f"championship_projection_v1 --backtest, completed seasons 2019-{last}, "
                                               "each round projected from the races before it", "titles": titles}, indent=2))
         print(f"=== TITLE CONFIDENCE (completed seasons from 2019; favourite = highest title chance) ===")
+        from championship_model_v1 import title_level
         for kind, stages in titles.items():
             for stage in ("pre_season", "early", "mid", "late"):
                 rec = stages.get(stage)
                 if rec:
                     print(f"  {kind:12} {stage:10} {rec['rounds']:4} projections: favourite became champion "
-                          f"{rec['favourite_won']:.0%} (average favourite chance {rec['mean_favourite_p']:.0%})")
+                          f"{rec['favourite_won']:.0%} (average favourite chance {rec['mean_favourite_p']:.0%})"
+                          f" -> {title_level(rec['favourite_won'])}")
+            for b in stages.get("by_chance", []):
+                print(f"  {kind:12} chance {b['lo']:.0%}-{min(b['hi'], 1):.0%} {b['rounds']:4} projections: said "
+                      f"{b['mean_p']:.0%}, favourite became champion {b['favourite_won']:.0%} -> {title_level(b['favourite_won'])}")
         print(f"  saved {path.name}")
         return 0
     with engine.begin() as db:
