@@ -11,12 +11,12 @@ ALTER TABLE tracks
 
 ALTER TABLE drivers
     ADD COLUMN IF NOT EXISTS date_of_birth DATE,
-    ADD COLUMN IF NOT EXISTS photo_url VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS photo_url TEXT,
     ADD COLUMN IF NOT EXISTS country_code VARCHAR(3),
     ADD COLUMN IF NOT EXISTS total_world_championships INTEGER DEFAULT 0;
 
 ALTER TABLE teams
-    ADD COLUMN IF NOT EXISTS logo_url VARCHAR(255);
+    ADD COLUMN IF NOT EXISTS logo_url TEXT;
 
 ALTER TABLE race_results
     ADD COLUMN IF NOT EXISTS gap_to_winner_seconds NUMERIC(8,3),

@@ -1,0 +1,148 @@
+=== STRATEGY PREDICTION BACKTEST (dry races 2022-2025, 1248 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.245   -0.010 [-0.030, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.255   
+sequence_hit         C hierarchy                       0.191   -0.064 [-0.109, -0.021]  WORSE
+sequence_hit         D pre-start (known start tyre)    0.287   +0.032 [+0.002, +0.060]  BETTER
+sequence_hit         E track-adjusted                  0.209   -0.046 [-0.088, -0.005]  WORSE
+sequence_hit         F last race here                  0.170   -0.086 [-0.138, -0.034]  WORSE
+sequence_hit         G CEILING (hindsight)             0.460   +0.205 [+0.163, +0.250]  BETTER
+sequence_hit         H era mode + track timing         0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.234   -0.021 [-0.068, +0.025]  no clear difference
+sequence_hit         J practice wear + compounds       0.203   -0.053 [-0.094, -0.014]  WORSE
+sequence_hit         K era stops + compounds           0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         L Pirelli compounds               0.224   -0.031 [-0.078, +0.016]  no clear difference
+sequence_hit         M wear + wear timing              0.234   -0.021 [-0.068, +0.025]  no clear difference
+stop_count_hit       A old production                  0.394   -0.009 [-0.029, +0.002]  no clear difference
+stop_count_hit       B era mode (real stints)          0.403   
+stop_count_hit       C hierarchy                       0.428   +0.026 [-0.043, +0.097]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.427   +0.024 [-0.023, +0.074]  no clear difference
+stop_count_hit       E track-adjusted                  0.448   +0.045 [-0.029, +0.122]  no clear difference
+stop_count_hit       F last race here                  0.427   +0.024 [-0.054, +0.106]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.750   +0.347 [+0.268, +0.428]  BETTER
+stop_count_hit       H era mode + track timing         0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       J practice wear + compounds       0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       K era stops + compounds           0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       L Pirelli compounds               0.446   +0.043 [-0.032, +0.118]  no clear difference
+stop_count_hit       M wear + wear timing              0.470   +0.068 [+0.000, +0.139]  BETTER
+first_stop_error     A old production                  8.359   +0.022 [-0.180, +0.244]  no clear difference
+first_stop_error     B era mode (real stints)          8.336   
+first_stop_error     C hierarchy                       8.660   +0.323 [-0.206, +0.865]  no clear difference
+first_stop_error     D pre-start (known start tyre)    7.985   -0.360 [-0.907, +0.202]  no clear difference
+first_stop_error     E track-adjusted                  8.562   +0.225 [-0.240, +0.689]  no clear difference
+first_stop_error     F last race here                  9.420   +1.185 [+0.374, +2.028]  WORSE
+first_stop_error     G CEILING (hindsight)             5.732   -2.628 [-3.477, -1.862]  BETTER
+first_stop_error     H era mode + track timing         8.643   +0.306 [+0.037, +0.591]  WORSE
+first_stop_error     I practice wear                   8.208   -0.129 [-0.560, +0.313]  no clear difference
+first_stop_error     J practice wear + compounds       8.169   -0.167 [-0.530, +0.206]  no clear difference
+first_stop_error     K era stops + compounds           8.336   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_error     L Pirelli compounds               8.220   -0.116 [-0.630, +0.408]  no clear difference
+first_stop_error     M wear + wear timing              8.196   -0.140 [-0.547, +0.282]  no clear difference
+first_stop_within_3  A old production                  0.263   -0.006 [-0.028, +0.014]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.269   
+first_stop_within_3  C hierarchy                       0.316   +0.048 [+0.005, +0.094]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.313   +0.053 [+0.008, +0.098]  BETTER
+first_stop_within_3  E track-adjusted                  0.303   +0.034 [-0.011, +0.081]  no clear difference
+first_stop_within_3  F last race here                  0.308   +0.033 [-0.025, +0.090]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.544   +0.281 [+0.221, +0.340]  BETTER
+first_stop_within_3  H era mode + track timing         0.249   -0.020 [-0.042, -0.001]  WORSE
+first_stop_within_3  I practice wear                   0.293   +0.024 [-0.019, +0.066]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.299   +0.031 [-0.011, +0.072]  no clear difference
+first_stop_within_3  K era stops + compounds           0.269   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_within_3  L Pirelli compounds               0.295   +0.026 [-0.002, +0.057]  no clear difference
+first_stop_within_3  M wear + wear timing              0.296   +0.027 [-0.015, +0.071]  no clear difference
+
+practice wear measured for 132 of 167 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.051%/lap (n=25), 2 stop(s): +0.094%/lap (n=25), 3 stop(s): +0.063%/lap (n=5), 4 stop(s): +0.334%/lap (n=1)
+Pirelli compound set known for 70 of 70 scored races
+=== STRATEGY PREDICTION BACKTEST (dry races 2026-2026, 229 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.225   
+sequence_hit         C hierarchy                       0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         D pre-start (known start tyre)    0.267   +0.042 [+0.013, +0.074]  BETTER
+sequence_hit         E track-adjusted                  0.124   -0.101 [-0.223, +0.009]  no clear difference
+sequence_hit         F last race here                  0.201   -0.024 [-0.097, +0.039]  no clear difference
+sequence_hit         G CEILING (hindsight)             0.462   +0.237 [+0.133, +0.347]  BETTER
+sequence_hit         H era mode + track timing         0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.237   +0.012 [-0.047, +0.069]  no clear difference
+sequence_hit         J practice wear + compounds       0.245   +0.020 [-0.047, +0.084]  no clear difference
+sequence_hit         K era stops + compounds           0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         L Pirelli compounds               0.087   -0.138 [-0.283, -0.021]  WORSE
+sequence_hit         M wear + wear timing              0.237   +0.012 [-0.047, +0.069]  no clear difference
+stop_count_hit       A old production                  0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       B era mode (real stints)          0.339   
+stop_count_hit       C hierarchy                       0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.327   -0.012 [-0.058, +0.031]  no clear difference
+stop_count_hit       E track-adjusted                  0.347   +0.008 [-0.187, +0.204]  no clear difference
+stop_count_hit       F last race here                  0.414   +0.075 [-0.064, +0.227]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.695   +0.356 [+0.196, +0.520]  BETTER
+stop_count_hit       H era mode + track timing         0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       J practice wear + compounds       0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       K era stops + compounds           0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       L Pirelli compounds               0.220   -0.119 [-0.295, +0.045]  no clear difference
+stop_count_hit       M wear + wear timing              0.447   +0.107 [-0.043, +0.271]  no clear difference
+first_stop_error     A old production                 10.233   +0.089 [-0.222, +0.423]  no clear difference
+first_stop_error     B era mode (real stints)         10.144   
+first_stop_error     C hierarchy                      10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     D pre-start (known start tyre)   10.416   +0.577 [-0.415, +1.562]  no clear difference
+first_stop_error     E track-adjusted                 10.041   -0.103 [-1.460, +1.221]  no clear difference
+first_stop_error     F last race here                 11.053   +1.314 [-1.036, +3.617]  no clear difference
+first_stop_error     G CEILING (hindsight)             5.646   -4.407 [-6.744, -2.311]  BETTER
+first_stop_error     H era mode + track timing        10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     I practice wear                  10.002   -0.142 [-1.024, +0.607]  no clear difference
+first_stop_error     J practice wear + compounds       9.603   -0.541 [-1.367, +0.009]  no clear difference
+first_stop_error     K era stops + compounds          10.144   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_error     L Pirelli compounds               9.575   -0.570 [-1.387, -0.028]  BETTER
+first_stop_error     M wear + wear timing              9.526   -0.618 [-1.378, -0.026]  BETTER
+first_stop_within_3  A old production                  0.122   +0.005 [-0.022, +0.035]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.117   
+first_stop_within_3  C hierarchy                       0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.160   +0.043 [+0.014, +0.078]  BETTER
+first_stop_within_3  E track-adjusted                  0.194   +0.076 [-0.024, +0.190]  no clear difference
+first_stop_within_3  F last race here                  0.176   +0.027 [-0.055, +0.130]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.642   +0.537 [+0.404, +0.672]  BETTER
+first_stop_within_3  H era mode + track timing         0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  I practice wear                   0.186   +0.069 [-0.009, +0.191]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.217   +0.100 [+0.014, +0.215]  BETTER
+first_stop_within_3  K era stops + compounds           0.117   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_within_3  L Pirelli compounds               0.231   +0.114 [+0.000, +0.241]  no clear difference
+first_stop_within_3  M wear + wear timing              0.258   +0.140 [+0.040, +0.257]  BETTER
+
+practice wear measured for 144 of 182 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.080%/lap (n=6), 2 stop(s): +0.195%/lap (n=5)
+Pirelli compound set known for 13 of 13 scored races
+=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===
+blend_practice_all winner_hit           +0.0111 [-0.0111, +0.0333]  no clear difference
+blend_practice_all podium_overlap       -0.0000 [-0.0093, +0.0093]  no clear difference
+blend_practice_all top10_overlap        +0.0033 [-0.0011, +0.0078]  no clear difference
+blend_practice_all rank_corr            +0.0027 [-0.0017, +0.0076]  no clear difference
+blend_practice_all mae                  -0.0184 [-0.0465, +0.0080]  no clear difference
+blend_practice_all mae_finishers        -0.0222 [-0.0514, +0.0054]  no clear difference
+blend_practice_all bad_miss_finishers   -0.0002 [-0.0018, +0.0014]  no clear difference
+blend_practice_all brier_win            +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_practice_all brier_podium         +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob winner_hit           +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob podium_overlap       +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob top10_overlap        +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob rank_corr            +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob mae                  +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob mae_finishers        +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob bad_miss_finishers   +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_prob brier_win            -0.0015 [-0.0037, +0.0006]  no clear difference
+blend_prob brier_podium         -0.0022 [-0.0050, +0.0005]  no clear difference
+  finishers started P1-3   blend 1.37   blend_practice_all 1.37   blend_prob 1.37
+  finishers started P4-10  blend 2.14   blend_practice_all 2.09   blend_prob 2.14
+  finishers started P11+   blend 3.45   blend_practice_all 3.45   blend_prob 3.45
+=== CALIBRATION p_win (blend_prob): when we said X, it happened Y ===
+       0%-2%  n= 2727  said   0.3%  happened   0.3%
+       2%-5%  n=  173  said   3.2%  happened   2.9%
+      5%-10%  n=  209  said   7.0%  happened   7.2%
+     10%-20%  n=  289  said  14.1%  happened  14.9%
+     20%-35%  n=   44  said  21.8%  happened  15.9%
+     35%-50%  n=    2  said  45.9%  happened 100.0%
+     50%-70%  n=  176  said  57.0%  happened  56.8%
+    70%-100%  n=    1  said  70.7%  happened   0.0%
+

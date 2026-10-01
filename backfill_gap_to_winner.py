@@ -13,9 +13,12 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from driver_names import canonical_driver_name
+from fastf1_cache import fastf1_cache_dir
+
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
-fastf1.Cache.enable_cache('/home/ashushekhar07/projects/F1-Apex-Analytics/cache')
+fastf1.Cache.enable_cache(fastf1_cache_dir())
 
 API_CALL_COUNT = 0
 THROTTLE_EVERY = 400
@@ -106,7 +109,7 @@ with engine.connect() as conn:
                   AND d.name = :name
             """), {
                 "gs": gap_seconds, "gd": gap_display,
-                "sid": session_id, "name": res_row['FullName']
+                "sid": session_id, "name": canonical_driver_name(conn, res_row['FullName'])
             })
             updated += result.rowcount
 

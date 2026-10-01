@@ -1,0 +1,609 @@
+"""Does recent team race-form add information beyond the grid?
+
+The all-driver backtest showed the simulator losing to "finish = grid": with
+race pace taken from qualifying alone it knows nothing the grid does not, and it
+treated the 0.8%-of-lap-time race-vs-quali residual as pure noise. Part of that
+residual may be persistent (cars that are better in race trim). This test asks,
+WITHOUT the simulator, whether that is real predictive signal.
+
+For every driver in every dry target race (walk-forward, race-date cutoff):
+  residual = actual race-pace gap - race gap implied by the qualifying gap
+  form     = shrunk mean of the TEAM's residuals over its last FORM_RACES races
+             before the target date (same era, any season): sum / (n + SHRINK)
+
+Part 1 -- signal: correlation between pre-race form and the target race's
+          residual (the thing form claims to predict). ~0 means no signal.
+Part 2 -- finishing order, three predictions ranked within each race:
+          grid       : starting grid
+          pace+form  : quali-implied race gap + form
+          blend      : grid rank + w * (pace+form rank - grid rank), w chosen
+                       on the PREVIOUS season only (grid of 0..1)
+
+Confidence intervals resample whole races. FORM_RACES and SHRINK are fixed in
+advance, not tuned on the target races.
+
+    python race_form_signal_v1.py --start-year 2024 --end-year 2025
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import random
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date
+from statistics import mean
+from typing import Any, Iterable, Sequence
+
+import numpy as np
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+
+from race_pace_from_quali_v1 import (
+    SESSION_WET_SQL,
+    PaceObservation,
+    best_quali_times,
+    fit_model,
+    load_observations,
+    quali_gaps,
+    quali_session_times,
+)
+from race_status import is_classified
+
+FORM_RACES = 5
+SHRINK = 2.0
+# Car pace: a driver whose qualifying did not show the car's pace (crash, failure,
+# aborted lap, skipped session for a penalty) is given the teammate's pace instead.
+#   ANOMALY_MARGIN  "did not show the pace" = slower than the teammate by more than this in
+#                   their last common session, or no time at all while the teammate set one.
+#                   1.0% is far outside normal teammate gaps (~0.1-0.5%), so the rule is rare.
+#   TEAMMATE_MARGIN pace penalty on the replacement: teammate's gap + a typical teammate gap.
+# History: v1 compared best laps across sessions; v2 used 0.3% as the anomaly line, which is
+# a NORMAL teammate gap, so both fired for ~27% of drivers. The margins are chosen from the
+# rule's firing rate (should be rare), not from scoreboard accuracy.
+ANOMALY_MARGIN = 0.01
+TEAMMATE_MARGIN = 0.003
+BLEND_WEIGHTS = tuple(round(w, 1) for w in np.arange(0.0, 1.01, 0.1))
+# Driver form (research): a driver's race-vs-quali residual minus the teammate's, over the
+# driver's last DRIVER_FORM_RACES races in the era, shrunk harder than team form because a
+# single driver-race is noisier. Fixed in advance, not tuned.
+DRIVER_FORM_RACES = 10
+DRIVER_SHRINK = 5.0
+
+
+@dataclass(frozen=True)
+class DriverForm:
+    race_id: int
+    season_year: int
+    driver_id: int
+    grid: int
+    finish: int
+    classified: bool
+    implied_gap: float   # race gap implied by qualifying
+    form: float          # team's shrunk recent residual (pre-race)
+    residual: float | None  # this race's realised residual (post-race), None if no clean pace
+    team_id: int | None = None
+    car_gap: float | None = None   # race gap implied by min(own quali gap, teammate gap + TEAMMATE_MARGIN)
+    practice_gap: float | None = None  # practice long-run gap (race_practice_pace_v1), if loaded
+    quali_wet: bool = False            # rain in qualifying (session_weather), if known
+    form_car: float | None = None      # team form from residuals against CAR pace (quali anomalies removed)
+    driver_form: float | None = None   # driver's shrunk residual vs the teammate (race craft), car-pace based
+    sprint_gap: float | None = None    # clean sprint-race pace gap (race_practice_pace_v1), sprint weekends
+    quali_pos: int | None = None       # qualifying position (grid penalties = grid well behind it)
+    practice_gap_all: float | None = None   # (research) long-run gap from FP1 and FP2 combined
+    driver_form_all: float | None = None    # (research) driver form not reset at a regulation change
+
+
+# --- pure helpers --------------------------------------------------------------
+
+def team_form(history: Sequence[tuple[date, int, float]], team_id: int, before: date,
+              races: int = FORM_RACES, shrink: float = SHRINK) -> float:
+    """Shrunk mean residual of a team's last `races` races strictly before `before`.
+
+    history: (race_date, race_id, residual) for that team's drivers.
+    """
+    by_race = defaultdict(list)
+    for race_date, race_id, residual in history:
+        if race_date < before:
+            by_race[(race_date, race_id)].append(residual)
+    recent = sorted(by_race)[-races:]
+    values = [mean(by_race[k]) for k in recent]
+    return sum(values) / (len(values) + shrink) if values else 0.0
+
+
+def team_residual_history(observations: Sequence[PaceObservation], *, era: str, before: date) -> dict[int, list]:
+    """team_id -> [(race_date, race_id, residual)] for races before `before`, each residual
+    computed with the pace model fitted on races before THAT race (same as build_rows)."""
+    era_obs = sorted((o for o in observations
+                      if o.regulation_era == era and o.race_date is not None and o.race_date < before),
+                     key=lambda o: (o.race_date, o.race_id))
+    by_race = defaultdict(list)
+    for o in era_obs:
+        by_race[(o.race_date, o.race_id)].append(o)
+    history = defaultdict(list)
+    for (when, race_id), rows in sorted(by_race.items()):
+        try:
+            model = fit_model([o for o in era_obs if o.race_date < when])
+        except ValueError:
+            continue
+        for o in rows:
+            if o.team_id is not None:
+                history[o.team_id].append((when, race_id, o.race_gap - model.race_gap(o.quali_gap)))
+    return history
+
+
+def ranks(scores: Sequence[float]) -> list[int]:
+    """1-based ranks, lower score = better; ties broken by input order."""
+    order = sorted(range(len(scores)), key=lambda i: (scores[i], i))
+    out = [0] * len(scores)
+    for position, i in enumerate(order, start=1):
+        out[i] = position
+    return out
+
+
+def off_teammate_pace(own: Sequence[float | None], mate: Sequence[float | None],
+                      margin: float = ANOMALY_MARGIN) -> bool:
+    """True if this driver's qualifying did not show the car's pace.
+
+    own / mate: (Q1, Q2, Q3) times. Compared in the LAST session in which both set a
+    time, so a Q1 exit is judged on Q1 laps, never against the teammate's Q3 lap.
+    No common session: off only if the driver has no time at all and the mate has one.
+    """
+    for mine, theirs in zip(reversed(tuple(own)), reversed(tuple(mate))):
+        if mine is not None and theirs is not None:
+            return mine > theirs * (1 + margin)
+    return all(t is None for t in own) and any(t is not None for t in mate)
+
+
+def car_quali_gaps(gaps: dict[int, float], teams: dict[int, int],
+                   sessions: dict[int, Sequence[float | None]]) -> dict[int, float]:
+    """Own quali gap, or the teammate's gap + TEAMMATE_MARGIN when this driver's lap was
+    off the teammate's in their last common session (see off_teammate_pace)."""
+    by_team = defaultdict(list)
+    for driver, team in teams.items():
+        if driver in gaps:
+            by_team[team].append(driver)
+    none = (None, None, None)
+    out = {}
+    for driver, gap in gaps.items():
+        mates = [d for d in by_team.get(teams.get(driver), []) if d != driver]
+        replaced = [gaps[m] + TEAMMATE_MARGIN for m in mates
+                    if off_teammate_pace(sessions.get(driver, none), sessions.get(m, none))]
+        out[driver] = min([gap] + replaced)
+    return out
+
+
+def with_car_pace_dry_quali(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """Car pace, except in wet qualifying: there teammate gaps are dominated by track
+    conditions and timing, not by who got the most out of the car."""
+    from dataclasses import replace
+    return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None and not r.quali_wet else r for r in rows]
+
+
+def with_car_pace(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    """Rows whose pace uses car_gap instead of the driver's own quali-implied gap."""
+    from dataclasses import replace
+    return [replace(r, implied_gap=r.car_gap) if r.car_gap is not None else r for r in rows]
+
+
+def _practice_surprise(rows: Sequence[DriverForm]) -> dict[int, float]:
+    """driver -> (long-run gap - quali-implied gap), centred within the race over drivers
+    with a long run, so practice and race-gap scales need not match."""
+    xs = {r.driver_id: r.practice_gap - r.implied_gap for r in rows if r.practice_gap is not None}
+    if len(xs) < 4:
+        return {}
+    centre = float(np.median(list(xs.values())))
+    return {d: x - centre for d, x in xs.items()}
+
+
+def practice_beta(history: Sequence[DriverForm]) -> float:
+    """How much of the practice surprise shows up in the race, fitted on earlier races only:
+    least squares (no intercept) of the race-centred race-vs-quali residual on the
+    race-centred practice surprise; clipped to [0, 1]."""
+    by_race = defaultdict(list)
+    for r in history:
+        by_race[r.race_id].append(r)
+    num = den = 0.0
+    for rows in by_race.values():
+        xs = _practice_surprise(rows)
+        ys = {r.driver_id: r.residual for r in rows if r.driver_id in xs and r.residual is not None}
+        if len(ys) < 4:
+            continue
+        y_centre = float(np.median(list(ys.values())))
+        for d, y in ys.items():
+            num += xs[d] * (y - y_centre)
+            den += xs[d] ** 2
+    return float(np.clip(num / den, 0.0, 1.0)) if den > 0 else 0.0
+
+
+def with_practice_correction(rows: Sequence[DriverForm], beta: float) -> list[DriverForm]:
+    """Pace += beta * practice surprise for drivers with a long run; others unchanged."""
+    from dataclasses import replace
+    xs = _practice_surprise(rows)
+    return [replace(r, implied_gap=r.implied_gap + beta * xs[r.driver_id]) if r.driver_id in xs else r
+            for r in rows]
+
+
+def _gap_surprise(rows: Sequence[DriverForm], attr: str) -> dict[int, float]:
+    """driver -> (gap from `attr` - quali-implied gap), centred within the race."""
+    xs = {r.driver_id: getattr(r, attr) - r.implied_gap for r in rows if getattr(r, attr) is not None}
+    if len(xs) < 4:
+        return {}
+    centre = float(np.median(list(xs.values())))
+    return {d: x - centre for d, x in xs.items()}
+
+
+def sprint_beta(history: Sequence[DriverForm]) -> float:
+    """Like practice_beta, for the sprint-race surprise (sprint pace minus the pace the
+    rows already imply), fitted on earlier races only; clipped to [0, 1]."""
+    by_race = defaultdict(list)
+    for r in history:
+        by_race[r.race_id].append(r)
+    num = den = 0.0
+    for rows in by_race.values():
+        xs = _gap_surprise(rows, "sprint_gap")
+        if not xs:
+            continue
+        ys = {r.driver_id: r.residual for r in rows if r.driver_id in xs and r.residual is not None}
+        if len(ys) < 4:
+            continue
+        y_centre = float(np.median(list(ys.values())))
+        for d, y in ys.items():
+            num += xs[d] * (y - y_centre)
+            den += xs[d] ** 2
+    return float(np.clip(num / den, 0.0, 1.0)) if den > 0 else 0.0
+
+
+def with_sprint_correction(rows: Sequence[DriverForm], beta: float) -> list[DriverForm]:
+    from dataclasses import replace
+    xs = _gap_surprise(rows, "sprint_gap")
+    return [replace(r, implied_gap=r.implied_gap + beta * xs[r.driver_id]) if r.driver_id in xs else r
+            for r in rows]
+
+
+def with_car_form(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    from dataclasses import replace
+    return [replace(r, form=r.form_car) if r.form_car is not None else r for r in rows]
+
+
+def with_driver_form(rows: Sequence[DriverForm]) -> list[DriverForm]:
+    from dataclasses import replace
+    return [replace(r, form=r.form + r.driver_form) if r.driver_form is not None else r for r in rows]
+
+
+OUT_OF_POSITION_PLACES = 3   # starting this many places behind the qualifying position (penalty, pit lane)
+
+
+def out_of_position(r: DriverForm) -> bool:
+    return r.quali_pos is not None and r.grid - r.quali_pos >= OUT_OF_POSITION_PLACES
+
+
+def predictions(rows: Sequence[DriverForm], weight: float,
+                recovery_weight: float | None = None) -> dict[str, list[int]]:
+    """recovery_weight (research): the blend weight for drivers starting out of position."""
+    grid = ranks([r.grid for r in rows])
+    pace = ranks([r.implied_gap + r.form for r in rows])
+    weights = [recovery_weight if recovery_weight is not None and out_of_position(r) else weight for r in rows]
+    blend = ranks([g + w * (p - g) for g, p, w in zip(grid, pace, weights)])
+    return {"grid": grid, "pace_form": pace, "blend": blend}
+
+
+# Pass model (research): positions change by overtaking, and a car is only passed by one that
+# is clearly faster. Expected position = grid - strength * (cars starting ahead that are slower
+# by more than `margin`) + strength * (cars starting behind that are faster by more than it).
+PASS_STRENGTHS = (0.25, 0.5, 0.75, 1.0)
+PASS_MARGINS = (0.0, 0.001, 0.002, 0.003, 0.005, 0.008)
+
+
+def pass_predictions(rows: Sequence[DriverForm], strength: float, margin: float) -> list[int]:
+    pace = [r.implied_gap + r.form for r in rows]
+    grid = [r.grid for r in rows]
+    scores = []
+    for i in range(len(rows)):
+        gained = sum(1 for j in range(len(rows)) if grid[j] < grid[i] and pace[j] - pace[i] > margin)
+        lost = sum(1 for j in range(len(rows)) if grid[j] > grid[i] and pace[i] - pace[j] > margin)
+        scores.append(grid[i] - strength * (gained - lost))
+    return ranks(scores)
+
+
+def choose_pass_params(races: dict[int, list[DriverForm]]) -> tuple[float, float]:
+    """(strength, margin) minimising finishing MAE on the given (earlier) races."""
+    def mae(params):
+        errors = []
+        for rows in races.values():
+            errors += [abs(p - r.finish) for p, r in zip(pass_predictions(rows, *params), rows)]
+        return mean(errors) if errors else float("inf")
+    return min(((s, m) for s in PASS_STRENGTHS for m in PASS_MARGINS), key=lambda p: (mae(p), p))
+
+
+def choose_recovery_weight(races: dict[int, list[DriverForm]], weight: float, min_drivers: int = 20) -> float | None:
+    """Weight for out-of-position drivers minimising THEIR finishing MAE on the given earlier
+    races (everyone else keeps `weight`); None with fewer than min_drivers such drivers."""
+    chosen = {k: v for k, v in races.items() if any(out_of_position(r) for r in v)}
+    if sum(out_of_position(r) for v in chosen.values() for r in v) < min_drivers:
+        return None
+
+    def mae(w):
+        errors = []
+        for rows in chosen.values():
+            predicted = predictions(rows, weight, w)["blend"]
+            errors += [abs(p - r.finish) for p, r in zip(predicted, rows) if out_of_position(r)]
+        return mean(errors)
+    return min(BLEND_WEIGHTS, key=lambda w: (mae(w), w))
+
+
+def race_clustered(values_by_race: dict[int, list[float]], *, seed: int = 11, draws: int = 4000):
+    means = [mean(v) for v in values_by_race.values() if v]
+    if not means:
+        return float("nan"), float("nan"), float("nan")
+    rng = random.Random(seed)
+    boots = sorted(mean(rng.choices(means, k=len(means))) for _ in range(draws))
+    return mean(means), boots[int(0.05 * draws)], boots[int(0.95 * draws) - 1]
+
+
+def form_signal(rows: Iterable[DriverForm], *, seed: int = 11, draws: int = 2000) -> tuple[float, float, float, int]:
+    """Pearson r between pre-race form and realised residual, bootstrap CI over races."""
+    by_race = defaultdict(list)
+    for r in rows:
+        if r.residual is not None:
+            by_race[r.race_id].append((r.form, r.residual))
+    pairs = [p for v in by_race.values() for p in v]
+    if len(pairs) < 10:
+        return float("nan"), float("nan"), float("nan"), len(pairs)
+
+    def corr(ps):
+        x, y = np.array(ps).T
+        return float(np.corrcoef(x, y)[0, 1]) if x.std() > 0 and y.std() > 0 else 0.0
+
+    rng = random.Random(seed)
+    keys = list(by_race)
+    boots = sorted(corr([p for k in rng.choices(keys, k=len(keys)) for p in by_race[k]]) for _ in range(draws))
+    return corr(pairs), boots[int(0.05 * draws)], boots[int(0.95 * draws) - 1], len(pairs)
+
+
+def choose_weight(races: dict[int, list[DriverForm]]) -> float:
+    """Blend weight minimising finishing MAE on the given (earlier) races."""
+    def mae(weight):
+        errors = []
+        for rows in races.values():
+            predicted = predictions(rows, weight)["blend"]
+            errors += [abs(p - r.finish) for p, r in zip(predicted, rows)]
+        return mean(errors) if errors else float("inf")
+    return min(BLEND_WEIGHTS, key=lambda w: (mae(w), w))
+
+
+# --- database assembly ---------------------------------------------------------
+
+def race_car_gaps(db: Any, race_id: int, teams: dict[int, int], gaps: dict[int, float] | None = None) -> dict[int, float]:
+    """Car-pace qualifying gap for every entry (teams: driver -> team); a driver without a
+    time starts from the back of the valid field, as in build_rows."""
+    gaps = quali_gaps(best_quali_times(db, race_id)) if gaps is None else gaps
+    back_gap = max(gaps.values()) if gaps else 0.03
+    own = {d: gaps.get(d, back_gap) for d in teams}
+    return car_quali_gaps(own, teams, quali_session_times(db, race_id))
+
+
+_ENTRY_CACHE: dict[tuple[str, int], tuple[dict[int, int], dict[int, float]]] = {}
+
+
+def car_form_histories(db: Any, observations: Sequence[PaceObservation], *, era: str,
+                       before: date) -> tuple[dict[int, list], dict[int, list]]:
+    """(team -> history, driver -> history) of residuals against CAR pace for dry races of
+    `era` before `before` -- what build_rows accumulates for form_car and driver_form, for a
+    single forecast. Pace model per race fitted on the era's races before it."""
+    era_obs = sorted((o for o in observations
+                      if o.regulation_era == era and o.race_date is not None and o.race_date < before),
+                     key=lambda o: (o.race_date, o.race_id))
+    by_race = defaultdict(list)
+    for o in era_obs:
+        by_race[(o.race_date, o.race_id)].append(o)
+    teams_hist, drivers_hist = defaultdict(list), defaultdict(list)
+    for (when, race_id), rows in sorted(by_race.items()):
+        try:
+            model = fit_model([o for o in era_obs if o.race_date < when])
+        except ValueError:
+            continue
+        key = (str(db.engine.url), race_id)
+        if key not in _ENTRY_CACHE:
+            teams = {int(d): int(t) for d, t in db.execute(text("""
+                SELECT re.driver_id, re.team_id FROM race_results rr
+                JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+                JOIN race_entries re ON re.id = rr.race_entry_id
+                WHERE s.race_id = :r AND rr.finishing_position IS NOT NULL
+            """), {"r": race_id})}
+            _ENTRY_CACHE[key] = (teams, race_car_gaps(db, race_id, teams))
+        teams, car_gaps = _ENTRY_CACHE[key]
+        by_team = defaultdict(dict)
+        for o in rows:
+            if o.driver_id in car_gaps and o.driver_id in teams:
+                residual = o.race_gap - model.race_gap(car_gaps[o.driver_id])
+                teams_hist[teams[o.driver_id]].append((when, race_id, residual))
+                by_team[teams[o.driver_id]][o.driver_id] = residual
+        for residuals in by_team.values():
+            if len(residuals) == 2:
+                centre = mean(residuals.values())
+                for driver, value in residuals.items():
+                    drivers_hist[driver].append((when, race_id, value - centre))
+    return teams_hist, drivers_hist
+
+
+def build_rows(db: Any, observations: Sequence[PaceObservation], *, start_year: int, end_year: int,
+               models: dict | None = None, include_wet: bool = False,
+               with_practice: bool = False, with_sprint: bool = False) -> list[DriverForm]:
+    """Per driver-race form rows; if `models` is given it is filled with race_id -> (model, pole_time).
+
+    Dry races only unless include_wet. Wet races are then scored too, but never feed
+    team form, so dry-race rows are identical with or without include_wet.
+    """
+    by_race_driver = {(o.race_id, o.driver_id): o for o in observations}
+    team_history = defaultdict(list)   # (era, team) -> [(date, race_id, residual)]
+    team_history_car = defaultdict(list)    # same, residual against car pace
+    driver_history = defaultdict(list)      # (era, driver) -> [(date, race_id, residual - teammate's)]
+    driver_history_all = defaultdict(list)  # driver -> same, across regulation eras
+    races = db.execute(text(f"""
+        SELECT * FROM (
+            SELECT r.id, r.season_year, r.regulation_era, r.race_date, {SESSION_WET_SQL} AS wet
+            FROM races r
+            JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
+            LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE r.season_year BETWEEN 2018 AND :b AND r.regulation_era IS NOT NULL
+        ) x WHERE NOT x.wet OR :wet
+        ORDER BY x.race_date, x.id
+    """), {"b": end_year, "wet": include_wet}).mappings().all()
+
+    rows: list[DriverForm] = []
+    for race in races:
+        era, when = race["regulation_era"], race["race_date"]
+        history = [o for o in observations if o.regulation_era == era and o.race_date is not None and o.race_date < when]
+        try:
+            model = fit_model(history)
+        except ValueError:
+            model = None
+        entries = db.execute(text("""
+            SELECT re.driver_id, re.team_id, rr.starting_grid_position AS grid,
+                   rr.finishing_position AS finish, rr.status,
+                   (SELECT q.final_position FROM qualifying_results q
+                    JOIN sessions sq ON sq.id = q.session_id AND sq.session_type = 'Q'
+                    WHERE sq.race_id = s.race_id AND q.race_entry_id = re.id LIMIT 1) AS quali_pos
+            FROM race_results rr
+            JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+            JOIN race_entries re ON re.id = rr.race_entry_id
+            WHERE s.race_id = :r AND rr.finishing_position IS NOT NULL
+        """), {"r": race["id"]}).mappings().all()
+        gaps = quali_gaps(best_quali_times(db, race["id"]))
+        back_grid = len(entries) + 1
+        back_gap = max(gaps.values()) if gaps else 0.03
+        car_gaps = race_car_gaps(db, race["id"], {int(e["driver_id"]): int(e["team_id"]) for e in entries}, gaps)
+        practice = {}
+        quali_wet = bool(db.execute(text(f"""
+            SELECT {SESSION_WET_SQL} FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = 'Q'
+        """), {"r": race["id"]}).scalar())
+        if with_practice and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_practice_gaps
+            practice, _ = load_practice_gaps(db, race["id"])
+        practice_all = {}
+        if with_practice and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_practice_gaps_all
+            practice_all = load_practice_gaps_all(db, race["id"])
+        sprint = {}
+        if with_sprint and race["season_year"] >= start_year:
+            from race_practice_pace_v1 import load_sprint_gaps
+            sprint = load_sprint_gaps(db, race["id"])
+
+        if models is not None and model is not None:
+            times = [t for t in best_quali_times(db, race["id"]).values() if t]
+            if times:
+                models[race["id"]] = (model, min(times))
+        if model is not None and race["season_year"] >= start_year and len(entries) >= 10:
+            for e in entries:
+                obs = by_race_driver.get((race["id"], int(e["driver_id"])))
+                gap = gaps.get(int(e["driver_id"]), back_gap)
+                implied = model.race_gap(gap)
+                rows.append(DriverForm(
+                    race["id"], race["season_year"], int(e["driver_id"]),
+                    int(e["grid"]) if e["grid"] and e["grid"] > 0 else back_grid,
+                    int(e["finish"]), is_classified(e["status"]), implied,
+                    team_form(team_history[(era, int(e["team_id"]))], int(e["team_id"]), when),
+                    (obs.race_gap - implied) if obs else None,
+                    int(e["team_id"]), model.race_gap(car_gaps[int(e["driver_id"])]),
+                    practice.get(int(e["driver_id"])), quali_wet,
+                    team_form(team_history_car[(era, int(e["team_id"]))], int(e["team_id"]), when),
+                    team_form(driver_history[(era, int(e["driver_id"]))], int(e["driver_id"]), when,
+                              races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
+                    sprint.get(int(e["driver_id"])),
+                    int(e["quali_pos"]) if e["quali_pos"] else None,
+                    practice_all.get(int(e["driver_id"])),
+                    team_form(driver_history_all[int(e["driver_id"])], int(e["driver_id"]), when,
+                              races=DRIVER_FORM_RACES, shrink=DRIVER_SHRINK),
+                ))
+        # update team history with THIS race only after its rows are built (no leakage)
+        if model is not None and not race["wet"]:
+            by_team_car = defaultdict(dict)
+            for e in entries:
+                obs = by_race_driver.get((race["id"], int(e["driver_id"])))
+                if obs is not None:
+                    team_history[(era, int(e["team_id"]))].append((when, race["id"], obs.race_gap - model.race_gap(obs.quali_gap)))
+                    car_residual = obs.race_gap - model.race_gap(car_gaps[int(e["driver_id"])])
+                    team_history_car[(era, int(e["team_id"]))].append((when, race["id"], car_residual))
+                    by_team_car[int(e["team_id"])][int(e["driver_id"])] = car_residual
+            for team, residuals in by_team_car.items():
+                if len(residuals) == 2:
+                    centre = mean(residuals.values())
+                    for driver, value in residuals.items():
+                        driver_history[(era, driver)].append((when, race["id"], value - centre))
+                        driver_history_all[driver].append((when, race["id"], value - centre))
+    return rows
+
+
+def evaluate(rows: Sequence[DriverForm], *, score_from: int) -> dict[str, Any]:
+    """Score seasons >= score_from; each season's blend weight comes from the season before."""
+    by_season_race: dict[int, dict[int, list[DriverForm]]] = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        by_season_race[r.season_year][r.race_id].append(r)
+    errors = {k: defaultdict(list) for k in ("grid", "pace_form", "blend")}
+    finisher_errors = {k: defaultdict(list) for k in ("grid", "pace_form", "blend")}
+    weights = {}
+    for season in sorted(by_season_race):
+        weight = choose_weight(by_season_race[season - 1]) if season - 1 in by_season_race else 0.0
+        weights[season] = float(weight)
+        if season < score_from:
+            continue
+        for race_id, race_rows in by_season_race[season].items():
+            for name, predicted in predictions(race_rows, weight).items():
+                for p, r in zip(predicted, race_rows):
+                    errors[name][race_id].append(abs(p - r.finish))
+                    if r.classified:
+                        finisher_errors[name][race_id].append(abs(p - r.finish))
+
+    def diff(table, a, b):
+        return {race: [x - y for x, y in zip(table[a][race], table[b][race])] for race in table[a]}
+
+    scored = [r for r in rows if r.season_year >= score_from]
+    return {
+        "signal": form_signal(scored),
+        "weights": weights,
+        "mae": {k: race_clustered(v)[0] for k, v in errors.items()},
+        "mae_finishers": {k: race_clustered(v)[0] for k, v in finisher_errors.items()},
+        "pace_form_minus_grid": race_clustered(diff(errors, "pace_form", "grid")),
+        "blend_minus_grid": race_clustered(diff(errors, "blend", "grid")),
+        "races": len({r.race_id for r in scored}),
+        "drivers": len(scored),
+    }
+
+
+def main() -> int:
+    load_dotenv()
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--start-year", type=int, default=2024)
+    parser.add_argument("--end-year", type=int, default=2025)
+    args = parser.parse_args()
+
+    engine = create_engine(os.environ["DATABASE_URL"])
+    with engine.connect() as db:
+        observations = load_observations(db, start_year=2018, end_year=args.end_year)
+        # previous season is scored too, so the blend weight can be chosen on it
+        rows = build_rows(db, observations, start_year=args.start_year - 1, end_year=args.end_year)
+    result = evaluate(rows, score_from=args.start_year)
+    r, lo, hi, n = result["signal"]
+
+    print(f"=== RACE-FORM SIGNAL {args.start_year}-{args.end_year}: {result['drivers']} drivers, "
+          f"{result['races']} races (form: last {FORM_RACES} team races, shrink {SHRINK}) ===")
+    print(f"Part 1  corr(pre-race team form, realised race-vs-quali residual) = {r:+.3f} "
+          f"[90% CI {lo:+.3f}, {hi:+.3f}]  n={n}")
+    print("        signal is real only if the CI lies entirely above zero")
+    print("Part 2  finishing-position MAE (all drivers / classified finishers only)")
+    for name in ("grid", "pace_form", "blend"):
+        print(f"        {name:10} {result['mae'][name]:.3f} / {result['mae_finishers'][name]:.3f}")
+    print(f"        blend weight per season (chosen on the previous season): {result['weights']}")
+    for label in ("pace_form_minus_grid", "blend_minus_grid"):
+        d, a, b = result[label]
+        verdict = "BEATS grid" if b < 0 else ("worse than grid" if a > 0 else "no clear difference")
+        print(f"        {label:22} {d:+.3f} [90% CI {a:+.3f}, {b:+.3f}]  {verdict}")
+    print("Read-only.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

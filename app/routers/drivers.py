@@ -122,7 +122,7 @@ def get_driver_history(
         **dict(driver),
         "current_car_number": current_number_row["current_number"] if current_number_row else None,
         "career_summary": {
-            "races": len(history),
+            "races": int(career_stats["races"] or 0),
             "wins": wins,
             "podiums": podiums,
             "race_points": float(total_points),
@@ -359,5 +359,9 @@ def get_driver_profile(driver_id: int, db: Session = Depends(get_db)):
         "current_team": dict(current_team) if current_team else None,
         "team_history": combined_team_history,
         "track_records_held": [dict(r) for r in track_records],
+        "track_records_note": (
+            "fastest valid race lap stored per circuit since 2018 (any layout), "
+            "not official FIA lap records"
+        ),
         "last_gp_win": dict(last_win) if last_win else None,
     }

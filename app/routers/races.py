@@ -51,6 +51,12 @@ class RaceListItem(BaseModel):
     weekend_format: Optional[str] = None
     track_name: str
     country: Optional[str] = None
+    winner_name: Optional[str] = None
+    winner_team: Optional[str] = None
+    winner_color_hex: Optional[str] = None
+    has_forecast: bool = False
+    predicted_winner_name: Optional[str] = None
+    predicted_winner_color_hex: Optional[str] = None
 
 
 class RaceSession(BaseModel):
@@ -133,13 +139,39 @@ def list_races(
     season: int | None = Query(None, ge=2018, le=2026),
     db: Session = Depends(get_db)
 ):
+    from race_forecast_v1 import MODEL_VERSION
+
     query = """
         SELECT r.id, r.season_year, r.round_number, r.race_date,
-               r.weekend_format, t.name AS track_name, t.country
+               r.weekend_format, t.name AS track_name, t.country,
+               w.driver_name AS winner_name, w.team_name AS winner_team, w.color_hex AS winner_color_hex,
+               (f.id IS NOT NULL) AS has_forecast,
+               pw.driver_name AS predicted_winner_name, pw.color_hex AS predicted_winner_color_hex
         FROM races r
         JOIN tracks t ON t.id = r.track_id
+        LEFT JOIN LATERAL (
+            SELECT d.name AS driver_name, tm.name AS team_name, tm.color_hex
+            FROM sessions s
+            JOIN race_results rr ON rr.session_id = s.id AND rr.finishing_position = 1
+            JOIN race_entries re ON re.id = rr.race_entry_id
+            JOIN drivers d ON d.id = re.driver_id
+            LEFT JOIN teams tm ON tm.id = re.team_id
+            WHERE s.race_id = r.id AND s.session_type = 'R'
+            LIMIT 1
+        ) w ON TRUE
+        LEFT JOIN race_forecasts f ON f.race_id = r.id AND f.model_version = :model_version
+        LEFT JOIN LATERAL (
+            SELECT d.name AS driver_name, tm.color_hex
+            FROM race_forecast_drivers fd
+            JOIN drivers d ON d.id = fd.driver_id
+            LEFT JOIN race_entries re ON re.race_id = r.id AND re.driver_id = fd.driver_id
+            LEFT JOIN teams tm ON tm.id = re.team_id
+            WHERE fd.forecast_id = f.id
+            ORDER BY fd.p_win DESC, fd.grid          -- predicted winner = highest win chance
+            LIMIT 1
+        ) pw ON TRUE
     """
-    params = {}
+    params = {"model_version": MODEL_VERSION}
     if season is not None:
         query += " WHERE r.season_year = :season"
         params["season"] = season
@@ -408,7 +440,7 @@ def get_position_battle(
         driver["positions_gained"] = (
             grid - finish
             if (
-                driver["status"] == "Finished"
+                is_classified(driver["status"])
                 and grid is not None
                 and finish is not None
             )
@@ -502,6 +534,8 @@ def get_qualifying(race_id: int, db: Session = Depends(get_db)):
 
         if row["q3_time"] is not None:
             eliminated_in = None
+        elif row["q2_time"] is not None and row["final_position"] is not None and row["final_position"] <= 10:
+            eliminated_in = None  # reached Q3 (always top 10) but set no Q3 time
         elif row["q2_time"] is not None:
             eliminated_in = "Q2"
         elif row["q1_time"] is not None:

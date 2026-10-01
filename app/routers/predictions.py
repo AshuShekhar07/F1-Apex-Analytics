@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
 
-router = APIRouter(prefix="/predictions", tags=["predictions"])
+# Superseded by /championship (championship_model_v1, validated walk-forward). These read
+# season_predictions from simulate_season.py, which stays blocked.
+router = APIRouter(prefix="/predictions", tags=["predictions"], deprecated=True)
 
 VALID_TYPES = {"wdc", "constructors", "next_race"}
 

@@ -17,9 +17,11 @@ import fastf1
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from fastf1_cache import fastf1_cache_dir
+
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
-fastf1.Cache.enable_cache('/home/ashushekhar07/projects/F1-Apex-Analytics/cache')
+fastf1.Cache.enable_cache(fastf1_cache_dir())
 
 API_CALL_COUNT = 0
 THROTTLE_EVERY = 400

@@ -23,3 +23,9 @@ circuit-viz-app/pipeline/data/circuits/*.xy.json
 circuit-viz-app/pipeline/data/circuits/*_preview.png
 circuit-viz-app/pipeline/data/circuits/*.boundaries.json
 circuit-viz-app/pipeline/data/circuits/*.sectors.json
+
+# scheduled pipeline logs (run_pipeline.py)
+logs/
+
+# database dumps (ops/db_dump.sh)
+*.dump

@@ -1,0 +1,626 @@
+{
+  "source": "winner_prediction_v1 --backtest, 2019-2026, walk-forward",
+  "stages": {
+    "pre_qualifying": {
+      "races": 167,
+      "favourite_won": 0.443,
+      "mean_favourite_p": 0.459,
+      "log_loss_winner": 1.632,
+      "bins": [
+        {
+          "lo": 0.0,
+          "hi": 0.25,
+          "races": 28,
+          "mean_p": 0.212,
+          "favourite_won": 0.071
+        },
+        {
+          "lo": 0.25,
+          "hi": 0.35,
+          "races": 23,
+          "mean_p": 0.309,
+          "favourite_won": 0.391
+        },
+        {
+          "lo": 0.35,
+          "hi": 0.45,
+          "races": 43,
+          "mean_p": 0.392,
+          "favourite_won": 0.419
+        },
+        {
+          "lo": 0.45,
+          "hi": 0.6,
+          "races": 34,
+          "mean_p": 0.521,
+          "favourite_won": 0.529
+        },
+        {
+          "lo": 0.6,
+          "hi": 1.01,
+          "races": 39,
+          "mean_p": 0.745,
+          "favourite_won": 0.692
+        }
+      ],
+      "by_data_stage": {
+        "season_start": {
+          "races": 24,
+          "favourite_won": 0.375,
+          "mean_favourite_p": 0.428,
+          "log_loss_winner": 1.672,
+          "bins": [
+            {
+              "lo": 0.0,
+              "hi": 0.25,
+              "races": 4,
+              "mean_p": 0.214,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 7,
+              "mean_p": 0.286,
+              "favourite_won": 0.429
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 4,
+              "mean_p": 0.37,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 5,
+              "mean_p": 0.537,
+              "favourite_won": 0.6
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 4,
+              "mean_p": 0.811,
+              "favourite_won": 0.75
+            }
+          ]
+        },
+        "early_season": {
+          "races": 32,
+          "favourite_won": 0.531,
+          "mean_favourite_p": 0.478,
+          "log_loss_winner": 1.385,
+          "bins": [
+            {
+              "lo": 0.0,
+              "hi": 0.25,
+              "races": 5,
+              "mean_p": 0.229,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 5,
+              "mean_p": 0.322,
+              "favourite_won": 0.2
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 8,
+              "mean_p": 0.376,
+              "favourite_won": 0.75
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 3,
+              "mean_p": 0.545,
+              "favourite_won": 1
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 11,
+              "mean_p": 0.719,
+              "favourite_won": 0.636
+            }
+          ]
+        },
+        "established": {
+          "races": 111,
+          "favourite_won": 0.432,
+          "mean_favourite_p": 0.46,
+          "log_loss_winner": 1.695,
+          "bins": [
+            {
+              "lo": 0.0,
+              "hi": 0.25,
+              "races": 19,
+              "mean_p": 0.207,
+              "favourite_won": 0.105
+            },
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 11,
+              "mean_p": 0.318,
+              "favourite_won": 0.455
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 31,
+              "mean_p": 0.399,
+              "favourite_won": 0.387
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 26,
+              "mean_p": 0.515,
+              "favourite_won": 0.462
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 24,
+              "mean_p": 0.746,
+              "favourite_won": 0.708
+            }
+          ]
+        },
+        "new_regulations": {
+          "races": 6,
+          "favourite_won": 0,
+          "mean_favourite_p": 0.302,
+          "log_loss_winner": 2.488,
+          "bins": [
+            {
+              "lo": 0.0,
+              "hi": 0.25,
+              "races": 1,
+              "mean_p": 0.227,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 3,
+              "mean_p": 0.28,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 2,
+              "mean_p": 0.374,
+              "favourite_won": 0
+            }
+          ]
+        }
+      },
+      "podium_calibration": {
+        "power": 1.264,
+        "promoted": false,
+        "power_by_season": {
+          "2019": 1.0,
+          "2020": 1.332,
+          "2021": 1.394,
+          "2022": 1.408,
+          "2023": 1.404,
+          "2024": 1.405,
+          "2025": 1.26,
+          "2026": 1.263
+        },
+        "log_loss_change": [
+          -0.0023,
+          -0.0095,
+          0.0062
+        ],
+        "calibration_error": {
+          "uncalibrated": 0.0422,
+          "calibrated": 0.0185
+        }
+      },
+      "uncalibrated": {
+        "races": 167,
+        "favourite_won": 0.443,
+        "mean_favourite_p": 0.249,
+        "log_loss_winner": 1.809,
+        "bins": [
+          {
+            "lo": 0.0,
+            "hi": 0.25,
+            "races": 97,
+            "mean_p": 0.196,
+            "favourite_won": 0.278
+          },
+          {
+            "lo": 0.25,
+            "hi": 0.35,
+            "races": 51,
+            "mean_p": 0.297,
+            "favourite_won": 0.667
+          },
+          {
+            "lo": 0.35,
+            "hi": 0.45,
+            "races": 19,
+            "mean_p": 0.387,
+            "favourite_won": 0.684
+          }
+        ]
+      },
+      "walk_forward_calibrated": {
+        "races": 167,
+        "favourite_won": 0.443,
+        "mean_favourite_p": 0.459,
+        "log_loss_winner": 1.632,
+        "bins": [
+          {
+            "lo": 0.0,
+            "hi": 0.25,
+            "races": 28,
+            "mean_p": 0.212,
+            "favourite_won": 0.071
+          },
+          {
+            "lo": 0.25,
+            "hi": 0.35,
+            "races": 23,
+            "mean_p": 0.309,
+            "favourite_won": 0.391
+          },
+          {
+            "lo": 0.35,
+            "hi": 0.45,
+            "races": 43,
+            "mean_p": 0.392,
+            "favourite_won": 0.419
+          },
+          {
+            "lo": 0.45,
+            "hi": 0.6,
+            "races": 34,
+            "mean_p": 0.521,
+            "favourite_won": 0.529
+          },
+          {
+            "lo": 0.6,
+            "hi": 1.01,
+            "races": 39,
+            "mean_p": 0.745,
+            "favourite_won": 0.692
+          }
+        ]
+      },
+      "calibration": {
+        "power": 1.957,
+        "promoted": true,
+        "power_by_season": {
+          "2019": 1.0,
+          "2020": 1.935,
+          "2021": 2.112,
+          "2022": 2.156,
+          "2023": 2.23,
+          "2024": 2.408,
+          "2025": 2.086,
+          "2026": 1.979
+        },
+        "log_loss_change": [
+          -0.1771,
+          -0.2546,
+          -0.0987
+        ],
+        "calibration_error": {
+          "uncalibrated": 0.0217,
+          "calibrated": 0.0065
+        }
+      }
+    },
+    "post_qualifying": {
+      "races": 167,
+      "favourite_won": 0.599,
+      "mean_favourite_p": 0.55,
+      "log_loss_winner": 1.213,
+      "bins": [
+        {
+          "lo": 0.25,
+          "hi": 0.35,
+          "races": 14,
+          "mean_p": 0.309,
+          "favourite_won": 0.357
+        },
+        {
+          "lo": 0.35,
+          "hi": 0.45,
+          "races": 44,
+          "mean_p": 0.406,
+          "favourite_won": 0.477
+        },
+        {
+          "lo": 0.45,
+          "hi": 0.6,
+          "races": 54,
+          "mean_p": 0.528,
+          "favourite_won": 0.648
+        },
+        {
+          "lo": 0.6,
+          "hi": 1.01,
+          "races": 55,
+          "mean_p": 0.747,
+          "favourite_won": 0.709
+        }
+      ],
+      "by_data_stage": {
+        "season_start": {
+          "races": 24,
+          "favourite_won": 0.667,
+          "mean_favourite_p": 0.545,
+          "log_loss_winner": 1.003,
+          "bins": [
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 3,
+              "mean_p": 0.3,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 6,
+              "mean_p": 0.404,
+              "favourite_won": 0.667
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 8,
+              "mean_p": 0.536,
+              "favourite_won": 0.875
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 7,
+              "mean_p": 0.782,
+              "favourite_won": 0.714
+            }
+          ]
+        },
+        "early_season": {
+          "races": 32,
+          "favourite_won": 0.625,
+          "mean_favourite_p": 0.594,
+          "log_loss_winner": 1.19,
+          "bins": [
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 1,
+              "mean_p": 0.285,
+              "favourite_won": 1
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 7,
+              "mean_p": 0.417,
+              "favourite_won": 0.429
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 11,
+              "mean_p": 0.53,
+              "favourite_won": 0.636
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 13,
+              "mean_p": 0.767,
+              "favourite_won": 0.692
+            }
+          ]
+        },
+        "established": {
+          "races": 111,
+          "favourite_won": 0.577,
+          "mean_favourite_p": 0.538,
+          "log_loss_winner": 1.265,
+          "bins": [
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 10,
+              "mean_p": 0.314,
+              "favourite_won": 0.4
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 31,
+              "mean_p": 0.404,
+              "favourite_won": 0.452
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 35,
+              "mean_p": 0.525,
+              "favourite_won": 0.6
+            },
+            {
+              "lo": 0.6,
+              "hi": 1.01,
+              "races": 35,
+              "mean_p": 0.733,
+              "favourite_won": 0.714
+            }
+          ]
+        },
+        "new_regulations": {
+          "races": 6,
+          "favourite_won": 0.5,
+          "mean_favourite_p": 0.393,
+          "log_loss_winner": 1.182,
+          "bins": [
+            {
+              "lo": 0.25,
+              "hi": 0.35,
+              "races": 3,
+              "mean_p": 0.3,
+              "favourite_won": 0
+            },
+            {
+              "lo": 0.35,
+              "hi": 0.45,
+              "races": 1,
+              "mean_p": 0.432,
+              "favourite_won": 1
+            },
+            {
+              "lo": 0.45,
+              "hi": 0.6,
+              "races": 2,
+              "mean_p": 0.514,
+              "favourite_won": 1
+            }
+          ]
+        }
+      },
+      "podium_calibration": {
+        "power": 1.152,
+        "promoted": false,
+        "power_by_season": {
+          "2019": 1.0,
+          "2020": 1.158,
+          "2021": 1.137,
+          "2022": 1.17,
+          "2023": 1.193,
+          "2024": 1.204,
+          "2025": 1.165,
+          "2026": 1.154
+        },
+        "log_loss_change": [
+          -0.0026,
+          -0.0054,
+          0.0004
+        ],
+        "calibration_error": {
+          "uncalibrated": 0.0189,
+          "calibrated": 0.0098
+        }
+      },
+      "uncalibrated": {
+        "races": 167,
+        "favourite_won": 0.599,
+        "mean_favourite_p": 0.417,
+        "log_loss_winner": 1.311,
+        "bins": [
+          {
+            "lo": 0.0,
+            "hi": 0.25,
+            "races": 7,
+            "mean_p": 0.227,
+            "favourite_won": 0.429
+          },
+          {
+            "lo": 0.25,
+            "hi": 0.35,
+            "races": 48,
+            "mean_p": 0.307,
+            "favourite_won": 0.5
+          },
+          {
+            "lo": 0.35,
+            "hi": 0.45,
+            "races": 55,
+            "mean_p": 0.402,
+            "favourite_won": 0.6
+          },
+          {
+            "lo": 0.45,
+            "hi": 0.6,
+            "races": 39,
+            "mean_p": 0.504,
+            "favourite_won": 0.692
+          },
+          {
+            "lo": 0.6,
+            "hi": 1.01,
+            "races": 18,
+            "mean_p": 0.643,
+            "favourite_won": 0.722
+          }
+        ]
+      },
+      "walk_forward_calibrated": {
+        "races": 167,
+        "favourite_won": 0.599,
+        "mean_favourite_p": 0.55,
+        "log_loss_winner": 1.213,
+        "bins": [
+          {
+            "lo": 0.25,
+            "hi": 0.35,
+            "races": 14,
+            "mean_p": 0.309,
+            "favourite_won": 0.357
+          },
+          {
+            "lo": 0.35,
+            "hi": 0.45,
+            "races": 44,
+            "mean_p": 0.406,
+            "favourite_won": 0.477
+          },
+          {
+            "lo": 0.45,
+            "hi": 0.6,
+            "races": 54,
+            "mean_p": 0.528,
+            "favourite_won": 0.648
+          },
+          {
+            "lo": 0.6,
+            "hi": 1.01,
+            "races": 55,
+            "mean_p": 0.747,
+            "favourite_won": 0.709
+          }
+        ]
+      },
+      "calibration": {
+        "power": 1.573,
+        "promoted": true,
+        "power_by_season": {
+          "2019": 1.0,
+          "2020": 1.251,
+          "2021": 1.304,
+          "2022": 1.413,
+          "2023": 1.564,
+          "2024": 1.718,
+          "2025": 1.549,
+          "2026": 1.551
+        },
+        "log_loss_change": [
+          -0.0977,
+          -0.1428,
+          -0.0501
+        ],
+        "calibration_error": {
+          "uncalibrated": 0.0175,
+          "calibrated": 0.0097
+        }
+      }
+    }
+  }
+}

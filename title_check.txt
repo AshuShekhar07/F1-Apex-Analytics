@@ -1,0 +1,131 @@
+=== TITLE CONFIDENCE (completed seasons from 2019; favourite = highest title chance) ===
+  drivers      pre_season    7 projections: favourite became champion 43% (average favourite chance 53%) -> low
+  drivers      early        36 projections: favourite became champion 69% (average favourite chance 65%) -> medium
+  drivers      mid          75 projections: favourite became champion 85% (average favourite chance 85%) -> high
+  drivers      late         34 projections: favourite became champion 97% (average favourite chance 92%) -> high
+  drivers      chance 0%-40%   10 projections: said 33%, favourite became champion 40% -> low
+  drivers      chance 40%-60%   21 projections: said 52%, favourite became champion 62% -> medium
+  drivers      chance 60%-80%   33 projections: said 71%, favourite became champion 64% -> medium
+  drivers      chance 80%-95%   26 projections: said 88%, favourite became champion 96% -> high
+  drivers      chance 95%-100%   62 projections: said 99%, favourite became champion 100% -> high
+  constructors pre_season    7 projections: favourite became champion 57% (average favourite chance 65%) -> medium
+  constructors early        36 projections: favourite became champion 78% (average favourite chance 81%) -> medium
+  constructors mid          75 projections: favourite became champion 80% (average favourite chance 94%) -> high
+  constructors late         34 projections: favourite became champion 100% (average favourite chance 92%) -> high
+  constructors chance 0%-40%    2 projections: said 36%, favourite became champion 50% -> low
+  constructors chance 40%-60%   10 projections: said 54%, favourite became champion 70% -> medium
+  constructors chance 60%-80%   17 projections: said 68%, favourite became champion 88% -> high
+  constructors chance 80%-95%   39 projections: said 88%, favourite became champion 59% -> medium
+  constructors chance 95%-100%   84 projections: said 99%, favourite became champion 95% -> high
+  saved title_confidence_v1.json
+=== REPLAY: 2021 after round 10 (only races before round 11 are used) ===
+
+=== 2021 R11 Budapest (2021-08-01) ===
+  line-up: entry list; grid: starting_grid
+  evidence: 10 races run this season, 69 under these regulations (established)
+
+  PRE QUALIFYING: predicted winner Max Verstappen (Red Bull Racing) -- win 38.6%, podium 50.2%
+  confidence MEDIUM: in 43 earlier races where the favourite had 35%-45% at this stage, the favourite won 42%; with 7+ races of the season run, the favourite won 43% of 111 earlier races at this stage
+        Max Verstappen           Red Bull Racing      win  38.6%  podium  50.2%
+        Lewis Hamilton           Mercedes             win  20.9%  podium  41.3%
+        Valtteri Bottas          Mercedes             win  15.5%  podium  36.5%
+        Lando Norris             McLaren              win   6.3%  podium  24.4%
+        Sergio Perez             Red Bull Racing      win   4.5%  podium  20.8%
+        Daniel Ricciardo         McLaren              win   3.3%  podium  18.4%
+
+  POST QUALIFYING: predicted winner Lewis Hamilton (Mercedes) -- win 44.7%, podium 68.6%
+  confidence MEDIUM: in 47 earlier races where the favourite had 35%-45% at this stage, the favourite won 47%; with 7+ races of the season run, the favourite won 57% of 111 earlier races at this stage
+    P1  Lewis Hamilton           Mercedes             win  44.7%  podium  68.6%
+    P3  Max Verstappen           Red Bull Racing      win  25.1%  podium  58.9%
+    P2  Valtteri Bottas          Mercedes             win  18.5%  podium  53.0%
+    P4  Sergio Perez             Red Bull Racing      win   3.5%  podium  22.6%
+    P6  Lando Norris             McLaren              win   2.8%  podium  20.8%
+    P7  Charles Leclerc          Ferrari              win   1.4%  podium  13.0%
+
+  current stage: post_qualifying -> predicted winner Lewis Hamilton, 44.7%, confidence medium
+
+  WHAT HAPPENED: P1 Esteban Ocon (Alpine, from P8), P2 Lewis Hamilton (Mercedes, from P1), P3 Carlos Sainz (Ferrari, from P15)
+  pre qualifying: we gave the winner 0.7% -- winner was our #10
+  post qualifying: we gave the winner 0.4% -- winner was our #10
+
+  TITLES after round 10 of 22:
+    drivers: confidence MEDIUM (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 85% of the time; favourites with a 60%-80% title chance became champion 64% of the time (33 projections))
+      Max Verstappen           title  67.8%   points then   185
+      Lewis Hamilton           title  31.6%   points then   177
+      Valtteri Bottas          title   0.5%   points then   108
+      Lando Norris             title   0.1%   points then   113
+      -> champion: Max Verstappen (396 pts); we gave 67.8% after round 10
+    constructors: confidence HIGH (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 80% of the time; favourites with a 60%-80% title chance became champion 88% of the time (17 projections))
+      Mercedes                 title  60.5%   points then   285
+      Red Bull Racing          title  39.4%   points then   289
+      McLaren                  title   0.1%   points then   163
+      Ferrari                  title   0.0%   points then   148
+      -> champion: Mercedes (614 pts); we gave 60.5% after round 10
+=== 1 DATA COVERAGE (raced = race results loaded) ===
+  season races raced quali results per race   sprints laps ok pit stops stints weather no era
+    2018    21    21    21     420     20.0    0/0         20         0     20      21      0
+  note 2018: 1 raced races with laps for fewer than 90% of starters
+    2019    21    21    21     420     20.0    0/0         21         0     21      21      0
+    2020    17    17    17     340     20.0    0/0         17         0     17      17      0
+    2021    22    22    22     440     20.0    3/3         22         0     22      22      0
+    2022    22    22    22     440     20.0    3/3         22         0     22      22      0
+    2023    22    22    22     440     20.0    6/6         22        22     22      22      0
+    2024    24    24    24     479     20.0    6/6         24        24     24      24      0
+    2025    24    24    24     479     20.0    6/6         24        24     24      24      0
+    2026    23    15    15     330     22.0    5/6         14        15     15      15      0
+  note 2026: 1 raced races with laps for fewer than 90% of starters
+
+=== 2 DATA QUALITY (data_quality_v1, identity check off) ===
+  2018: 21 races checked, 0 FAIL, 1 warn
+  2019: 21 races checked, 0 FAIL, 0 warn
+  2020: 17 races checked, 0 FAIL, 1 warn
+  2021: 22 races checked, 0 FAIL, 0 warn
+  2022: 22 races checked, 0 FAIL, 0 warn
+  2023: 22 races checked, 0 FAIL, 0 warn
+  2024: 24 races checked, 0 FAIL, 0 warn
+  2025: 24 races checked, 0 FAIL, 0 warn
+  2026: 15 races checked, 0 FAIL, 0 warn
+
+=== 3 KNOWN FACTS: champions from the stored points ===
+  2018: Lewis Hamilton 408 pts, Mercedes 655 pts  ok
+  2019: Lewis Hamilton 413 pts, Mercedes 739 pts  ok
+  2020: Lewis Hamilton 347 pts, Mercedes 573 pts  ok
+  2021: Max Verstappen 396 pts, Mercedes 614 pts  ok
+  2022: Max Verstappen 454 pts, Red Bull Racing 759 pts  ok
+  2023: Max Verstappen 575 pts, Red Bull Racing 860 pts  ok
+  2024: Max Verstappen 437 pts, McLaren 666 pts  ok
+  2025: Lando Norris 423 pts, McLaren 833 pts  ok
+
+=== 5 MODELS ===
+  2026 titles after round 15, 8 weekends left:
+    drivers      Kimi Antonelli 95.9% (302 -> 387 pts), George Russell 3.8% (236 -> 324 pts), Lewis Hamilton 0.2% (199 -> 281 pts), Lando Norris 0.1% (186 -> 271 pts)
+                 confidence HIGH: second and third quarters: in 75 earlier projections at this stage, the favourite became champion 85% of the time; favourites with a 95%-100% title chance became champion 100% of the time (62 projections)
+    constructors Mercedes 99.9% (538 -> 711 pts), Ferrari 0.1% (378 -> 545 pts), McLaren 0.0% (304 -> 447 pts), Red Bull Racing 0.0% (260 -> 387 pts)
+                 confidence HIGH: second and third quarters: in 75 earlier projections at this stage, the favourite became champion 80% of the time; favourites with a 95%-100% title chance became champion 95% of the time (84 projections)
+
+=== REMAINING RACES ===
+  race id  189  2026 R16 Kuala Lumpur             2026-10-04  before qualifying
+  race id  190  2026 R17 Marina Bay               2026-10-11  before qualifying
+  race id  191  2026 R18 Austin                   2026-10-25  before qualifying
+  race id  192  2026 R19 Mexico City              2026-11-01  before qualifying
+  race id  193  2026 R20 São Paulo                2026-11-08  before qualifying
+  race id  194  2026 R21 Las Vegas                2026-11-21  before qualifying
+  race id  195  2026 R22 Lusail                   2026-11-29  before qualifying
+  race id  196  2026 R23 Yas Marina               2026-12-06  before qualifying
+
+=== 2026 R16 Kuala Lumpur (2026-10-04) ===
+  line-up: line-up of round 15 (entry list not loaded yet); grid: not known yet (before qualifying)
+  evidence: 15 races run this season, 15 under these regulations (established)
+
+  PRE QUALIFYING: predicted winner George Russell (Mercedes) -- win 19.0%, podium 38.7%
+  confidence LOW: in 28 earlier races where the favourite had 0%-25% at this stage, the favourite won 7%; with 7+ races of the season run, the favourite won 43% of 111 earlier races at this stage
+        George Russell           Mercedes             win  19.0%  podium  38.7%
+        Charles Leclerc          Ferrari              win  18.2%  podium  36.5%
+        Kimi Antonelli           Mercedes             win  16.5%  podium  36.9%
+        Lando Norris             McLaren              win  14.5%  podium  34.4%
+        Lewis Hamilton           Ferrari              win  13.2%  podium  33.6%
+        Max Verstappen           Red Bull Racing      win  10.0%  podium  29.2%
+
+  current stage: pre_qualifying -> predicted winner George Russell, 19.0%, confidence low
+
+=== 0 FAIL(S) ===

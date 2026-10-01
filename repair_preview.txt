@@ -1,0 +1,32 @@
+== 2018
+2018: every race driver who took part has a result in every race and sprint
+== 2019
+2019: every race driver who took part has a result in every race and sprint
+== 2020
+2020: every race driver who took part has a result in every race and sprint
+== 2021
+2021: every race driver who took part has a result in every race and sprint
+== 2022
+2022: every race driver who took part has a result in every race and sprint
+== 2023
+2023: every race driver who took part has a result in every race and sprint
+== 2024
+2024: every race driver who took part has a result in every race and sprint
+== 2025
+core           INFO 	Loading data for Chinese Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 20 drivers: ['81', '4', '63', '1', '31', '12', '23', '87', '18', '55', '6', '30', '7', '5', '27', '22', '14', '16', '44', '10']
+core           INFO 	Loading data for Chinese Grand Prix - Sprint [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 20 drivers: ['44', '81', '1', '63', '16', '22', '12', '4', '18', '14', '23', '10', '6', '30', '87', '31', '55', '5', '27', '7']
+core           INFO 	Loading data for Spanish Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 19 drivers: ['81', '4', '16', '63', '27', '44', '6', '10', '14', '1', '30', '5', '22', '55', '43', '31', '87', '12', '23']
+  R2 Shanghai race: Kimi Antonelli (#12): P6 from grid 8, 8 pts, Finished  (dry run)
+  R2 Shanghai sprint: Kimi Antonelli (#12): P7 from grid 7, 2 pts, Finished  (dry run)
+  R9 Barcelona race: Lance Stroll (#18): not in FastF1's classification -- left as is (withdrew / did not take part?)
+== 2026
+2026: every race driver who took part has a result in every race and sprint

@@ -1,0 +1,14 @@
+.git
+.env
+venv
+__pycache__
+*.pyc
+cache
+fastf1_cache
+logs
+*.log
+*.dump
+frontend
+circuit-viz-app
+tests/__pycache__
+*_latest.txt

@@ -4,6 +4,8 @@ import fastf1
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from driver_names import canonical_driver_name
+
 engine = create_engine(os.environ["DATABASE_URL"])
 
 with engine.connect() as conn:
@@ -32,6 +34,7 @@ with engine.connect() as conn:
                 name = row['FullName']
                 if not name or name.strip().lower() in ('none none', 'nan nan', ''):
                     continue  # unresolved identity -- skip, don't guess
+                name = canonical_driver_name(conn, name)  # accent-insensitive: "Pérez" = "Perez"
                 grid_pos = int(row['GridPosition']) if pd.notna(row['GridPosition']) else None
                 if grid_pos is None:
                     continue

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.database import engine
+from app.database import get_db
 from race_status import DNF_STATUSES
 
 
@@ -39,150 +40,150 @@ router = APIRouter(prefix="/teams", tags=["Teams"])
 def team_season_summary(
     team_id: int = Path(..., ge=1),
     season: int = Path(..., ge=2018, le=2026),
+    db: Session = Depends(get_db),
 ):
-    with engine.connect() as conn:
-        team = conn.execute(
-            text("""
-                SELECT
-                    id,
-                    name,
-                    color_hex,
-                    logo_url
-                FROM teams
-                WHERE id = :team_id
-            """),
-            {"team_id": team_id},
-        ).mappings().first()
+    team = db.execute(
+        text("""
+            SELECT
+                id,
+                name,
+                color_hex,
+                logo_url
+            FROM teams
+            WHERE id = :team_id
+        """),
+        {"team_id": team_id},
+    ).mappings().first()
 
-        if team is None:
-            raise HTTPException(status_code=404, detail="Team not found")
+    if team is None:
+        raise HTTPException(status_code=404, detail="Team not found")
 
-        race_stats = conn.execute(
-            text("""
-                SELECT
-                    COUNT(DISTINCT r.id) AS races,
-                    COUNT(*) FILTER (
-                        WHERE rr.finishing_position = 1
-                    ) AS wins,
-                    COUNT(*) FILTER (
-                        WHERE rr.finishing_position BETWEEN 1 AND 3
-                    ) AS podiums,
-                    COALESCE(SUM(rr.points), 0) AS race_points,
-                    AVG(rr.finishing_position) AS average_finish
-                FROM race_results rr
-                JOIN race_entries re
-                    ON re.id = rr.race_entry_id
-                JOIN races r
-                    ON r.id = re.race_id
-                JOIN sessions s
-                    ON s.id = rr.session_id
-                WHERE re.team_id = :team_id
-                  AND re.role = 'race_driver'
-                  AND s.session_type = 'R'
-                  AND r.season_year = :season
-            """),
-            {
-                "team_id": team_id,
-                "season": season,
-            },
-        ).mappings().first()
+    race_stats = db.execute(
+        text("""
+            SELECT
+                COUNT(DISTINCT r.id) AS races,
+                COUNT(*) FILTER (
+                    WHERE rr.finishing_position = 1
+                ) AS wins,
+                COUNT(*) FILTER (
+                    WHERE rr.finishing_position BETWEEN 1 AND 3
+                ) AS podiums,
+                COALESCE(SUM(rr.points), 0) AS race_points,
+                AVG(rr.finishing_position) AS average_finish
+            FROM race_results rr
+            JOIN race_entries re
+                ON re.id = rr.race_entry_id
+            JOIN races r
+                ON r.id = re.race_id
+            JOIN sessions s
+                ON s.id = rr.session_id
+            WHERE re.team_id = :team_id
+              AND re.role = 'race_driver'
+              AND s.session_type = 'R'
+              AND r.season_year = :season
+        """),
+        {
+            "team_id": team_id,
+            "season": season,
+        },
+    ).mappings().first()
 
-        sprint_stats = conn.execute(
-            text("""
-                SELECT
-                    COALESCE(SUM(rr.points), 0) AS sprint_points
-                FROM race_results rr
-                JOIN race_entries re
-                    ON re.id = rr.race_entry_id
-                JOIN races r
-                    ON r.id = re.race_id
-                JOIN sessions s
-                    ON s.id = rr.session_id
-                WHERE re.team_id = :team_id
-                  AND re.role = 'race_driver'
-                  AND s.session_type = 'S'
-                  AND r.season_year = :season
-            """),
-            {
-                "team_id": team_id,
-                "season": season,
-            },
-        ).mappings().first()
+    sprint_stats = db.execute(
+        text("""
+            SELECT
+                COALESCE(SUM(rr.points), 0) AS sprint_points
+            FROM race_results rr
+            JOIN race_entries re
+                ON re.id = rr.race_entry_id
+            JOIN races r
+                ON r.id = re.race_id
+            JOIN sessions s
+                ON s.id = rr.session_id
+            WHERE re.team_id = :team_id
+              AND re.role = 'race_driver'
+              AND s.session_type = 'S'
+              AND r.season_year = :season
+        """),
+        {
+            "team_id": team_id,
+            "season": season,
+        },
+    ).mappings().first()
 
-        qualifying_stats = conn.execute(
-            text("""
-                SELECT
-                    AVG(qr.final_position) AS average_qualifying
-                FROM qualifying_results qr
-                JOIN race_entries re
-                    ON re.id = qr.race_entry_id
-                JOIN races r
-                    ON r.id = re.race_id
-                JOIN sessions s
-                    ON s.id = qr.session_id
-                WHERE re.team_id = :team_id
-                  AND re.role = 'race_driver'
-                  AND s.session_type = 'Q'
-                  AND r.season_year = :season
-            """),
-            {
-                "team_id": team_id,
-                "season": season,
-            },
-        ).mappings().first()
+    qualifying_stats = db.execute(
+        text("""
+            SELECT
+                AVG(qr.final_position) AS average_qualifying
+            FROM qualifying_results qr
+            JOIN race_entries re
+                ON re.id = qr.race_entry_id
+            JOIN races r
+                ON r.id = re.race_id
+            JOIN sessions s
+                ON s.id = qr.session_id
+            WHERE re.team_id = :team_id
+              AND re.role = 'race_driver'
+              AND s.session_type = 'Q'
+              AND r.season_year = :season
+        """),
+        {
+            "team_id": team_id,
+            "season": season,
+        },
+    ).mappings().first()
 
-        dnf_stats = conn.execute(
-            text("""
-                SELECT
-                    COUNT(*) AS dnfs
-                FROM race_results rr
-                JOIN race_entries re
-                    ON re.id = rr.race_entry_id
-                JOIN races r
-                    ON r.id = re.race_id
-                JOIN sessions s
-                    ON s.id = rr.session_id
-                WHERE re.team_id = :team_id
-                  AND re.role = 'race_driver'
-                  AND s.session_type = 'R'
-                  AND r.season_year = :season
-                  AND rr.status = ANY(:dnf_statuses)
-            """),
-            {
-                "team_id": team_id,
-                "season": season,
-                "dnf_statuses": list(DNF_STATUSES),
-            },
-        ).scalar() or 0
+    dnf_stats = db.execute(
+        text("""
+            SELECT
+                COUNT(*) AS dnfs
+            FROM race_results rr
+            JOIN race_entries re
+                ON re.id = rr.race_entry_id
+            JOIN races r
+                ON r.id = re.race_id
+            JOIN sessions s
+                ON s.id = rr.session_id
+            WHERE re.team_id = :team_id
+              AND re.role = 'race_driver'
+              AND s.session_type = 'R'
+              AND r.season_year = :season
+              AND rr.status = ANY(:dnf_statuses)
+        """),
+        {
+            "team_id": team_id,
+            "season": season,
+            "dnf_statuses": list(DNF_STATUSES),
+        },
+    ).scalar() or 0
 
-        drivers = conn.execute(
-            text("""
-                SELECT
-                    d.id AS driver_id,
-                    d.name AS driver_name,
-                    MIN(re.car_number) AS car_number,
-                    COUNT(DISTINCT r.id) AS races_entered
-                FROM race_results rr
-                JOIN sessions s
-                    ON s.id = rr.session_id
-                JOIN race_entries re
-                    ON re.id = rr.race_entry_id
-                JOIN drivers d
-                    ON d.id = re.driver_id
-                JOIN races r
-                    ON r.id = re.race_id
-                WHERE re.team_id = :team_id
-                  AND re.role = 'race_driver'
-                  AND s.session_type = 'R'
-                  AND r.season_year = :season
-                GROUP BY d.id, d.name
-                ORDER BY d.name
-            """),
-            {
-                "team_id": team_id,
-                "season": season,
-            },
-        ).mappings().all()
+    drivers = db.execute(
+        text("""
+            SELECT
+                d.id AS driver_id,
+                d.name AS driver_name,
+                MIN(re.car_number) AS car_number,
+                COUNT(DISTINCT r.id) AS races_entered
+            FROM race_results rr
+            JOIN sessions s
+                ON s.id = rr.session_id
+            JOIN race_entries re
+                ON re.id = rr.race_entry_id
+            JOIN drivers d
+                ON d.id = re.driver_id
+            JOIN races r
+                ON r.id = re.race_id
+            WHERE re.team_id = :team_id
+              AND re.role = 'race_driver'
+              AND s.session_type = 'R'
+              AND r.season_year = :season
+            GROUP BY d.id, d.name
+            ORDER BY d.name
+        """),
+        {
+            "team_id": team_id,
+            "season": season,
+        },
+    ).mappings().all()
 
     race_points = float(race_stats["race_points"] or 0)
     sprint_points = float(sprint_stats["sprint_points"] or 0)

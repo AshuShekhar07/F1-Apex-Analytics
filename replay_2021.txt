@@ -1,0 +1,43 @@
+=== REPLAY: 2021 after round 10 (only races before round 11 are used) ===
+
+=== 2021 R11 Budapest (2021-08-01) ===
+  line-up: entry list; grid: starting_grid
+  evidence: 10 races run this season, 69 under these regulations (established)
+
+  PRE QUALIFYING: predicted winner Max Verstappen (Red Bull Racing) -- win 38.6%, podium 50.2%
+  confidence MEDIUM: in 43 earlier races where the favourite had 35%-45% at this stage, the favourite won 42%; with 7+ races of the season run, the favourite won 43% of 111 earlier races at this stage
+        Max Verstappen           Red Bull Racing      win  38.6%  podium  50.2%
+        Lewis Hamilton           Mercedes             win  20.9%  podium  41.3%
+        Valtteri Bottas          Mercedes             win  15.5%  podium  36.5%
+        Lando Norris             McLaren              win   6.3%  podium  24.4%
+        Sergio Perez             Red Bull Racing      win   4.5%  podium  20.8%
+        Daniel Ricciardo         McLaren              win   3.3%  podium  18.4%
+
+  POST QUALIFYING: predicted winner Lewis Hamilton (Mercedes) -- win 44.7%, podium 68.6%
+  confidence MEDIUM: in 47 earlier races where the favourite had 35%-45% at this stage, the favourite won 47%; with 7+ races of the season run, the favourite won 57% of 111 earlier races at this stage
+    P1  Lewis Hamilton           Mercedes             win  44.7%  podium  68.6%
+    P3  Max Verstappen           Red Bull Racing      win  25.1%  podium  58.9%
+    P2  Valtteri Bottas          Mercedes             win  18.5%  podium  53.0%
+    P4  Sergio Perez             Red Bull Racing      win   3.5%  podium  22.6%
+    P6  Lando Norris             McLaren              win   2.8%  podium  20.8%
+    P7  Charles Leclerc          Ferrari              win   1.4%  podium  13.0%
+
+  current stage: post_qualifying -> predicted winner Lewis Hamilton, 44.7%, confidence medium
+
+  WHAT HAPPENED: P1 Esteban Ocon (Alpine, from P8), P2 Lewis Hamilton (Mercedes, from P1), P3 Carlos Sainz (Ferrari, from P15)
+  pre qualifying: we gave the winner 0.7% -- winner was our #10
+  post qualifying: we gave the winner 0.4% -- winner was our #10
+
+  TITLES after round 10 of 22:
+    drivers: confidence HIGH (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 85% of the time)
+      Max Verstappen           title  67.8%   points then   185
+      Lewis Hamilton           title  31.6%   points then   177
+      Valtteri Bottas          title   0.5%   points then   108
+      Lando Norris             title   0.1%   points then   113
+      -> champion: Max Verstappen (396 pts); we gave 67.8% after round 10
+    constructors: confidence HIGH (second and third quarters: in 75 earlier projections at this stage, the favourite became champion 80% of the time)
+      Mercedes                 title  60.5%   points then   285
+      Red Bull Racing          title  39.4%   points then   289
+      McLaren                  title   0.1%   points then   163
+      Ferrari                  title   0.0%   points then   148
+      -> champion: Mercedes (614 pts); we gave 60.5% after round 10

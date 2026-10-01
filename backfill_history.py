@@ -5,11 +5,14 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from driver_names import find_driver_id
+
+from fastf1_cache import fastf1_cache_dir
+
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
 
-# IMPORTANT: use the absolute path you already confirmed works
-CACHE_DIR = '/home/ashushekhar07/projects/F1-Apex-Analytics/cache'
+CACHE_DIR = fastf1_cache_dir()
 fastf1.Cache.enable_cache(CACHE_DIR)
 
 # Map FastF1's real session display names (from the event schedule
@@ -116,7 +119,7 @@ def get_or_create_driver(conn, name, number):
         # a shared placeholder. Return None so the caller skips this driver
         # instead of silently merging them with someone else.
         return None
-    did = conn.execute(text("SELECT id FROM drivers WHERE name = :name"), {"name": name}).scalar()
+    did = find_driver_id(conn, name)   # accent-insensitive: "Sergio Pérez" is "Sergio Perez"
     if not did:
         did = conn.execute(text("INSERT INTO drivers (name, permanent_number) VALUES (:n, :num) RETURNING id"),
                             {"n": name, "num": number}).scalar()
@@ -169,8 +172,14 @@ with engine.connect() as conn:
                 existing = conn.execute(text("""
                     SELECT id FROM sessions WHERE race_id = :r AND session_type = :s
                 """), {"r": race_id, "s": sess_type}).scalar()
-                if existing:
+                if existing and conn.execute(text("""
+                    SELECT EXISTS (SELECT 1 FROM laps WHERE session_id = :s)
+                        OR EXISTS (SELECT 1 FROM race_results WHERE session_id = :s)
+                        OR EXISTS (SELECT 1 FROM qualifying_results WHERE session_id = :s)
+                """), {"s": existing}).scalar():
                     continue  # already backfilled, skip without touching the API
+                # an existing but EMPTY session (created before FastF1 had the data) is loaded
+                # again into the same session row instead of being skipped forever
 
                 try:
                     session = api_call(fastf1.get_session, year, round_num, sess_identifier)
@@ -193,7 +202,7 @@ with engine.connect() as conn:
                     driver_id_map[row['Abbreviation']] = entry_id
                 conn.commit()
 
-                session_id = conn.execute(text("""
+                session_id = existing or conn.execute(text("""
                     INSERT INTO sessions (race_id, session_type, start_time)
                     VALUES (:r, :s, :t) RETURNING id
                 """), {"r": race_id, "s": sess_type, "t": session.date}).scalar()
