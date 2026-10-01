@@ -477,3 +477,18 @@ def test_confidence_grows_with_data():
     assert wp.confidence("pre_qualifying", 0.4, table, late)["level"] == "high"
     out = wp.backtest(weekends, 2024, 2024, sims=300)
     assert set(out["pre_qualifying"]["by_data_stage"]) >= {"season_start", "established"}
+
+
+def test_replay_shows_prediction_titles_and_outcome(forecast_db, capsys, monkeypatch):
+    import championship_model_v1
+    import winner_prediction_v1 as wp
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    with forecast_db.connect() as db:
+        rounds = db.execute(text("""SELECT round_number FROM races r WHERE season_year = 2024 AND EXISTS (
+            SELECT 1 FROM sessions s JOIN race_results rr ON rr.session_id = s.id
+            WHERE s.race_id = r.id AND s.session_type = 'R') ORDER BY round_number""")).scalars().all()
+        wp.print_replay(db, 2024, rounds[-1] - 1)
+    out = capsys.readouterr().out
+    assert "REPLAY: 2024" in out and "WHAT HAPPENED: P1" in out and "TITLES after round" in out
+    assert "we gave the winner" in out

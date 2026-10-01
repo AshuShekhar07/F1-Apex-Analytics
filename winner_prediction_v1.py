@@ -32,6 +32,8 @@ excludes 0) and calibration error not worse; the verdict is stored with the tabl
     python winner_prediction_v1.py --race-id 189
     python winner_prediction_v1.py --backtest             # (re)measure the confidence table, 2019 onwards
     python winner_prediction_v1.py --calendar             # remaining races and their ids
+    python winner_prediction_v1.py --season 2021 --after-round 10   # replay: the next race and both
+                                                          # titles as the model saw them then, vs what happened
 """
 
 from __future__ import annotations
@@ -383,6 +385,64 @@ def print_calendar(db: Any) -> None:
               f"  {'qualifying loaded' if r['qualifying_loaded'] else 'before qualifying'}")
 
 
+def race_id_for(db: Any, season: int, round_number: int) -> int:
+    rid = db.execute(text("SELECT id FROM races WHERE season_year = :s AND round_number = :r"),
+                     {"s": season, "r": round_number}).scalar()
+    if rid is None:
+        raise PredictionError(f"{season} round {round_number} is not in the calendar")
+    return int(rid)
+
+
+def actual_result(db: Any, race_id: int) -> list[dict]:
+    """Top three of the race as it happened ([] if not run)."""
+    return [dict(r) for r in db.execute(text("""
+        SELECT rr.finishing_position AS position, d.id AS driver_id, d.name AS driver_name, t.name AS team_name,
+               rr.starting_grid_position AS grid
+        FROM race_results rr JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+        JOIN race_entries re ON re.id = rr.race_entry_id JOIN drivers d ON d.id = re.driver_id
+        JOIN teams t ON t.id = re.team_id
+        WHERE s.race_id = :r AND rr.finishing_position BETWEEN 1 AND 3 ORDER BY rr.finishing_position"""),
+        {"r": race_id}).mappings()]
+
+
+def print_replay(db: Any, season: int, after_round: int) -> None:
+    """The next race and both titles as the model saw them after `after_round`, with the outcome."""
+    race_id = race_id_for(db, season, after_round + 1)
+    pred = predict(db, race_id)
+    print(f"=== REPLAY: {season} after round {after_round} (only races before round {after_round + 1} are used) ===\n")
+    print_prediction(pred)
+    result = actual_result(db, race_id)
+    if result:
+        print("\n  WHAT HAPPENED: " + ", ".join(f"P{r['position']} {r['driver_name']} ({r['team_name']}, from P{r['grid']})"
+                                               for r in result))
+        winner = result[0]["driver_id"]
+        for stage, block in pred["stages"].items():
+            chance = next((d["p_win"] for d in block["drivers"] if d["driver_id"] == winner), 0.0)
+            rank = next((i for i, d in enumerate(block["drivers"], 1) if d["driver_id"] == winner), None)
+            verdict = "RIGHT" if block["favourite"]["driver_id"] == winner else f"winner was our #{rank}"
+            print(f"  {stage.replace('_', ' ')}: we gave the winner {chance:.1%} -- {verdict}")
+
+    from championship_model_v1 import load_weekends, project_season, standings, title_confidence
+
+    weekends = load_weekends(db, start_year=2018, end_year=season)
+    season_w = [w for w in weekends if w.season == season]
+    sp = project_season(weekends, season, after_round=after_round)
+    dn = {int(i): n for i, n in db.execute(text("SELECT id, name FROM drivers"))}
+    tn = {int(i): n for i, n in db.execute(text("SELECT id, name FROM teams"))}
+    final = standings(season_w, season) if all(w.raced for w in season_w) else None
+    print(f"\n  TITLES after round {after_round} of {len(season_w)}:")
+    for i, (kind, probs, pts, names) in enumerate((("drivers", sp.projection.p_driver_title, sp.driver_points, dn),
+                                                    ("constructors", sp.projection.p_team_title, sp.team_points, tn))):
+        conf = title_confidence(kind, after_round, len(season_w))
+        print(f"    {kind}: confidence {conf['level'].upper()} ({conf['basis']})")
+        for k in sorted(probs, key=lambda k: -probs[k])[:4]:
+            print(f"      {names.get(k, k):24} title {probs[k]:6.1%}   points then {pts.get(k, 0):5.0f}")
+        if final:
+            champ = max(final[i], key=final[i].get)
+            print(f"      -> champion: {names.get(champ)} ({final[i][champ]:.0f} pts); we gave {probs.get(champ, 0):.1%} "
+                  f"after round {after_round}")
+
+
 def print_prediction(pred: dict) -> None:
     print(f"=== {pred['season']} R{pred['round']} {pred['track']} ({pred['race_date']}) ===")
     print(f"  line-up: {pred['lineup_source']}; grid: {pred['grid_source'] or 'not known yet (before qualifying)'}")
@@ -410,6 +470,8 @@ def main() -> int:
     parser.add_argument("--race-id", type=int)
     parser.add_argument("--backtest", action="store_true")
     parser.add_argument("--calendar", action="store_true", help="list the remaining races and their ids")
+    parser.add_argument("--season", type=int, help="with --after-round: replay a past point of a season")
+    parser.add_argument("--after-round", type=int)
     parser.add_argument("--start-year", type=int, default=2019)
     args = parser.parse_args()
     engine = create_engine(os.environ["DATABASE_URL"])
@@ -442,6 +504,12 @@ def main() -> int:
             print(f"  saved {CONFIDENCE_FILE.name}")
         if args.calendar:
             print_calendar(db)
+        if args.season and args.after_round is not None:
+            try:
+                print_replay(db, args.season, args.after_round)
+            except (PredictionError, ValueError) as exc:
+                print(f"no replay: {exc}")
+                return 1
         if args.next or args.race_id:
             try:
                 print_prediction(predict(db, args.race_id or next_race_id(db)))
