@@ -24,6 +24,8 @@ judges them on 2018-2025.
 
 from __future__ import annotations
 
+import math
+
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
@@ -207,10 +209,10 @@ class RaceProbabilities:
 
 
 def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, int | None]], *, grid_coef: float,
-                       dnf: float, scale: float = 1.0, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
-    """entrants: (driver, team, grid slot or None). scale * strength + grid_coef * -log(grid)."""
+                       dnf: float, sims: int = SIMS, seed: int = 7) -> RaceProbabilities:
+    """entrants: (driver, team, grid slot or None). Strength + grid_coef * -log(grid)."""
     field_size = len(entrants)
-    s = np.array([scale * strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
+    s = np.array([strengths.of(d, t) - grid_coef * np.log(g or field_size) for d, t, g in entrants])
     pos = simulate_order(s, dnf, np.random.default_rng(seed), sims)
     drivers = [d for d, _, _ in entrants]
     finished = pos > 0
@@ -219,38 +221,6 @@ def race_probabilities(strengths: Strengths, entrants: Sequence[tuple[int, int, 
         {d: float(np.mean(finished[:, i] & (pos[:, i] <= 3))) for i, d in enumerate(drivers)},
         {d: float(np.mean(finished[:, i] & (pos[:, i] <= 10))) for i, d in enumerate(drivers)},
     )
-
-
-def fit_race_scale(weekends: Sequence[Weekend], strengths_for, *, with_grid: bool,
-                   max_races: int = 60) -> tuple[float, float]:
-    """(strength scale, grid coefficient) maximising the PL likelihood of the actual orders of
-    the last max_races raced weekends, each predicted with strengths fitted only on the
-    weekends before it. A scale below 1 means the fitted strengths are overconfident; it is
-    measured out of sample, never tuned on championship outcomes. Without grid (season
-    simulations: future grids are unknown) the grid coefficient is 0."""
-    cases = []
-    raced = [w for w in weekends if w.raced]
-    for idx in range(max(0, len(raced) - max_races), len(raced)):
-        w, before = raced[idx], raced[:idx]
-        if len(before) < 5:
-            continue
-        st = strengths_for(before, w.era)
-        finishers = sorted((r for r in w.race if r.classified and r.finish), key=lambda r: r.finish)
-        if len(finishers) < 5:
-            continue
-        n = len(w.race)
-        cases.append((np.array([st.of(r.driver_id, r.team_id) for r in finishers]),
-                      np.array([-np.log(r.grid or n) for r in finishers])))
-    if not cases:
-        return 1.0, (1.0 if with_grid else 0.0)
-
-    def neg(params):
-        a, b = params[0], (params[1] if with_grid else 0.0)
-        return -sum(pl_loglik_grad(a * base + b * g)[0] for base, g in cases)
-    x0 = [1.0, 1.0] if with_grid else [1.0]
-    bounds = [(0.0, 3.0), (0.0, 5.0)] if with_grid else [(0.0, 3.0)]
-    res = minimize(neg, x0, method="L-BFGS-B", bounds=bounds)
-    return float(res.x[0]), (float(res.x[1]) if with_grid else 0.0)
 
 
 def fit_grid_coef(weekends: Sequence[Weekend], strengths_for, *, max_races: int = 60) -> float:
@@ -303,28 +273,35 @@ def standings(weekends: Iterable[Weekend], season: int) -> tuple[dict[int, float
 def project_championship(strengths: Strengths, lineup: dict[int, int], remaining: Sequence[Weekend], *,
                          driver_points: dict[int, float], team_points: dict[int, float], dnf: float,
                          sims: int = SIMS, seed: int = 11, drift: float = 0.0,
-                         scale: float = 1.0) -> ChampionshipProjection:
+                         car_uncertainty: float = 0.0) -> ChampionshipProjection:
     """Monte Carlo of every remaining weekend for the current lineup (driver -> team).
 
     drift: car development. Each simulated season every team's car strength takes a random
     walk with this standard deviation per weekend, so a team that is fastest now is not
-    assumed fastest until the end (static strengths were overconfident: 2024 constructors)."""
+    assumed fastest until the end.
+
+    car_uncertainty: how unsure we are of each car's strength right now (standard deviation of
+    one offset per team car, drawn once per simulated season). Fitted strengths are point
+    estimates carried over from earlier seasons; without this the model was ~99% sure of 2024
+    Red Bull (McLaren 0%) and ~85% of 2021 Hamilton early on. Use new_car_sd() to size it."""
     rng = np.random.default_rng(seed)
     # everyone with points stays in the table (a dropped driver keeps theirs); only the
     # current lineup races the remaining weekends
     drivers = sorted(set(lineup) | set(driver_points))
     racing = np.array([i for i, d in enumerate(drivers) if d in lineup])
     teams = sorted(set(lineup.values()) | set(team_points))
-    s = np.array([scale * strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
+    s = np.array([strengths.of(drivers[i], lineup[drivers[i]]) for i in racing])
     car_teams = sorted({lineup[drivers[i]] for i in racing})
     car_of = np.array([car_teams.index(lineup[drivers[i]]) for i in racing], dtype=int)
-    development = np.zeros((sims, len(car_teams)))
+    development = (rng.normal(0.0, car_uncertainty, size=(sims, len(car_teams))) if car_uncertainty > 0
+                   else np.zeros((sims, len(car_teams))))
+    moving = drift > 0 or car_uncertainty > 0
     pts = np.tile(np.array([driver_points.get(d, 0.0) for d in drivers]), (sims, 1))
     wins = np.zeros_like(pts)
     for w in remaining if len(racing) else ():
         if drift > 0:
             development += rng.normal(0.0, drift, size=development.shape)
-        s_now = s[None, :] + development[:, car_of] if drift > 0 else s
+        s_now = s[None, :] + development[:, car_of] if moving else s
         if w.sprint_weekend and sprint_points(w.season):
             pos = simulate_order(s_now, dnf * 0.5, rng, sims)
             pts[:, racing] += points_for(pos, sprint_points(w.season))
@@ -353,6 +330,15 @@ def project_championship(strengths: Strengths, lineup: dict[int, int], remaining
         {t: float(team_pts[:, i].mean()) for i, t in enumerate(teams)},
         len(remaining),
     )
+
+
+SEEN_RACES = 4   # races of the current season after which the new-car doubt has shrunk by 1/sqrt(2)
+
+
+def new_car_sd(uncertainty: float, races_this_season: int) -> float:
+    """Car-strength doubt: full size before round 1 (winter rebuilds), shrinking like
+    1/sqrt(races seen) as this season's races show the real pace."""
+    return uncertainty * math.sqrt(SEEN_RACES / (SEEN_RACES + races_this_season))
 
 
 def current_lineup(weekends: Sequence[Weekend]) -> dict[int, int]:

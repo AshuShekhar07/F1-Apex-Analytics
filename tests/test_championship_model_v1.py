@@ -5,11 +5,10 @@ import pytest
 
 from championship_model_v1 import (
     Result,
-    Strengths,
     Weekend,
     fit_grid_coef,
-    fit_race_scale,
     fit_strengths,
+    new_car_sd,
     pl_loglik_grad,
     points_for,
     project_championship,
@@ -83,17 +82,6 @@ def test_grid_coef_is_learned_from_earlier_races():
     assert coef > 1.0
 
 
-def test_race_scale_calms_overconfident_strengths():
-    # strengths say driver 1 >> 2 >> ... but the order rotates every race -> scale near 0;
-    # when the order always matches the strengths, the scale stays well above that
-    rotating = [_weekend(i, [((i + k) % 6) + 1 for k in range(6)]) for i in range(1, 25)]
-    steady = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(1, 25)]
-    overconfident = Strengths(car={}, skill={d: -1.5 * d for d in range(1, 7)})
-    a_rot, b_rot = fit_race_scale(rotating, lambda before, era: overconfident, with_grid=False)
-    a_steady, _ = fit_race_scale(steady, lambda before, era: overconfident, with_grid=False)
-    assert b_rot == 0.0 and a_rot < 0.2 < 1.0 < a_steady
-
-
 def test_championship_reflects_lead_and_races_left():
     weekends = [_weekend(i, [1, 2, 3, 4]) for i in range(1, 9)]
     st = fit_strengths(weekends)
@@ -130,10 +118,12 @@ def test_backtest_runs_on_the_synthetic_database(synthetic_db):
     assert len(raced) == 6 and all(len(w.race) == 12 for w in raced)
     out = championship_backtest(weekends, StrengthCache(raced), 2022, 2024)
     assert [c[0] for c in out["checks"]] == [2022, 2023, 2024]
-    assert out["chosen_drift"][2022] == 0.06 and out["drift_now"] in (0.0, 0.03, 0.06, 0.1, 0.15)
+    from championship_backtest_v1 import DEFAULT_SETTING, SETTINGS
+    assert out["chosen"][2022] == DEFAULT_SETTING and out["setting_now"] in SETTINGS
+    assert out["chosen_drift"][2022][1] == 0.0
     from championship_backtest_v1 import summarise_titles
     summary = summarise_titles(out["rounds"], "drivers")
-    assert summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
+    assert summary["records"]["model, drift + new-car doubt"] and summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
 
 
 from test_race_strategy_backtest_v2 import synthetic_db  # noqa: E402,F401  (fixture)
@@ -151,3 +141,18 @@ def test_development_drift_lowers_overconfidence_far_from_the_end():
                                     sims=4000, drift=0.15)
     assert drifting.p_team_title[1] < static.p_team_title[1]
     assert sum(drifting.p_team_title.values()) == pytest.approx(1.0)
+
+
+def test_new_car_doubt_shrinks_with_races_and_gives_the_rival_a_chance():
+    assert new_car_sd(0.6, 0) == pytest.approx(0.6)
+    assert new_car_sd(0.6, 4) == pytest.approx(0.6 / 2 ** 0.5) and new_car_sd(0.6, 20) < new_car_sd(0.6, 4)
+    # team 1 dominated last season; before round 1 (no points yet) it must not be near-certain
+    weekends = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(1, 21)]
+    st = fit_strengths(weekends)
+    lineup = {d: (d + 1) // 2 for d in range(1, 7)}
+    remaining = [_weekend(i, [1, 2, 3, 4, 5, 6], season=2025) for i in range(1, 23)]
+    sure = project_championship(st, lineup, remaining, driver_points={}, team_points={}, dnf=0.1, sims=3000)
+    doubt = project_championship(st, lineup, remaining, driver_points={}, team_points={}, dnf=0.1, sims=3000,
+                                 car_uncertainty=new_car_sd(1.0, 0))
+    assert doubt.p_team_title[1] < sure.p_team_title[1] and doubt.p_team_title[2] > sure.p_team_title[2]
+    assert sum(doubt.p_team_title.values()) == pytest.approx(1.0)
