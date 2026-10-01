@@ -1,0 +1,208 @@
+core           INFO 	Loading data for Chinese Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 20 drivers: ['81', '4', '63', '1', '31', '12', '23', '87', '18', '55', '6', '30', '7', '5', '27', '22', '14', '16', '44', '10']
+core           INFO 	Loading data for Chinese Grand Prix - Sprint [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 20 drivers: ['44', '81', '1', '63', '16', '22', '12', '4', '18', '14', '23', '10', '6', '30', '87', '31', '55', '5', '27', '7']
+core           INFO 	Loading data for Spanish Grand Prix - Race [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+core           INFO 	Finished loading data for 19 drivers: ['81', '4', '16', '63', '27', '44', '6', '10', '14', '1', '30', '5', '22', '55', '43', '31', '87', '12', '23']
+  R2 Shanghai race: Kimi Antonelli (#12): P6 from grid 8, 8 pts, Finished
+  R2 Shanghai sprint: Kimi Antonelli (#12): P7 from grid 7, 2 pts, Finished
+  R9 Barcelona race: Lance Stroll (#18): not in FastF1's classification -- left as is (withdrew / did not take part?)
+inserted 2 result(s). Next: python repair_session_laps_v1.py --season 2025 --apply
+core           INFO 	Loading data for Miami Grand Prix - Sprint [v3.8.3]
+req            INFO 	Using cached data for session_info
+req            INFO 	Using cached data for driver_info
+req            INFO 	Using cached data for session_status_data
+req            INFO 	Using cached data for lap_count
+req            INFO 	Using cached data for track_status_data
+req            INFO 	Using cached data for _extended_timing_data
+req            INFO 	Using cached data for timing_app_data
+core           INFO 	Processing timing data...
+core        WARNING 	Fixed incorrect tyre stint information for driver '4'
+core        WARNING 	Fixed incorrect tyre stint information for driver '81'
+core        WARNING 	Fixed incorrect tyre stint information for driver '44'
+core        WARNING 	Fixed incorrect tyre stint information for driver '63'
+core        WARNING 	Fixed incorrect tyre stint information for driver '18'
+core        WARNING 	Fixed incorrect tyre stint information for driver '22'
+core        WARNING 	Fixed incorrect tyre stint information for driver '12'
+core        WARNING 	Fixed incorrect tyre stint information for driver '10'
+core        WARNING 	Fixed incorrect tyre stint information for driver '27'
+core        WARNING 	Fixed incorrect tyre stint information for driver '6'
+core        WARNING 	Fixed incorrect tyre stint information for driver '23'
+core        WARNING 	Fixed incorrect tyre stint information for driver '31'
+core        WARNING 	Fixed incorrect tyre stint information for driver '30'
+core        WARNING 	Fixed incorrect tyre stint information for driver '87'
+core        WARNING 	Fixed incorrect tyre stint information for driver '5'
+core        WARNING 	Fixed incorrect tyre stint information for driver '7'
+core        WARNING 	Fixed incorrect tyre stint information for driver '1'
+core        WARNING 	Fixed incorrect tyre stint information for driver '14'
+core        WARNING 	Fixed incorrect tyre stint information for driver '55'
+core        WARNING 	No lap data for driver 16
+core        WARNING 	Failed to perform lap accuracy check - all laps marked as inaccurate (driver 16)
+core        WARNING 	Driver 4 completed the race distance 00:00.023000 before the recorded end of the session.
+core           INFO 	Finished loading data for 20 drivers: ['4', '81', '44', '63', '18', '22', '12', '10', '27', '6', '23', '31', '30', '87', '5', '7', '1', '14', '55', '16']
+R6 Miami sprint: laps for 19/20 starters
+  0 laps for 0/1 drivers without laps
+championship projection 2025: stored after round(s) [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+  drivers after round 24:
+    Lando Norris             title 100.0%   points   423   expected   423
+    Max Verstappen           title   0.0%   points   421   expected   421
+    Oscar Piastri            title   0.0%   points   410   expected   410
+    George Russell           title   0.0%   points   319   expected   319
+    Charles Leclerc          title   0.0%   points   242   expected   242
+  constructors after round 24:
+    McLaren                  title 100.0%   points   833   expected   833
+    Mercedes                 title   0.0%   points   469   expected   469
+    Red Bull Racing          title   0.0%   points   451   expected   451
+    Ferrari                  title   0.0%   points   398   expected   398
+    Williams                 title   0.0%   points   137   expected   137
+championship projection 2026: stored after round(s) [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  drivers after round 15:
+    Kimi Antonelli           title  95.9%   points   302   expected   387
+    George Russell           title   3.8%   points   236   expected   324
+    Lewis Hamilton           title   0.2%   points   199   expected   280
+    Lando Norris             title   0.1%   points   186   expected   271
+    Charles Leclerc          title   0.0%   points   179   expected   264
+  constructors after round 15:
+    Mercedes                 title  99.9%   points   538   expected   711
+    Ferrari                  title   0.1%   points   378   expected   545
+    McLaren                  title   0.0%   points   304   expected   447
+    Red Bull Racing          title   0.0%   points   260   expected   387
+    Racing Bulls             title   0.0%   points    79   expected   142
+race 174: stored forecast 23 (starting_grid), predicted winner driver 29  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Max Verstappen's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Carlos Sainz's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 4/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; strategy: no dry era3_2026regs races yet, using era2_18inch_groundeffect strategies; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 175: stored forecast 24 (starting_grid), predicted winner driver 65  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Sergio Perez's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 10/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; out of position (grid penalty / pit lane): Alexander Albon; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 176: stored forecast 25 (starting_grid), predicted winner driver 65  notes: team race form: no earlier races in this era, form = 0 for every team; practice: long-run pace for 15/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 177: stored forecast 26 (starting_grid), predicted winner driver 65  notes: car pace: Isack Hadjar's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Gabriel Bortoleto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 19/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 178: stored forecast 27 (starting_grid), predicted winner driver 29  notes: car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 12/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 22/22 drivers, correction beta 0.40; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 179: stored forecast 28 (starting_grid), predicted winner driver 65  notes: car pace: Gabriel Bortoleto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Arvid Lindblad's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: no usable long runs (wet or no practice), qualifying pace only; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 180: stored forecast 29 (starting_grid), predicted winner driver 29  notes: practice: long-run pace for 12/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 181: stored forecast 30 (starting_grid), predicted winner driver 29  notes: car pace: Franco Colapinto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 14/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 182: stored forecast 31 (starting_grid), predicted winner driver 65  notes: car pace: Franco Colapinto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 14/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; out of position (grid penalty / pit lane): Pierre Gasly; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 183: stored forecast 32 (starting_grid), predicted winner driver 65  notes: practice: no usable long runs (wet or no practice), qualifying pace only; out of position (grid penalty / pit lane): Lando Norris, Carlos Sainz, Isack Hadjar; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 184: stored forecast 33 (starting_grid), predicted winner driver 18  notes: practice: long-run pace for 16/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Lewis Hamilton, Kimi Antonelli; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 185: stored forecast 34 (starting_grid), predicted winner driver 24  notes: practice: no usable long runs (wet or no practice), qualifying pace only; sprint: race pace from the sprint for 21/22 drivers, correction beta 0.40; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 186: stored forecast 337 (starting_grid), predicted winner driver 7  notes: car pace: Yuki Tsunoda's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 18/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Oscar Piastri, Kimi Antonelli, Liam Lawson; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 187: stored forecast 338 (starting_grid), predicted winner driver 24  notes: car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Oliver Bearman's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 6/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Carlos Sainz; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+race 188: stored forecast 339 (starting_grid), predicted winner driver 29  notes: car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Kimi Antonelli's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 11/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Carlos Sainz; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16
+=== 2026 RACE WINNERS: favourite (highest win chance) vs the real winner ===
+  (recomputed with the current model from races before each one; 'live' = what was frozen before the race with the model of that time)
+  R1  Melbourne              favourite George Russell         36% from P1   winner George Russell (we gave 36%)  RIGHT
+  R2  Shanghai               favourite Kimi Antonelli         31% from P1   winner Kimi Antonelli (we gave 31%)  RIGHT
+  R3  Suzuka                 favourite Kimi Antonelli         35% from P1   winner Kimi Antonelli (we gave 35%)  RIGHT
+  R4  Miami                  favourite Kimi Antonelli         43% from P1   winner Kimi Antonelli (we gave 43%)  RIGHT
+  R5  Montréal               favourite George Russell         44% from P1   winner Kimi Antonelli (we gave 17%)
+  R6  Monaco                 favourite Kimi Antonelli         51% from P1   winner Kimi Antonelli (we gave 51%)  RIGHT
+  R7  Barcelona              favourite George Russell         36% from P1   winner Lewis Hamilton (we gave 19%)
+  R8  Spielberg              favourite George Russell         37% from P1   winner George Russell (we gave 37%)  RIGHT
+  R9  Silverstone            favourite Kimi Antonelli         47% from P1   winner Charles Leclerc (we gave 16%)
+  R10 Spa-Francorchamps      favourite Kimi Antonelli         35% from P1   winner Kimi Antonelli (we gave 35%)  RIGHT
+  R11 Budapest               favourite Lando Norris           39% from P1   winner Lando Norris (we gave 39%)  RIGHT
+  R12 Zandvoort              favourite Lando Norris           42% from P1   winner Lando Norris (we gave 42%)  RIGHT
+  R13 Monza                  favourite George Russell         27% from P2   winner Kimi Antonelli (we gave 2%)
+  R14 Madrid                 favourite Lando Norris           43% from P1   winner Kimi Antonelli (we gave 19%)
+  R15 Baku                   favourite George Russell         42% from P1   winner George Russell (we gave 42%)  RIGHT
+  favourite won 10/15 races (67%); backtest 2019-2025: 57%
+
+=== 2025 TITLE CHANCES AFTER EACH ROUND (top 4 at the end) ===
+  drivers:  round    Lando Norris  Max Verstappen   Oscar Piastri  George Russell
+                1           18.7%           33.8%            2.1%           15.5%
+                2           23.4%           26.0%            5.8%           20.4%
+                3           27.4%           30.8%            5.9%           16.7%
+                4           31.8%           22.2%           11.1%           19.2%
+                5           27.5%           24.4%           18.6%           15.7%
+                6           37.3%            6.1%           33.5%           16.6%
+                7           43.6%            8.8%           35.4%            8.7%
+                8           56.7%            6.0%           32.6%            1.5%
+                9           53.5%            1.1%           42.7%            0.8%
+               10           41.6%            1.6%           53.4%            1.8%
+               11           49.8%            0.2%           48.6%            0.7%
+               12           56.0%            0.1%           43.9%            0.1%
+               13           45.2%            0.0%           54.8%            0.0%
+               14           52.3%            0.0%           47.7%            0.0%
+               15           25.0%            0.0%           75.0%            0.0%
+               16           26.3%            0.0%           73.7%            0.0%
+               17           24.7%            0.0%           75.2%            0.0%
+               18           26.0%            0.0%           74.0%            0.0%
+               19           36.0%            0.5%           63.4%            0.0%
+               20           59.7%            0.3%           40.0%            0.0%
+               21           90.7%            0.1%            9.2%            0.0%
+               22           91.3%            2.3%            6.4%            0.0%
+               23           83.4%            9.0%            7.6%            0.0%
+               24          100.0%            0.0%            0.0%            0.0%
+  constructors:  round         McLaren        Mercedes  Red Bull Racin         Ferrari
+                     1           22.1%           33.0%           21.6%           23.2%
+                     2           37.9%           30.5%            6.6%           25.0%
+                     3           45.7%           26.9%            6.8%           20.6%
+                     4           60.5%           15.6%            3.9%           20.0%
+                     5           70.9%           11.9%            2.8%           14.3%
+                     6           86.6%            8.0%            0.3%            5.1%
+                     7           93.8%            3.3%            0.2%            2.8%
+                     8           97.7%            0.1%            0.0%            2.2%
+                     9           99.2%            0.0%            0.0%            0.7%
+                    10           99.5%            0.0%            0.0%            0.5%
+                    11           99.9%            0.0%            0.0%            0.1%
+                    12          100.0%            0.0%            0.0%            0.0%
+                    13          100.0%            0.0%            0.0%            0.0%
+                    14          100.0%            0.0%            0.0%            0.0%
+                    15          100.0%            0.0%            0.0%            0.0%
+                    16          100.0%            0.0%            0.0%            0.0%
+                    17          100.0%            0.0%            0.0%            0.0%
+                    18          100.0%            0.0%            0.0%            0.0%
+                    19          100.0%            0.0%            0.0%            0.0%
+                    20          100.0%            0.0%            0.0%            0.0%
+                    21          100.0%            0.0%            0.0%            0.0%
+                    22          100.0%            0.0%            0.0%            0.0%
+                    23          100.0%            0.0%            0.0%            0.0%
+                    24          100.0%            0.0%            0.0%            0.0%
+
+=== 2026 TITLE CHANCES AFTER EACH ROUND (top 4 at the end) ===
+  drivers:  round  Kimi Antonelli  George Russell  Lewis Hamilton    Lando Norris
+                1            2.1%           17.0%            2.4%           38.7%
+                2            6.0%           35.8%            4.6%           25.8%
+                3           12.2%           33.6%            3.3%           18.1%
+                4           19.3%           26.4%            1.4%           26.6%
+                5           51.7%           24.4%            3.0%           13.4%
+                6           75.4%            1.6%            7.0%            9.2%
+                7           65.7%            4.2%           15.8%           10.1%
+                8           73.3%            8.9%           11.6%            3.9%
+                9           28.1%           24.9%           34.0%            6.9%
+               10           52.0%           11.1%           27.8%            2.2%
+               11           61.8%            5.7%           22.6%            4.2%
+               12           73.8%            6.3%           11.7%            5.4%
+               13           89.5%            4.7%            3.5%            1.8%
+               14           97.7%            1.4%            0.4%            0.5%
+               15           95.9%            3.8%            0.2%            0.1%
+  constructors:  round        Mercedes         Ferrari         McLaren  Red Bull Racin
+                     1           15.3%            9.8%           72.8%            1.9%
+                     2           39.0%           16.6%           44.1%            0.3%
+                     3           46.2%           14.2%           39.5%            0.0%
+                     4           46.8%            4.3%           48.9%            0.0%
+                     5           81.0%            8.2%           10.8%            0.0%
+                     6           66.0%           18.6%           15.4%            0.0%
+                     7           66.7%           20.4%           12.9%            0.0%
+                     8           85.2%            9.3%            5.5%            0.0%
+                     9           63.4%           32.9%            3.7%            0.0%
+                    10           66.1%           32.6%            1.2%            0.0%
+                    11           66.6%           32.0%            1.3%            0.0%
+                    12           82.8%           16.3%            0.9%            0.0%
+                    13           96.4%            3.5%            0.1%            0.0%
+                    14           99.3%            0.7%            0.0%            0.0%
+                    15           99.9%            0.1%            0.0%            0.0%
+
+=== TEAM IDS USED FOR ONLY PART OF A SEASON (possible duplicate team rows) ===
+  2025 Yuki Tsunoda           team id 21 'Racing Bulls' in rounds [1, 2]; rest of the season team id 2 'Red Bull Racing'
+  2025 Liam Lawson            team id 2 'Red Bull Racing' in rounds [1, 2]; rest of the season team id 21 'Racing Bulls'
+  2025 Ryo Hirakawa           team id 18 'Alpine' in rounds [3]; rest of the season team id 4 'Haas F1 Team'
+  2025 Ayumu Iwasa            team id 2 'Red Bull Racing' in rounds [4]; rest of the season team id 21 'Racing Bulls'
+  2025 Paul Aron              team id 20 'Kick Sauber' in rounds [12, 14]; rest of the season team id 18 'Alpine'
+  2026 Ayumu Iwasa            team id 21 'Racing Bulls' in rounds [8]; rest of the season team id 2 'Red Bull Racing'
+  2026 Paul Aron              team id 22 'Audi' in rounds [8]; rest of the season team id 18 'Alpine'
+  2026 Liam Lawson            team id 2 'Red Bull Racing' in rounds [12, 13, 14]; rest of the season team id 21 'Racing Bulls'
+
+=== RACES WHERE A TEAM HAS FEWER THAN 2 RACE RESULTS ===
+  2025 R9  Aston Martin         results for ['Fernando Alonso']; entered without a result: ['Lance Stroll']
