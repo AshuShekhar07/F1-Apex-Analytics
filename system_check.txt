@@ -1,42 +1,49 @@
 === WINNER BACKTEST 2019-2026 (each race from the races before it) ===
-  pre_qualifying: 167 races, favourite won 44.3% (average favourite chance 24.9%), winner log loss 1.809
-    favourite had 0%-25%:   97 races, said 19.6%, won 27.8% -> low
-    favourite had 25%-35%:   51 races, said 29.7%, won 66.7% -> high
-    favourite had 35%-45%:   19 races, said 38.7%, won 68.4% -> high
-  post_qualifying: 167 races, favourite won 59.3% (average favourite chance 41.9%), winner log loss 1.315
-    favourite had 0%-25%:    7 races, said 22.8%, won 42.9% -> medium
-    favourite had 25%-35%:   48 races, said 30.9%, won 47.9% -> medium
-    favourite had 35%-45%:   54 races, said 40.3%, won 59.3% -> high
-    favourite had 45%-60%:   40 races, said 50.4%, won 70.0% -> high
-    favourite had 60%-100%:   18 races, said 64.4%, won 72.2% -> high
+
+  PRE_QUALIFYING: 167 races
+    uncalibrated               favourite won 44.3%, average favourite chance 24.9%, winner log loss 1.809
+      favourite had 0%-25%:   97 races, said 19.6%, won 27.8% -> low
+      favourite had 25%-35%:   51 races, said 29.7%, won 66.7% -> high
+      favourite had 35%-45%:   19 races, said 38.7%, won 68.4% -> high
+    calibrated (walk-forward)  favourite won 44.3%, average favourite chance 45.9%, winner log loss 1.632
+      favourite had 0%-25%:   28 races, said 21.2%, won 7.1% -> low
+      favourite had 25%-35%:   23 races, said 30.9%, won 39.1% -> medium
+      favourite had 35%-45%:   43 races, said 39.2%, won 41.9% -> medium
+      favourite had 45%-60%:   34 races, said 52.1%, won 52.9% -> medium
+      favourite had 60%-100%:   39 races, said 74.5%, won 69.2% -> high
+    sharpening k by season (fitted on earlier seasons): {2019: 1.0, 2020: 1.935, 2021: 2.112, 2022: 2.156, 2023: 2.23, 2024: 2.408, 2025: 2.086, 2026: 1.979}; now 1.957
+    log loss change -0.1771 [-0.2546, -0.0987], calibration error 0.0217 -> 0.0065  => PROMOTED
+
+  POST_QUALIFYING: 167 races
+    uncalibrated               favourite won 59.3%, average favourite chance 41.9%, winner log loss 1.315
+      favourite had 0%-25%:    7 races, said 22.8%, won 42.9% -> medium
+      favourite had 25%-35%:   48 races, said 30.9%, won 47.9% -> medium
+      favourite had 35%-45%:   54 races, said 40.3%, won 59.3% -> high
+      favourite had 45%-60%:   40 races, said 50.4%, won 70.0% -> high
+      favourite had 60%-100%:   18 races, said 64.4%, won 72.2% -> high
+    calibrated (walk-forward)  favourite won 59.3%, average favourite chance 54.8%, winner log loss 1.221
+      favourite had 25%-35%:   13 races, said 30.5%, won 30.8% -> low
+      favourite had 35%-45%:   47 races, said 40.7%, won 46.8% -> medium
+      favourite had 45%-60%:   53 races, said 53.1%, won 64.2% -> high
+      favourite had 60%-100%:   54 races, said 74.6%, won 72.2% -> high
+    sharpening k by season (fitted on earlier seasons): {2019: 1.0, 2020: 1.247, 2021: 1.302, 2022: 1.402, 2023: 1.541, 2024: 1.693, 2025: 1.532, 2026: 1.537}; now 1.554
+    log loss change -0.0937 [-0.1382, -0.0469], calibration error 0.0175 -> 0.0086  => PROMOTED
   saved winner_confidence_v1.json
-/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
-  from starlette.testclient import TestClient as TestClient  # noqa
-2026-10-01 13:10:58,751 INFO httpx HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,753 INFO httpx HTTP Request: GET http://testserver/about "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,764 INFO httpx HTTP Request: GET http://testserver/races?season=2026 "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,774 INFO httpx HTTP Request: GET http://testserver/races/188 "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,780 INFO httpx HTTP Request: GET http://testserver/races/188/qualifying "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,786 INFO httpx HTTP Request: GET http://testserver/races/188/strategy "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,796 INFO httpx HTTP Request: GET http://testserver/races/188/position-battle "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,811 INFO httpx HTTP Request: GET http://testserver/races/188/practice/FP1 "HTTP/1.1 200 OK"
-2026-10-01 13:10:58,817 INFO httpx HTTP Request: GET http://testserver/races/188/forecast "HTTP/1.1 200 OK"
-2026-10-01 13:10:59,046 INFO httpx HTTP Request: POST http://testserver/races/188/what-if "HTTP/1.1 200 OK"
-2026-10-01 13:11:03,377 INFO httpx HTTP Request: GET http://testserver/races/188/winner-prediction "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,679 INFO httpx HTTP Request: GET http://testserver/races/next/winner-prediction "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,704 INFO httpx HTTP Request: GET http://testserver/drivers/29/history "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,722 INFO httpx HTTP Request: GET http://testserver/drivers/29/season/2026 "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,906 INFO httpx HTTP Request: GET http://testserver/drivers/29/profile "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,957 INFO httpx HTTP Request: GET http://testserver/drivers/wet-weather-ranking "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,974 INFO httpx HTTP Request: GET http://testserver/compare/29/7 "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,983 INFO httpx HTTP Request: GET http://testserver/teams/10/season/2026 "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,988 INFO httpx HTTP Request: GET http://testserver/tracks/4/stats "HTTP/1.1 200 OK"
-2026-10-01 13:11:05,994 INFO httpx HTTP Request: GET http://testserver/tracks/4/overtaking-index "HTTP/1.1 200 OK"
-2026-10-01 13:11:06,057 INFO httpx HTTP Request: GET http://testserver/records/all-time "HTTP/1.1 200 OK"
-2026-10-01 13:11:07,094 INFO httpx HTTP Request: GET http://testserver/strategy/predict?track_id=4&race_date=2026-09-26 "HTTP/1.1 200 OK"
-2026-10-01 13:11:07,102 INFO httpx HTTP Request: GET http://testserver/championship/2026 "HTTP/1.1 200 OK"
-2026-10-01 13:11:07,109 INFO httpx HTTP Request: GET http://testserver/championship/2026/history "HTTP/1.1 200 OK"
-2026-10-01 13:11:07,115 INFO httpx HTTP Request: GET http://testserver/predict-and-compete/2026/15 "HTTP/1.1 200 OK"
+race 174: stored forecast 23 (starting_grid), predicted winner driver 29  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Max Verstappen's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Carlos Sainz's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 4/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; strategy: no dry era3_2026regs races yet, using era2_18inch_groundeffect strategies; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 175: stored forecast 24 (starting_grid), predicted winner driver 65  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Sergio Perez's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 10/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; out of position (grid penalty / pit lane): Alexander Albon; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 176: stored forecast 25 (starting_grid), predicted winner driver 65  notes: team race form: no earlier races in this era, form = 0 for every team; practice: long-run pace for 15/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 177: stored forecast 26 (starting_grid), predicted winner driver 65  notes: car pace: Isack Hadjar's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Gabriel Bortoleto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 19/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 178: stored forecast 27 (starting_grid), predicted winner driver 29  notes: car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 12/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 22/22 drivers, correction beta 0.40; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 179: stored forecast 28 (starting_grid), predicted winner driver 65  notes: car pace: Gabriel Bortoleto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Arvid Lindblad's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: no usable long runs (wet or no practice), qualifying pace only; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 180: stored forecast 29 (starting_grid), predicted winner driver 29  notes: practice: long-run pace for 12/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 181: stored forecast 30 (starting_grid), predicted winner driver 29  notes: car pace: Franco Colapinto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 14/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 182: stored forecast 31 (starting_grid), predicted winner driver 65  notes: car pace: Franco Colapinto's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 14/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; out of position (grid penalty / pit lane): Pierre Gasly; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 183: stored forecast 32 (starting_grid), predicted winner driver 65  notes: practice: no usable long runs (wet or no practice), qualifying pace only; out of position (grid penalty / pit lane): Lando Norris, Carlos Sainz, Isack Hadjar; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 184: stored forecast 33 (starting_grid), predicted winner driver 18  notes: practice: long-run pace for 16/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Lewis Hamilton, Kimi Antonelli; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 185: stored forecast 34 (starting_grid), predicted winner driver 24  notes: practice: no usable long runs (wet or no practice), qualifying pace only; sprint: race pace from the sprint for 21/22 drivers, correction beta 0.40; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 186: stored forecast 337 (starting_grid), predicted winner driver 7  notes: car pace: Yuki Tsunoda's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 18/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Oscar Piastri, Kimi Antonelli, Liam Lawson; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 187: stored forecast 338 (starting_grid), predicted winner driver 24  notes: car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Oliver Bearman's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 6/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Carlos Sainz; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
+race 188: stored forecast 339 (starting_grid), predicted winner driver 29  notes: car pace: Valtteri Bottas's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Kimi Antonelli's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 11/22 drivers (FP2), correction beta 0.24; out of position (grid penalty / pit lane): Carlos Sainz; recovery weight 0.8; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
 === 1 DATA COVERAGE (raced = race results loaded) ===
   season races raced quali results per race   sprints laps ok pit stops stints weather no era
     2018    21    21    21     420     20.0    0/0         20         0     20      21      0
@@ -72,50 +79,33 @@
   2024: Max Verstappen 437 pts, McLaren 666 pts  ok
   2025: Lando Norris 423 pts, McLaren 833 pts  ok
 
-=== 4 API: every endpoint on this database ===
-  GET  /health                                                       200       31 ms  ok
-  GET  /about                                                        200        3 ms  ok
-  GET  /races?season=2026                                            200       11 ms  ok
-  GET  /races/188                                                    200        9 ms  ok
-  GET  /races/188/qualifying                                         200        6 ms  ok
-  GET  /races/188/strategy                                           200        6 ms  ok
-  GET  /races/188/position-battle                                    200       10 ms  ok
-  GET  /races/188/practice/FP1                                       200       15 ms  ok
-  GET  /races/188/forecast                                           200        6 ms  ok
-  POST /races/188/what-if                                            200      229 ms  ok
-  GET  /races/188/winner-prediction                                  200     4331 ms  ok
-  GET  /races/next/winner-prediction                                 200     2302 ms  ok
-  GET  /drivers/29/history                                           200       26 ms  ok
-  GET  /drivers/29/season/2026                                       200       17 ms  ok
-  GET  /drivers/29/profile                                           200      184 ms  ok
-  GET  /drivers/wet-weather-ranking                                  200       51 ms  ok
-  GET  /compare/29/7                                                 200       17 ms  ok
-  GET  /teams/10/season/2026                                         200       10 ms  ok
-  GET  /tracks/4/stats                                               200        5 ms  ok
-  GET  /tracks/4/overtaking-index                                    200        6 ms  ok
-  GET  /records/all-time                                             200       63 ms  ok
-  GET  /strategy/predict?track_id=4&race_date=2026-09-26             200     1037 ms  ok
-  GET  /championship/2026                                            200        8 ms  ok
-  GET  /championship/2026/history                                    200        7 ms  ok
-  GET  /predict-and-compete/2026/15                                  200        6 ms  ok
-
 === 5 MODELS ===
   2026 titles after round 15, 8 weekends left:
     drivers      Kimi Antonelli 95.9% (302 -> 387 pts), George Russell 3.8% (236 -> 324 pts), Lewis Hamilton 0.2% (199 -> 281 pts), Lando Norris 0.1% (186 -> 271 pts)
     constructors Mercedes 99.9% (538 -> 711 pts), Ferrari 0.1% (378 -> 545 pts), McLaren 0.0% (304 -> 447 pts), Red Bull Racing 0.0% (260 -> 387 pts)
 
+=== REMAINING RACES ===
+  race id  189  2026 R16 Kuala Lumpur             2026-10-04  before qualifying
+  race id  190  2026 R17 Marina Bay               2026-10-11  before qualifying
+  race id  191  2026 R18 Austin                   2026-10-25  before qualifying
+  race id  192  2026 R19 Mexico City              2026-11-01  before qualifying
+  race id  193  2026 R20 São Paulo                2026-11-08  before qualifying
+  race id  194  2026 R21 Las Vegas                2026-11-21  before qualifying
+  race id  195  2026 R22 Lusail                   2026-11-29  before qualifying
+  race id  196  2026 R23 Yas Marina               2026-12-06  before qualifying
+
 === 2026 R16 Kuala Lumpur (2026-10-04) ===
   line-up: line-up of round 15 (entry list not loaded yet); grid: not known yet (before qualifying)
 
-  PRE QUALIFYING: predicted winner George Russell (Mercedes) -- win 13.8%, podium 38.7%
-  confidence LOW: in 97 earlier races where the favourite had 0%-25% at this stage, the favourite won 28%
-        George Russell           Mercedes             win  13.8%  podium  38.7%
-        Charles Leclerc          Ferrari              win  13.5%  podium  36.5%
-        Kimi Antonelli           Mercedes             win  12.8%  podium  36.9%
-        Lando Norris             McLaren              win  12.0%  podium  34.4%
-        Lewis Hamilton           Ferrari              win  11.5%  podium  33.6%
-        Max Verstappen           Red Bull Racing      win   9.9%  podium  29.2%
+  PRE QUALIFYING: predicted winner George Russell (Mercedes) -- win 19.0%, podium 38.7%
+  confidence LOW: in 28 earlier races where the favourite had 0%-25% at this stage, the favourite won 7%
+        George Russell           Mercedes             win  19.0%  podium  38.7%
+        Charles Leclerc          Ferrari              win  18.2%  podium  36.5%
+        Kimi Antonelli           Mercedes             win  16.5%  podium  36.9%
+        Lando Norris             McLaren              win  14.5%  podium  34.4%
+        Lewis Hamilton           Ferrari              win  13.2%  podium  33.6%
+        Max Verstappen           Red Bull Racing      win  10.0%  podium  29.2%
 
-  current stage: pre_qualifying -> predicted winner George Russell, 13.8%, confidence low
+  current stage: pre_qualifying -> predicted winner George Russell, 19.0%, confidence low
 
 === 0 FAIL(S) ===
