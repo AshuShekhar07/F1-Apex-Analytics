@@ -22,6 +22,10 @@ PART 2  CANDIDATE FIXES, each judged against production on the same races
                                  Prix: include its order in the strengths after qualifying
         Run 1 (2026-10): out-of-position w=0.5 PASSED and is now production (the baseline here);
         half-life 4/6/12 and practice pace did not. --all reruns every candidate.
+        Run 2: same-weekend sprint no clear difference (29 sprint weekends: log loss -0.016
+        [-0.044, +0.009]) -> not used. Podium sharpening (winner_prediction_v1 --backtest)
+        halved the podium calibration error but its log loss gain was not clear (-0.0026
+        [-0.0054, +0.0004]) -> kept off by its gate.
         Each variant gets its own walk-forward win calibration, then winner log loss, win
         Brier and favourite-won are compared with production, CI resampling races.
         Promote only BETTER somewhere and WORSE nowhere.
