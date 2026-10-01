@@ -39,6 +39,7 @@ def loaders(season: int) -> list[tuple[str, list[str]]]:
     y = str(season)
     return [
         ("sessions, entries, laps, qualifying, results", ["backfill_history.py"]),
+        ("results missing for drivers who took part", ["repair_missing_race_results_v1.py", "--season", y, "--apply"]),
         ("laps missing for drivers with results", ["repair_session_laps_v1.py", "--season", y, "--apply"]),
         ("weekend format (sprint or not)", ["populate_weekend_format.py"]),
         ("sprint results", ["backfill_sprint_results.py"]),
