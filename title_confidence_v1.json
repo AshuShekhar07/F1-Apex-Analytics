@@ -21,7 +21,44 @@
         "rounds": 34,
         "favourite_won": 0.971,
         "mean_favourite_p": 0.918
-      }
+      },
+      "by_chance": [
+        {
+          "lo": 0.0,
+          "hi": 0.4,
+          "rounds": 10,
+          "mean_p": 0.33,
+          "favourite_won": 0.4
+        },
+        {
+          "lo": 0.4,
+          "hi": 0.6,
+          "rounds": 21,
+          "mean_p": 0.524,
+          "favourite_won": 0.619
+        },
+        {
+          "lo": 0.6,
+          "hi": 0.8,
+          "rounds": 33,
+          "mean_p": 0.712,
+          "favourite_won": 0.636
+        },
+        {
+          "lo": 0.8,
+          "hi": 0.95,
+          "rounds": 26,
+          "mean_p": 0.881,
+          "favourite_won": 0.962
+        },
+        {
+          "lo": 0.95,
+          "hi": 1.01,
+          "rounds": 62,
+          "mean_p": 0.992,
+          "favourite_won": 1.0
+        }
+      ]
     },
     "constructors": {
       "pre_season": {
@@ -43,7 +80,44 @@
         "rounds": 34,
         "favourite_won": 1.0,
         "mean_favourite_p": 0.915
-      }
+      },
+      "by_chance": [
+        {
+          "lo": 0.0,
+          "hi": 0.4,
+          "rounds": 2,
+          "mean_p": 0.363,
+          "favourite_won": 0.5
+        },
+        {
+          "lo": 0.4,
+          "hi": 0.6,
+          "rounds": 10,
+          "mean_p": 0.535,
+          "favourite_won": 0.7
+        },
+        {
+          "lo": 0.6,
+          "hi": 0.8,
+          "rounds": 17,
+          "mean_p": 0.682,
+          "favourite_won": 0.882
+        },
+        {
+          "lo": 0.8,
+          "hi": 0.95,
+          "rounds": 39,
+          "mean_p": 0.884,
+          "favourite_won": 0.59
+        },
+        {
+          "lo": 0.95,
+          "hi": 1.01,
+          "rounds": 84,
+          "mean_p": 0.992,
+          "favourite_won": 0.952
+        }
+      ]
     }
   }
 }
