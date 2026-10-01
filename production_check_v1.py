@@ -110,6 +110,32 @@ def team_id_changes(db, seasons) -> None:
         print(f"  team name '{name}' has several ids: {ids}")
 
 
+def teams_short_of_cars(db, seasons) -> None:
+    """Races where a team has fewer than 2 race results, with the race drivers entered for it
+    that have no result. The title simulation takes each team's cars from the latest race's
+    results, so a missing result leaves that team one car short for the rest of the season."""
+    print("\n=== RACES WHERE A TEAM HAS FEWER THAN 2 RACE RESULTS ===")
+    rows = db.execute(text("""
+        WITH res AS (
+            SELECT s.race_id, re.team_id, COUNT(*) AS n, array_agg(d.name ORDER BY d.name) AS with_result
+            FROM race_results rr JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
+            JOIN race_entries re ON re.id = rr.race_entry_id JOIN drivers d ON d.id = re.driver_id
+            GROUP BY s.race_id, re.team_id)
+        SELECT r.season_year, r.round_number, t.name AS team, res.n, res.with_result,
+               (SELECT array_agg(d.name ORDER BY d.name) FROM race_entries re2 JOIN drivers d ON d.id = re2.driver_id
+                WHERE re2.race_id = r.id AND re2.team_id = res.team_id
+                  AND NOT EXISTS (SELECT 1 FROM race_results rr2 JOIN sessions s2 ON s2.id = rr2.session_id
+                                  AND s2.session_type = 'R' WHERE rr2.race_entry_id = re2.id)) AS entered_no_result
+        FROM res JOIN races r ON r.id = res.race_id JOIN teams t ON t.id = res.team_id
+        WHERE r.season_year = ANY(:s) AND res.n < 2
+        ORDER BY r.season_year, r.round_number, t.name"""), {"s": list(seasons)}).mappings().all()
+    if not rows:
+        print("  none")
+    for r in rows:
+        print(f"  {r['season_year']} R{r['round_number']:<2} {r['team']:20} results for {r['with_result']}; "
+              f"entered without a result: {r['entered_no_result'] or 'nobody (entry missing too)'}")
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -121,6 +147,7 @@ def main() -> int:
         for season in args.titles:
             title_history(db, season)
         team_id_changes(db, sorted({args.season, *args.titles}))
+        teams_short_of_cars(db, sorted({args.season, *args.titles}))
     return 0
 
 

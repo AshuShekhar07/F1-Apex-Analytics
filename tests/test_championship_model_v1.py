@@ -225,3 +225,16 @@ def test_projection_is_stored_and_served(synthetic_db, monkeypatch):
             app.dependency_overrides.pop(get_db, None)
         else:                                   # other modules share the app: put theirs back
             app.dependency_overrides[get_db] = previous
+
+
+def test_season_lineup_tops_a_team_up_to_two_cars():
+    from championship_model_v1 import season_lineup
+
+    full = _weekend(1, [1, 2, 3, 4, 5, 6])
+    missing = _weekend(2, [1, 2, 3, 5, 6])          # driver 4 (team 2) has no result stored
+    lineup = season_lineup([full, missing])
+    assert lineup[4] == 2 and len(lineup) == 6
+    # a seat swap is not undone: the new driver keeps the seat, the old one is not added back
+    swapped = _weekend(3, [1, 2, 3, 7, 5, 6], teams={1: 1, 2: 1, 3: 2, 7: 2, 5: 3, 6: 3})
+    lineup = season_lineup([full, swapped])
+    assert lineup[7] == 2 and 4 not in lineup

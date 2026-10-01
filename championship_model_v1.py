@@ -413,6 +413,23 @@ def race_win_chances(weekends: Sequence[Weekend], *, race_date: date, era: str |
     return race_probabilities(st, entrants, grid_coef=grid_coef, dnf=dnf_rate(before, era), sims=sims), grid_coef
 
 
+def season_lineup(done: Sequence[Weekend], cars_per_team: int = 2) -> dict[int, int]:
+    """driver -> team for the rest of the season: the latest race's starters, topped up to two
+    cars per team with the team's most recent other driver this season. A result missing from
+    the data would otherwise leave a team one car short for every remaining race (which made
+    2025 Mercedes 0.1% after round 2)."""
+    lineup = {r.driver_id: r.team_id for r in done[-1].race}
+    count: dict[int, int] = defaultdict(int)
+    for team in lineup.values():
+        count[team] += 1
+    for w in reversed(done[:-1]):
+        for r in w.race:
+            if r.driver_id not in lineup and count[r.team_id] < cars_per_team:
+                lineup[r.driver_id] = r.team_id
+                count[r.team_id] += 1
+    return lineup
+
+
 @dataclass(frozen=True)
 class SeasonProjection:
     season: int
@@ -440,7 +457,7 @@ def project_season(weekends: Sequence[Weekend], season: int, *, after_round: int
     history = [w for w in weekends if w.raced and w.race_date <= cutoff]
     era = (remaining[0] if remaining else done[-1]).era
     st = fit_strengths(history, era=era, winter_sd=TITLE_WINTER_SD, season=season)
-    lineup = {r.driver_id: r.team_id for r in done[-1].race}
+    lineup = season_lineup(done)
     d_pts, t_pts = standings(done, season)
     proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
                                 dnf=dnf_rate(history, era), sims=sims or SIMS, drift=TITLE_DRIFT)
