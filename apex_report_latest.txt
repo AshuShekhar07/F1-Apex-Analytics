@@ -1,4 +1,4 @@
-APEX21 REPORT  2026-09-30
+APEX21 REPORT  2026-10-01
 
 1. LATEST UPDATE (2026)
   loaders: step 16/16 done in 2s
@@ -37,41 +37,39 @@ APEX21 REPORT  2026-09-30
 
 3. 2026 FORECASTS vs RESULTS
   R1  Melbourne            winner called   podium 2/3  top10 7/10  avg error 4.5
-  R2  Shanghai             winner called   podium 2/3  top10 7/10  avg error 4.1
-  R3  Suzuka               winner called   podium 2/3  top10 8/10  avg error 2.0
-  R4  Miami                winner called   podium 1/3  top10 8/10  avg error 4.0
-  R5  Montréal             winner missed   podium 1/3  top10 6/10  avg error 5.1
+  R2  Shanghai             winner called   podium 3/3  top10 7/10  avg error 4.0
+  R3  Suzuka               winner called   podium 2/3  top10 8/10  avg error 1.9
+  R4  Miami                winner called   podium 1/3  top10 8/10  avg error 3.8
+  R5  Montréal             winner missed   podium 1/3  top10 6/10  avg error 5.2
   R6  Monaco               winner called   podium 2/3  top10 6/10  avg error 5.1
-  R7  Barcelona            winner missed   podium 2/3  top10 7/10  avg error 3.3
-  R8  Spielberg            winner called   podium 2/3  top10 9/10  avg error 1.7
+  R7  Barcelona            winner missed   podium 2/3  top10 7/10  avg error 3.1
+  R8  Spielberg            winner called   podium 1/3  top10 9/10  avg error 1.8
   R9  Silverstone          winner missed   podium 2/3  top10 7/10  avg error 4.3
   R10 Spa-Francorchamps    winner called   podium 2/3  top10 8/10  avg error 2.3
   R11 Budapest             winner missed   podium 1/3  top10 9/10  avg error 2.3
-  R12 Zandvoort            winner called   podium 3/3  top10 7/10  avg error 2.5
-  R13 Monza                winner missed   podium 2/3  top10 9/10  avg error 2.6
-  R14 Madrid               winner missed   podium 3/3  top10 9/10  avg error 2.1
+  R12 Zandvoort            winner called   podium 3/3  top10 7/10  avg error 2.6
+  R13 Monza                winner missed   podium 1/3  top10 9/10  avg error 3.0
+  R14 Madrid               winner missed   podium 3/3  top10 9/10  avg error 2.2
   R15 Baku                 winner called   podium 1/3  top10 6/10  avg error 4.5
 
 4. SCOREBOARD
-  metric                                    grid                     blend        blend_practice_all          blend_driver_all                    stored   better
-  winner_hit                 53.3% [47.2%,59.4%]       57.2% [51.1%,63.3%]       58.3% [52.2%,64.4%]       57.2% [51.1%,63.3%]       53.8% [41.0%,66.7%]   higher
-  podium_overlap             68.3% [65.4%,71.3%]       69.1% [66.3%,72.0%]       69.1% [66.3%,72.0%]       69.3% [66.5%,72.2%]       69.2% [64.1%,74.4%]   higher
-  mae                        3.490 [3.348,3.625]       3.308 [3.165,3.444]       3.289 [3.148,3.425]       3.315 [3.174,3.450]       3.310 [3.010,3.604]   lower
-  mae_finishers              2.916 [2.792,3.036]       2.712 [2.593,2.827]       2.689 [2.573,2.801]       2.718 [2.603,2.830]       2.679 [2.431,2.929]   lower
-  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.5%,2.4%]          1.9% [1.5%,2.4%]          1.8% [1.4%,2.3%]          2.6% [1.3%,3.9%]   lower
-  races / drivers                   180 / 3621                180 / 3621                180 / 3621                180 / 3621                 39 / 808   
-  candidate blend_driver_all: better on nothing, worse on nothing -> keep off
-  candidate blend_practice_all: better on nothing, worse on nothing -> keep off
+  metric                                    grid                     blend        blend_practice_all                    stored   better
+  winner_hit                 53.3% [47.2%,59.4%]       57.2% [51.1%,63.3%]       59.4% [53.3%,65.6%]       56.4% [43.6%,69.2%]   higher
+  podium_overlap             68.3% [65.4%,71.3%]       68.9% [65.9%,72.0%]       68.9% [66.1%,71.9%]       68.4% [62.4%,74.4%]   higher
+  mae                        3.490 [3.348,3.625]       3.314 [3.174,3.451]       3.292 [3.152,3.427]       3.327 [3.042,3.630]   lower
+  mae_finishers              2.916 [2.792,3.036]       2.715 [2.596,2.830]       2.696 [2.581,2.808]       2.697 [2.463,2.949]   lower
+  bad_miss_finishers            3.7% [3.1%,4.3%]          1.9% [1.4%,2.4%]          2.0% [1.5%,2.5%]          2.7% [1.5%,4.0%]   lower
+  races / drivers                   180 / 3621                180 / 3621                180 / 3621                 39 / 808   
+  candidate blend_practice_all: better on ['rank_corr'], worse on nothing -> PROMOTE
   WHERE THE ERROR COMES FROM (production blend; each driver in one group)
-    retired (not classified)                               546 drivers   31.8% of all error  avg 6.97 places
-    grid penalty / pit-lane start (>= 3 places back)       173 drivers    5.1% of all error  avg 3.54 places
-    lap 1 changed position by >= 5                         181 drivers    6.5% of all error  avg 4.29 places
-    wet race                                               642 drivers   15.2% of all error  avg 2.83 places
-    everything else                                       2079 drivers   41.4% of all error  avg 2.39 places
+    retired (not classified)                               546 drivers   31.8% of all error  avg 6.99 places
+    grid penalty / pit-lane start (>= 3 places back)       173 drivers    5.3% of all error  avg 3.64 places
+    lap 1 changed position by >= 5                         181 drivers    6.5% of all error  avg 4.30 places
+    wet race                                               642 drivers   14.9% of all error  avg 2.79 places
+    everything else                                       2079 drivers   41.5% of all error  avg 2.39 places
     hindsight: finishers' error if we knew the order after lap 1 = 2.60 places (production before the start: 2.66)
-    blend_pass (strength, margin) per season: 2018: 0.50/0.2%, 2019: 0.50/0.0%, 2020: 1.00/0.3%, 2021: 1.00/0.5%, 2022: 0.50/0.0%, 2023: 1.00/0.5%, 2024: 0.50/0.0%, 2025: 1.00/0.5%, 2026: 1.00/0.5%
-    recovery weight for out-of-position drivers (own / everyone else) per season: 2018: -/0.5, 2019: 1.0/0.5, 2020: 0.9/0.5, 2021: 0.9/0.5, 2022: 0.7/0.5, 2023: 0.8/0.5, 2024: 0.8/0.5, 2025: 0.8/0.5, 2026: 0.8/0.4
-    out-of-position finishers: 3.54 places (n=173)
+    recovery weight for out-of-position drivers (own / everyone else) per season: 2018: -/0.5, 2019: 1.0/0.5, 2020: 1.0/0.5, 2021: 0.8/0.5, 2022: 0.7/0.5, 2023: 0.8/0.5, 2024: 0.8/0.5, 2025: 0.8/0.5, 2026: 0.8/0.3
+    out-of-position finishers: 3.64 places (n=173)
   NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races)
     team form (production)                       r=+0.335 [+0.286, +0.386] n= 2601  REAL signal
     team form from car-pace residuals            r=+0.343 [+0.294, +0.393] n= 2601  REAL signal
@@ -79,11 +77,13 @@ APEX21 REPORT  2026-09-30
     sprint-race pace vs qualifying pace          r=+0.376 [+0.202, +0.546] n=  329  REAL signal
     sprint pace: 470 drivers in 24 sprint weekends; beta per season: 2018: 0.00, 2019: 0.00, 2020: 0.00, 2021: 0.00, 2022: 0.17, 2023: 0.32, 2024: 0.32, 2025: 0.38, 2026: 0.40
   CONFIDENCE LABEL (walk-forward; ranges should contain 80% of drivers)
-    all races                    n= 3281  inside range  82.4%  said 3.46 places  actual 3.28  ok
-    dry qualifying               n= 2216  inside range  83.0%  said 3.31 places  actual 3.08  ok
-    wet qualifying               n=  563  inside range  79.9%  said 3.77 places  actual 3.79  ok
-    rain forecast for the race   n=  502  inside range  82.3%  said 3.79 places  actual 3.61  ok
+    all races                    n= 3281  inside range  82.2%  said 3.47 places  actual 3.29  ok
+    dry qualifying               n= 2216  inside range  82.9%  said 3.32 places  actual 3.09  ok
+    wet qualifying               n=  563  inside range  80.1%  said 3.77 places  actual 3.80  ok
+    rain forecast for the race   n=  502  inside range  81.7%  said 3.78 places  actual 3.55  ok
     (rain forecast rows use the actual race weather as a perfect forecast)
   in wet qualifying: 83 of 743 drivers (11.2%) across 37 races
   CAR PACE RULE: replaced the driver's own lap for 227 of 3621 drivers (6.3%); it should be rare
+  PRACTICE PACE: long-run data for 2044 of 3621 drivers (56%); FP1+FP2 combined: 2345 (65%)
   regression gate vs scoreboard_baseline_2018.json: PASS
+  baseline re-saved to scoreboard_baseline_2018.json
