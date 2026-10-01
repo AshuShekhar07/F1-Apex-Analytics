@@ -492,3 +492,27 @@ def test_replay_shows_prediction_titles_and_outcome(forecast_db, capsys, monkeyp
     out = capsys.readouterr().out
     assert "REPLAY: 2024" in out and "WHAT HAPPENED: P1" in out and "TITLES after round" in out
     assert "we gave the winner" in out
+
+
+def test_winner_diagnostics_run(forecast_db, capsys, monkeypatch):
+    import championship_model_v1
+    import winner_diagnostics_v1 as wd
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    monkeypatch.setattr(wd, "SIMS", 300)
+    with forecast_db.connect() as db:
+        weekends = championship_model_v1.load_weekends(db, start_year=2018)
+        cases = wd.load_cases(db, weekends, 2022)
+    raced = [w for w in weekends if w.raced]
+    assert cases and all(c.winner for c in cases)
+    base = {s: wd.evaluate(wd.Model(raced), cases, s) for s in wd.STAGES}
+    for rows in base.values():
+        wd.calibrate(rows)
+    wd.part1(base)
+    rows = wd.evaluate(wd.Model(raced, recovery=0.5), cases, "post_qualifying")
+    wd.calibrate(rows)
+    lines = wd.compare(rows, base["post_qualifying"], "post")
+    prac = wd.evaluate(wd.Model(raced, practice=True), cases, "pre_qualifying")
+    out = capsys.readouterr().out
+    assert "WHERE THE MISSES COME FROM" in out and "favourite's record by situation" in out
+    assert lines[0].startswith("    post (") and all(r["beta"] == 0.0 for r in prac)   # too few races to fit beta

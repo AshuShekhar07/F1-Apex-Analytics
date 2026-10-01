@@ -122,11 +122,12 @@ class Strengths:
         return self.car.get(team_id, 0.0) + self.skill.get(driver_id, 0.0)
 
 
-def _orders(weekends: Sequence[Weekend], era: str | None) -> list[tuple[float, int, list[tuple[int, int]]]]:
+def _orders(weekends: Sequence[Weekend], era: str | None,
+            half_life: float | None = None) -> list[tuple[float, int, list[tuple[int, int]]]]:
     """(weight, season, [(driver, team) in finishing order]) for every race/sprint, newest first."""
     out = []
     for age, w in enumerate(reversed(weekends[-MAX_HISTORY:])):
-        base = 0.5 ** (age / HALF_LIFE) * (1.0 if (era is None or w.era == era) else OTHER_ERA_WEIGHT)
+        base = 0.5 ** (age / (half_life or HALF_LIFE)) * (1.0 if (era is None or w.era == era) else OTHER_ERA_WEIGHT)
         for results, factor in ((w.race, 1.0), (w.sprint, SPRINT_WEIGHT)):
             finishers = sorted((r for r in results if r.classified and r.finish), key=lambda r: r.finish)
             if len(finishers) >= 2:
@@ -143,13 +144,13 @@ def pl_loglik_grad(s: np.ndarray) -> tuple[float, np.ndarray]:
 
 
 def fit_strengths(weekends: Sequence[Weekend], *, era: str | None = None, winter_sd: float | None = None,
-                  season: int | None = None) -> Strengths:
+                  season: int | None = None, half_life: float | None = None) -> Strengths:
     """MAP car and skill strengths from the given (earlier) weekends.
 
     winter_sd None: one car strength per team across seasons. Otherwise one per team and
     season (see module doc); the returned car is the one of `season` (the season being
     predicted), or, before that team has raced in it, its latest earlier car."""
-    orders = _orders(weekends, era)
+    orders = _orders(weekends, era, half_life)
     if not orders:
         return Strengths({}, {})
     season_cars = winter_sd is not None
@@ -390,13 +391,13 @@ VALIDATION = {
 }
 
 
-def _cached_strengths(winter_sd: float | None):
+def _cached_strengths(winter_sd: float | None, half_life: float | None = None):
     cache: dict = {}
 
     def strengths_for(before: Sequence[Weekend], w: Weekend) -> Strengths:
         key = (len(before), w.era, w.season)
         if key not in cache:
-            cache[key] = fit_strengths(before, era=w.era, winter_sd=winter_sd, season=w.season)
+            cache[key] = fit_strengths(before, era=w.era, winter_sd=winter_sd, season=w.season, half_life=half_life)
         return cache[key]
     return strengths_for
 
