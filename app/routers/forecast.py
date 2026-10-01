@@ -50,6 +50,46 @@ def _load_forecast(db: Session, race_id: int) -> Optional[dict]:
     """), {"r": race_id, "v": MODEL_VERSION}).mappings().first()
 
 
+_WINNER_CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
+
+
+def _winner_prediction(db: Session, race_id: int) -> dict:
+    """winner_prediction_v1.predict, cached until new results, qualifying or grid arrive."""
+    import winner_prediction_v1 as wp
+
+    fingerprint = tuple(db.execute(text("""
+        SELECT (SELECT COUNT(*) FROM race_results),
+               (SELECT COUNT(*) FROM qualifying_results q JOIN sessions s ON s.id = q.session_id WHERE s.race_id = :r),
+               (SELECT COUNT(*) FROM race_entries WHERE race_id = :r)"""), {"r": race_id}).one())
+    key = (race_id, *fingerprint, len(wp.provisional_grid_rows(db, race_id)))
+    if key not in _WINNER_CACHE:
+        try:
+            _WINNER_CACHE[key] = wp.predict(db, race_id)
+        except wp.PredictionError as exc:
+            raise HTTPException(status_code=404, detail=f"No winner prediction: {exc}")
+        if len(_WINNER_CACHE) > 32:
+            _WINNER_CACHE.popitem(last=False)
+    return _WINNER_CACHE[key]
+
+
+@router.get("/next/winner-prediction")
+def next_winner_prediction(db: Session = Depends(get_db)):
+    """Predicted winner of the next race: before qualifying from car and driver strength only
+    (lower confidence), after qualifying with the grid too (higher confidence)."""
+    import winner_prediction_v1 as wp
+
+    try:
+        race_id = wp.next_race_id(db)
+    except wp.PredictionError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return _winner_prediction(db, race_id)
+
+
+@router.get("/{race_id}/winner-prediction")
+def winner_prediction(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
+    return _winner_prediction(db, race_id)
+
+
 @router.get("/{race_id}/forecast")
 def get_forecast(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
     forecast = _load_forecast(db, race_id)

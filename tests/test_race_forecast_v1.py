@@ -365,3 +365,79 @@ def test_production_check_report_runs(forecast_db, capsys):
     out = capsys.readouterr().out
     assert "favourite" in out and "not raced yet" in out and "favourite won" in out
     assert "nothing stored" in out or "round" in out
+
+
+def test_winner_prediction_before_and_after_qualifying(forecast_db, monkeypatch):
+    import championship_model_v1
+    import winner_prediction_v1 as wp
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    with forecast_db.connect() as db:
+        after = wp.predict(db, 7)                  # qualifying in, race not run
+        before = wp.predict(db, 8)                 # no qualifying yet
+    assert after["stage"] == "post_qualifying" and set(after["stages"]) == set(wp.STAGES)
+    assert after["grid_source"] == "qualifying"
+    assert before["stage"] == "pre_qualifying" and set(before["stages"]) == {"pre_qualifying"}
+    assert before["lineup_source"].startswith("line-up of round")   # no entry list loaded for race 8
+    for pred in (after, before):
+        block = pred["stages"][pred["stage"]]
+        assert sum(d["p_win"] for d in block["drivers"]) == pytest.approx(1.0, abs=0.01)
+        assert pred["predicted_winner"] == block["favourite"] == {k: block["drivers"][0][k] for k in block["favourite"]}
+        assert pred["confidence"]["level"] in ("high", "medium", "low")
+    # the grid only exists after qualifying
+    assert all(d["grid"] is None for d in after["stages"]["pre_qualifying"]["drivers"])
+    assert all(d["grid"] for d in after["stages"]["post_qualifying"]["drivers"])
+
+
+def test_winner_confidence_uses_measured_bins():
+    import winner_prediction_v1 as wp
+
+    table = {"pre_qualifying": {"races": 100, "favourite_won": 0.45,
+                                "bins": [{"lo": 0.25, "hi": 0.35, "races": 40, "mean_p": 0.3, "favourite_won": 0.30},
+                                         {"lo": 0.45, "hi": 0.6, "races": 5, "mean_p": 0.5, "favourite_won": 1.0}]},
+             "post_qualifying": {"races": 100, "favourite_won": 0.6, "bins": []}}
+    assert wp.confidence("pre_qualifying", 0.3, table)["level"] == "low"          # bin: 30%
+    small = wp.confidence("pre_qualifying", 0.5, table)                            # bin too small -> stage record
+    assert small["favourite_won_historically"] == 0.45 and small["level"] == "medium"
+    assert wp.confidence("post_qualifying", 0.4, table)["level"] == "high"
+    assert wp.confidence("post_qualifying", 0.4, wp.FALLBACK)["stage_record"] == 0.572
+
+
+def test_winner_backtest_measures_both_stages():
+    import winner_prediction_v1 as wp
+    from test_championship_model_v1 import _weekend
+
+    # the pole sitter always wins and is a different driver each race: only the grid tells
+    weekends = []
+    for i in range(1, 25):
+        order = [((i + k) % 6) + 1 for k in range(6)]
+        weekends.append(_weekend(i, order, season=2023 + (i > 12), grid={d: p for p, d in enumerate(order, start=1)}))
+    out = wp.backtest(weekends, 2024, 2024, sims=500)
+    assert out["post_qualifying"]["favourite_won"] > out["pre_qualifying"]["favourite_won"]
+    assert out["post_qualifying"]["races"] == out["pre_qualifying"]["races"] == 12
+
+
+def test_winner_prediction_endpoints(client, monkeypatch):
+    import championship_model_v1
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    body = client.get("/races/7/winner-prediction").json()
+    assert body["stage"] == "post_qualifying" and body["predicted_winner"]["driver_name"].startswith("Driver")
+    assert client.get("/races/8/winner-prediction").json()["stage"] == "pre_qualifying"
+    assert client.get("/races/999/winner-prediction").status_code == 404
+
+
+def test_system_check_runs_on_a_small_database(forecast_db, client, capsys, monkeypatch):
+    import championship_model_v1
+    import system_check_v1 as sc
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    with forecast_db.connect() as db:
+        sc.coverage(db, 2025)
+        sc.quality(db, 2025)
+        sc.api(db)
+    out = capsys.readouterr().out
+    print(out)                     # shown with -s: the endpoint table is the useful part
+    assert "DATA COVERAGE" in out and "API" in out
+    api_fails = [p for p in sc.problems if p.startswith("API")]
+    assert api_fails == [], api_fails
