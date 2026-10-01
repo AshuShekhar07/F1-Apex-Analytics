@@ -12,6 +12,10 @@
       favourite had 45%-60%:   34 races, said 52.1%, won 52.9% -> medium
       favourite had 60%-100%:   39 races, said 74.5%, won 69.2% -> high
     sharpening k by season (fitted on earlier seasons): {2019: 1.0, 2020: 1.935, 2021: 2.112, 2022: 2.156, 2023: 2.23, 2024: 2.408, 2025: 2.086, 2026: 1.979}; now 1.957
+    season_start     24 races: favourite won 37.5% (average favourite chance 42.8%) -> medium
+    early_season     32 races: favourite won 53.1% (average favourite chance 47.8%) -> medium
+    established     111 races: favourite won 43.2% (average favourite chance 46.0%) -> medium
+    new_regulations    6 races: favourite won 0.0% (average favourite chance 30.2%) -> low
     log loss change -0.1771 [-0.2546, -0.0987], calibration error 0.0217 -> 0.0065  => PROMOTED
 
   POST_QUALIFYING: 167 races
@@ -27,8 +31,48 @@
       favourite had 45%-60%:   53 races, said 53.1%, won 64.2% -> high
       favourite had 60%-100%:   54 races, said 74.6%, won 72.2% -> high
     sharpening k by season (fitted on earlier seasons): {2019: 1.0, 2020: 1.247, 2021: 1.302, 2022: 1.402, 2023: 1.541, 2024: 1.693, 2025: 1.532, 2026: 1.537}; now 1.554
+    season_start     24 races: favourite won 66.7% (average favourite chance 54.4%) -> high
+    early_season     32 races: favourite won 62.5% (average favourite chance 59.1%) -> high
+    established     111 races: favourite won 56.8% (average favourite chance 53.7%) -> high
+    new_regulations    6 races: favourite won 50.0% (average favourite chance 39.1%) -> medium
     log loss change -0.0937 [-0.1382, -0.0469], calibration error 0.0175 -> 0.0086  => PROMOTED
   saved winner_confidence_v1.json
+=== TITLE CONFIDENCE (completed seasons from 2019; favourite = highest title chance) ===
+  drivers      pre_season    7 projections: favourite became champion 43% (average favourite chance 53%)
+  drivers      early        36 projections: favourite became champion 69% (average favourite chance 65%)
+  drivers      mid          75 projections: favourite became champion 85% (average favourite chance 85%)
+  drivers      late         34 projections: favourite became champion 97% (average favourite chance 92%)
+  constructors pre_season    7 projections: favourite became champion 57% (average favourite chance 65%)
+  constructors early        36 projections: favourite became champion 78% (average favourite chance 81%)
+  constructors mid          75 projections: favourite became champion 80% (average favourite chance 94%)
+  constructors late         34 projections: favourite became champion 100% (average favourite chance 92%)
+  saved title_confidence_v1.json
+championship projection 2025: stored after round(s) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+  drivers after round 24:
+    Lando Norris             title 100.0%   points   423   expected   423
+    Max Verstappen           title   0.0%   points   421   expected   421
+    Oscar Piastri            title   0.0%   points   410   expected   410
+    George Russell           title   0.0%   points   319   expected   319
+    Charles Leclerc          title   0.0%   points   242   expected   242
+  constructors after round 24:
+    McLaren                  title 100.0%   points   833   expected   833
+    Mercedes                 title   0.0%   points   469   expected   469
+    Red Bull Racing          title   0.0%   points   451   expected   451
+    Ferrari                  title   0.0%   points   398   expected   398
+    Williams                 title   0.0%   points   137   expected   137
+championship projection 2026: stored after round(s) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  drivers after round 15:
+    Kimi Antonelli           title  95.9%   points   302   expected   387
+    George Russell           title   3.8%   points   236   expected   324
+    Lewis Hamilton           title   0.2%   points   199   expected   280
+    Lando Norris             title   0.1%   points   186   expected   271
+    Charles Leclerc          title   0.0%   points   179   expected   264
+  constructors after round 15:
+    Mercedes                 title  99.9%   points   538   expected   711
+    Ferrari                  title   0.1%   points   378   expected   545
+    McLaren                  title   0.0%   points   304   expected   447
+    Red Bull Racing          title   0.0%   points   260   expected   387
+    Racing Bulls             title   0.0%   points    79   expected   142
 race 174: stored forecast 23 (starting_grid), predicted winner driver 29  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Lance Stroll's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Max Verstappen's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; car pace: Carlos Sainz's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 4/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; strategy: no dry era3_2026regs races yet, using era2_18inch_groundeffect strategies; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
 race 175: stored forecast 24 (starting_grid), predicted winner driver 65  notes: pace model: too few era3_2026regs races yet, using era2_18inch_groundeffect relation; team race form: no earlier races in this era, form = 0 for every team; car pace: Sergio Perez's qualifying lap was missing or well off the teammate's; using the teammate's pace + 0.3%; practice: long-run pace for 10/22 drivers (FP1), correction beta 0.24; sprint: race pace from the sprint for 20/22 drivers, correction beta 0.40; out of position (grid penalty / pit lane): Alexander Albon; recovery weight 0.8; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (green): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
 race 176: stored forecast 25 (starting_grid), predicted winner driver 65  notes: team race form: no earlier races in this era, form = 0 for every team; practice: long-run pace for 15/22 drivers (FP2), correction beta 0.24; grid-slot rates and retirement rate: fewer than 200 era3_2026regs results, using all earlier eras; pit loss (sc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; pit loss (vsc): no era3_2026regs evidence yet, using era2_18inch_groundeffect; Safety Car / VSC / red-flag rates: no earlier seasons in this era, using all eras; win/podium chances: strength model, grid effect 1.16; win chances calibrated on earlier winners (sharpening 1.55)
@@ -82,7 +126,9 @@ race 188: stored forecast 339 (starting_grid), predicted winner driver 29  notes
 === 5 MODELS ===
   2026 titles after round 15, 8 weekends left:
     drivers      Kimi Antonelli 95.9% (302 -> 387 pts), George Russell 3.8% (236 -> 324 pts), Lewis Hamilton 0.2% (199 -> 281 pts), Lando Norris 0.1% (186 -> 271 pts)
+                 confidence HIGH: second and third quarters: in 75 earlier projections at this stage, the favourite became champion 85% of the time
     constructors Mercedes 99.9% (538 -> 711 pts), Ferrari 0.1% (378 -> 545 pts), McLaren 0.0% (304 -> 447 pts), Red Bull Racing 0.0% (260 -> 387 pts)
+                 confidence HIGH: second and third quarters: in 75 earlier projections at this stage, the favourite became champion 80% of the time
 
 === REMAINING RACES ===
   race id  189  2026 R16 Kuala Lumpur             2026-10-04  before qualifying
@@ -96,9 +142,10 @@ race 188: stored forecast 339 (starting_grid), predicted winner driver 29  notes
 
 === 2026 R16 Kuala Lumpur (2026-10-04) ===
   line-up: line-up of round 15 (entry list not loaded yet); grid: not known yet (before qualifying)
+  evidence: 15 races run this season, 15 under these regulations (established)
 
   PRE QUALIFYING: predicted winner George Russell (Mercedes) -- win 19.0%, podium 38.7%
-  confidence LOW: in 28 earlier races where the favourite had 0%-25% at this stage, the favourite won 7%
+  confidence LOW: in 28 earlier races where the favourite had 0%-25% at this stage, the favourite won 7%; with 7+ races of the season run, the favourite won 43% of 111 earlier races at this stage
         George Russell           Mercedes             win  19.0%  podium  38.7%
         Charles Leclerc          Ferrari              win  18.2%  podium  36.5%
         Kimi Antonelli           Mercedes             win  16.5%  podium  36.9%

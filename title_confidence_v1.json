@@ -1,0 +1,49 @@
+{
+  "source": "championship_projection_v1 --backtest, completed seasons 2019-2026, each round projected from the races before it",
+  "titles": {
+    "drivers": {
+      "pre_season": {
+        "rounds": 7,
+        "favourite_won": 0.429,
+        "mean_favourite_p": 0.526
+      },
+      "early": {
+        "rounds": 36,
+        "favourite_won": 0.694,
+        "mean_favourite_p": 0.65
+      },
+      "mid": {
+        "rounds": 75,
+        "favourite_won": 0.853,
+        "mean_favourite_p": 0.852
+      },
+      "late": {
+        "rounds": 34,
+        "favourite_won": 0.971,
+        "mean_favourite_p": 0.918
+      }
+    },
+    "constructors": {
+      "pre_season": {
+        "rounds": 7,
+        "favourite_won": 0.571,
+        "mean_favourite_p": 0.647
+      },
+      "early": {
+        "rounds": 36,
+        "favourite_won": 0.778,
+        "mean_favourite_p": 0.808
+      },
+      "mid": {
+        "rounds": 75,
+        "favourite_won": 0.8,
+        "mean_favourite_p": 0.943
+      },
+      "late": {
+        "rounds": 34,
+        "favourite_won": 1.0,
+        "mean_favourite_p": 0.915
+      }
+    }
+  }
+}
