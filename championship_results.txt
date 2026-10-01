@@ -10,12 +10,6 @@
 
 === RACE WINNER (each race, grid known; lower Brier / log loss = better) ===
   152 races; grid effect per season: 2019: 1.27, 2020: 0.83, 2021: 0.68, 2022: 0.58, 2023: 0.75, 2024: 0.99, 2025: 1.07
-  scaled model (strength scale, grid effect) per season: 2019: (0.96, 1.29), 2020: (0.72, 1.06), 2021: (0.66, 0.97), 2022: (0.62, 0.88), 2023: (0.71, 0.92), 2024: (0.81, 1.06), 2025: (0.71, 1.19)
-  strength + grid, scaled  favourite_won 55.3%  brier_win 0.0310  brier_podium 0.0677  log_loss_win 1.3653
-      vs production brier_win      -0.0024 [-0.0038, -0.0011]  BETTER
-      vs production brier_podium   -0.0014 [-0.0037, +0.0009]  no clear difference
-      vs production log_loss_win   -0.1661 [-0.2634, -0.0737]  BETTER
-      vs production favourite_won  +0.0329 [-0.0066, +0.0724]  no clear difference
   strength + grid          favourite_won 57.2%  brier_win 0.0306  brier_podium 0.0682  log_loss_win 1.3297
       vs production brier_win      -0.0029 [-0.0047, -0.0011]  BETTER
       vs production brier_podium   -0.0009 [-0.0036, +0.0018]  no clear difference
@@ -30,53 +24,53 @@
   pole sitter              favourite_won 52.6%
       vs production favourite_won  +0.0066 [+0.0000, +0.0197]  no clear difference
 
-  car-development drift chosen walk-forward per season: 2018: 0.06, 2019: 0.15, 2020: 0.1, 2021: 0.06, 2022: 0.15, 2023: 0.15, 2024: 0.1, 2025: 0.15; for the projection: 0.15
-  strength scale for season simulations (learned before each season, 1 = trust fully): 2018: 1.00, 2019: 1.28, 2020: 1.04, 2021: 0.98, 2022: 0.93, 2023: 1.03, 2024: 1.07, 2025: 0.99
+  (drift, new-car doubt) chosen walk-forward per season: 2018: (0.06, 0.3), 2019: (0.0, 0.6), 2020: (0.0, 0.3), 2021: (0.0, 0.3), 2022: (0.15, 0.0), 2023: (0.0, 0.3), 2024: (0.0, 0.3), 2025: (0.15, 1.0); for the projection: (0.15, 1.0)
+  drift chosen walk-forward (doubt 0, previous version): 2018: 0.06, 2019: 0.15, 2020: 0.15, 2021: 0.06, 2022: 0.15, 2023: 0.15, 2024: 0.15, 2025: 0.15
 
 === DRIVERS CHAMPIONSHIP (2018-2025, every round) ===
   stage            model                       chance given to champion  favourite right  log loss   Brier
-  first quarter    model, development drift                       50.5%            59.6%     0.936   0.498
-  first quarter    model, static cars                             52.8%            63.8%     0.935   0.500
-  first quarter    model, unscaled (previous)                     52.2%            63.8%     0.943   0.504
+  first quarter    model, drift + new-car doubt                     49.9%            59.6%     0.936   0.496
+  first quarter    model, development drift                       49.4%            59.6%     0.954   0.505
+  first quarter    model, static cars                             52.2%            63.8%     0.943   0.504
   first quarter    points leader wins                             45.5%            44.7%     3.155   0.928
   first quarter    in proportion to points                        16.3%            44.7%     2.015   0.792
-  second quarter   model, development drift                       80.7%            97.6%     0.247   0.118
-  second quarter   model, static cars                             82.0%            95.1%     0.226   0.112
-  second quarter   model, unscaled (previous)                     81.9%            95.1%     0.227   0.113
+  second quarter   model, drift + new-car doubt                     79.6%            95.1%     0.273   0.127
+  second quarter   model, development drift                       80.4%            97.6%     0.250   0.118
+  second quarter   model, static cars                             81.9%            95.1%     0.227   0.113
   second quarter   points leader wins                             78.0%            78.0%     1.516   0.439
   second quarter   in proportion to points                        19.5%            78.0%     1.644   0.729
-  third quarter    model, development drift                       79.8%            79.5%     0.309   0.222
-  third quarter    model, static cars                             79.6%            79.5%     0.318   0.231
-  third quarter    model, unscaled (previous)                     79.7%            79.5%     0.317   0.231
+  third quarter    model, drift + new-car doubt                     79.7%            79.5%     0.313   0.225
+  third quarter    model, development drift                       79.7%            79.5%     0.310   0.223
+  third quarter    model, static cars                             79.7%            79.5%     0.317   0.231
   third quarter    points leader wins                             79.5%            79.5%     1.413   0.409
   third quarter    in proportion to points                        19.0%            79.5%     1.667   0.732
+  last quarter     model, drift + new-car doubt                     90.5%            95.1%     0.133   0.087
   last quarter     model, development drift                       90.6%            95.1%     0.131   0.085
-  last quarter     model, static cars                             90.5%            92.7%     0.134   0.088
-  last quarter     model, unscaled (previous)                     90.5%            92.7%     0.133   0.088
+  last quarter     model, static cars                             90.5%            92.7%     0.133   0.088
   last quarter     points leader wins                             93.9%            95.1%     0.354   0.110
   last quarter     in proportion to points                        18.9%            95.1%     1.670   0.732
-  all rounds   model, development drift   log loss 0.422  Brier 0.240  champion's chance moves 6.5%/round (largest 43%)
-  all rounds   model, static cars         log loss 0.420  Brier 0.242  champion's chance moves 6.6%/round (largest 48%)
-  all rounds   model, unscaled (previous) log loss 0.422  Brier 0.243  champion's chance moves 6.6%/round (largest 51%)
+  all rounds   model, drift + new-car doubt log loss 0.430  Brier 0.242  champion's chance moves 6.4%/round (largest 43%)
+  all rounds   model, development drift   log loss 0.428  Brier 0.242  champion's chance moves 6.6%/round (largest 43%)
+  all rounds   model, static cars         log loss 0.422  Brier 0.243  champion's chance moves 6.6%/round (largest 51%)
   all rounds   points leader wins         log loss 1.660  Brier 0.486  champion's chance moves 12.5%/round (largest 100%)
   all rounds   in proportion to points    log loss 1.757  Brier 0.748  champion's chance moves 1.6%/round (largest 20%)
-  calibration (model, development drift): when we said X, they became champion Y
-        0%-2%  n= 3164  said   0.0%  happened   0.0%
-       2%-10%  n=  139  said   5.0%  happened   2.2%
-      10%-25%  n=   83  said  15.9%  happened  12.0%
-      25%-50%  n=   51  said  36.3%  happened  49.0%
-      50%-75%  n=   44  said  62.0%  happened  61.4%
-      75%-90%  n=   32  said  81.7%  happened  84.4%
+  calibration (model, drift + new-car doubt): when we said X, they became champion Y
+        0%-2%  n= 3152  said   0.0%  happened   0.0%
+       2%-10%  n=  145  said   5.1%  happened   2.1%
+      10%-25%  n=   90  said  16.0%  happened  13.3%
+      25%-50%  n=   55  said  35.9%  happened  47.3%
+      50%-75%  n=   43  said  63.6%  happened  65.1%
+      75%-90%  n=   28  said  82.4%  happened  82.1%
      90%-100%  n=   81  said  98.4%  happened 100.0%
+  calibration (model, development drift): when we said X, they became champion Y
+        0%-2%  n= 3159  said   0.0%  happened   0.0%
+       2%-10%  n=  142  said   5.1%  happened   2.1%
+      10%-25%  n=   84  said  16.0%  happened  11.9%
+      25%-50%  n=   53  said  36.2%  happened  49.1%
+      50%-75%  n=   45  said  62.2%  happened  62.2%
+      75%-90%  n=   31  said  81.9%  happened  83.9%
+     90%-100%  n=   80  said  98.2%  happened 100.0%
   calibration (model, static cars): when we said X, they became champion Y
-        0%-2%  n= 3195  said   0.0%  happened   0.0%
-       2%-10%  n=  121  said   5.0%  happened   3.3%
-      10%-25%  n=   67  said  15.9%  happened  13.4%
-      25%-50%  n=   51  said  37.1%  happened  49.0%
-      50%-75%  n=   42  said  62.1%  happened  59.5%
-      75%-90%  n=   36  said  82.1%  happened  77.8%
-     90%-100%  n=   82  said  98.5%  happened 100.0%
-  calibration (model, unscaled (previous)): when we said X, they became champion Y
         0%-2%  n= 3192  said   0.0%  happened   0.0%
        2%-10%  n=  125  said   5.0%  happened   4.0%
       10%-25%  n=   66  said  16.2%  happened  12.1%
@@ -84,62 +78,62 @@
       50%-75%  n=   44  said  62.5%  happened  61.4%
       75%-90%  n=   34  said  82.1%  happened  76.5%
      90%-100%  n=   82  said  98.5%  happened 100.0%
-  most confident wrong calls (model, development drift):
-    2021 before round  5: Lewis Hamilton          87.1%   champion Max Verstappen          11.3%
-    2021 before round  4: Lewis Hamilton          82.9%   champion Max Verstappen          14.9%
-    2021 before round  3: Lewis Hamilton          79.8%   champion Max Verstappen          17.1%
-    2025 before round 18: Oscar Piastri           75.9%   champion Lando Norris            24.1%
-    2021 before round  2: Lewis Hamilton          75.5%   champion Max Verstappen          16.6%
-    2018 before round  3: Sebastian Vettel        74.8%   champion Lewis Hamilton           6.5%
-    2025 before round 16: Oscar Piastri           74.7%   champion Lando Norris            25.3%
-    2025 before round 19: Oscar Piastri           73.4%   champion Lando Norris            26.6%
-    2021 before round  1: Lewis Hamilton          73.3%   champion Max Verstappen          18.1%
-    2025 before round 17: Oscar Piastri           73.0%   champion Lando Norris            27.0%
+  most confident wrong calls (model, drift + new-car doubt):
+    2021 before round  5: Lewis Hamilton          85.4%   champion Max Verstappen          12.6%
+    2021 before round  4: Lewis Hamilton          81.6%   champion Max Verstappen          15.5%
+    2021 before round  3: Lewis Hamilton          78.1%   champion Max Verstappen          18.3%
+    2025 before round 18: Oscar Piastri           76.7%   champion Lando Norris            23.1%
+    2025 before round 16: Oscar Piastri           76.2%   champion Lando Norris            23.7%
+    2021 before round  2: Lewis Hamilton          74.1%   champion Max Verstappen          17.4%
+    2025 before round 19: Oscar Piastri           73.9%   champion Lando Norris            25.9%
+    2025 before round 17: Oscar Piastri           73.4%   champion Lando Norris            26.6%
+    2018 before round  3: Sebastian Vettel        72.6%   champion Lewis Hamilton           8.1%
+    2021 before round 12: Lewis Hamilton          71.1%   champion Max Verstappen          28.4%
 
 === CONSTRUCTORS CHAMPIONSHIP (2018-2025, every round) ===
   stage            model                       chance given to champion  favourite right  log loss   Brier
-  first quarter    model, development drift                       60.0%            70.2%     1.365   0.503
-  first quarter    model, static cars                             64.4%            70.2%     1.350   0.505
-  first quarter    model, unscaled (previous)                     64.3%            70.2%     1.353   0.507
+  first quarter    model, drift + new-car doubt                     58.5%            70.2%     1.372   0.511
+  first quarter    model, development drift                       59.2%            70.2%     1.360   0.497
+  first quarter    model, static cars                             64.3%            70.2%     1.353   0.507
   first quarter    points leader wins                             53.8%            57.4%     2.464   0.760
   first quarter    in proportion to points                        27.3%            57.4%     1.511   0.668
-  second quarter   model, development drift                       69.5%            70.7%     1.330   0.490
-  second quarter   model, static cars                             70.6%            70.7%     1.341   0.501
-  second quarter   model, unscaled (previous)                     70.6%            70.7%     1.342   0.501
+  second quarter   model, drift + new-car doubt                     68.1%            70.7%     1.346   0.498
+  second quarter   model, development drift                       69.4%            70.7%     1.320   0.481
+  second quarter   model, static cars                             70.6%            70.7%     1.342   0.501
   second quarter   points leader wins                             68.3%            68.3%     2.190   0.634
   second quarter   in proportion to points                        31.8%            68.3%     1.169   0.586
-  third quarter    model, development drift                       82.3%            86.4%     0.621   0.248
-  third quarter    model, static cars                             82.6%            86.4%     0.686   0.253
-  third quarter    model, unscaled (previous)                     82.7%            86.4%     0.654   0.251
+  third quarter    model, drift + new-car doubt                     82.3%            86.4%     0.616   0.249
+  third quarter    model, development drift                       82.6%            86.4%     0.518   0.235
+  third quarter    model, static cars                             82.7%            86.4%     0.654   0.251
   third quarter    points leader wins                             88.6%            88.6%     0.785   0.227
   third quarter    in proportion to points                        31.7%            88.6%     1.160   0.576
-  last quarter     model, development drift                       91.9%           100.0%     0.099   0.051
-  last quarter     model, static cars                             92.2%           100.0%     0.096   0.049
-  last quarter     model, unscaled (previous)                     92.2%           100.0%     0.095   0.048
+  last quarter     model, drift + new-car doubt                     92.0%           100.0%     0.099   0.051
+  last quarter     model, development drift                       92.0%           100.0%     0.098   0.051
+  last quarter     model, static cars                             92.2%           100.0%     0.095   0.048
   last quarter     points leader wins                            100.0%           100.0%     0.000   0.000
   last quarter     in proportion to points                        31.5%           100.0%     1.160   0.577
-  all rounds   model, development drift   log loss 0.867  Brier 0.328  champion's chance moves 5.4%/round (largest 63%)
-  all rounds   model, static cars         log loss 0.882  Brier 0.332  champion's chance moves 5.5%/round (largest 68%)
-  all rounds   model, unscaled (previous) log loss 0.874  Brier 0.332  champion's chance moves 5.5%/round (largest 68%)
+  all rounds   model, drift + new-car doubt log loss 0.872  Brier 0.332  champion's chance moves 5.4%/round (largest 62%)
+  all rounds   model, development drift   log loss 0.837  Brier 0.321  champion's chance moves 5.5%/round (largest 64%)
+  all rounds   model, static cars         log loss 0.874  Brier 0.332  champion's chance moves 5.5%/round (largest 68%)
   all rounds   points leader wins         log loss 1.388  Brier 0.414  champion's chance moves 8.4%/round (largest 100%)
   all rounds   in proportion to points    log loss 1.258  Brier 0.604  champion's chance moves 2.1%/round (largest 33%)
+  calibration (model, drift + new-car doubt): when we said X, they became champion Y
+        0%-2%  n= 1427  said   0.0%  happened   1.1%
+       2%-10%  n=   64  said   5.9%  happened  12.5%
+      10%-25%  n=   47  said  16.6%  happened   6.4%
+      25%-50%  n=   36  said  35.0%  happened  27.8%
+      50%-75%  n=   28  said  63.4%  happened  85.7%
+      75%-90%  n=   22  said  84.1%  happened  81.8%
+     90%-100%  n=  114  said  98.1%  happened  83.3%
   calibration (model, development drift): when we said X, they became champion Y
-        0%-2%  n= 1430  said   0.0%  happened   1.0%
-       2%-10%  n=   64  said   5.3%  happened  10.9%
-      10%-25%  n=   45  said  15.8%  happened   8.9%
-      25%-50%  n=   34  said  36.1%  happened  26.5%
-      50%-75%  n=   24  said  62.3%  happened  83.3%
-      75%-90%  n=   23  said  83.2%  happened  82.6%
-     90%-100%  n=  118  said  98.0%  happened  83.9%
+        0%-2%  n= 1422  said   0.0%  happened   1.0%
+       2%-10%  n=   71  said   5.8%  happened   9.9%
+      10%-25%  n=   46  said  16.0%  happened  10.9%
+      25%-50%  n=   33  said  35.9%  happened  24.2%
+      50%-75%  n=   28  said  62.9%  happened  82.1%
+      75%-90%  n=   24  said  84.4%  happened  75.0%
+     90%-100%  n=  114  said  97.6%  happened  86.0%
   calibration (model, static cars): when we said X, they became champion Y
-        0%-2%  n= 1464  said   0.0%  happened   1.1%
-       2%-10%  n=   52  said   5.9%  happened  15.4%
-      10%-25%  n=   27  said  15.8%  happened   7.4%
-      25%-50%  n=   27  said  35.8%  happened  25.9%
-      50%-75%  n=   21  said  64.1%  happened  85.7%
-      75%-90%  n=   16  said  82.3%  happened  81.2%
-     90%-100%  n=  131  said  98.5%  happened  83.2%
-  calibration (model, unscaled (previous)): when we said X, they became champion Y
         0%-2%  n= 1461  said   0.0%  happened   1.1%
        2%-10%  n=   53  said   5.5%  happened  15.1%
       10%-25%  n=   29  said  15.5%  happened   6.9%
@@ -147,31 +141,31 @@
       50%-75%  n=   21  said  64.2%  happened  85.7%
       75%-90%  n=   17  said  82.7%  happened  82.4%
      90%-100%  n=  130  said  98.5%  happened  83.1%
-  most confident wrong calls (model, development drift):
-    2024 before round  3: Red Bull Racing         99.5%   champion McLaren                  0.0%
+  most confident wrong calls (model, drift + new-car doubt):
+    2024 before round  7: Red Bull Racing         99.5%   champion McLaren                  0.0%
+    2024 before round  3: Red Bull Racing         99.3%   champion McLaren                  0.0%
     2024 before round  6: Red Bull Racing         99.3%   champion McLaren                  0.0%
-    2024 before round  7: Red Bull Racing         99.1%   champion McLaren                  0.0%
-    2024 before round  8: Red Bull Racing         98.7%   champion McLaren                  0.0%
-    2024 before round  2: Red Bull Racing         98.0%   champion McLaren                  0.0%
-    2024 before round  5: Red Bull Racing         97.6%   champion McLaren                  0.0%
-    2024 before round  1: Red Bull Racing         97.2%   champion McLaren                  0.0%
-    2024 before round 12: Red Bull Racing         97.2%   champion McLaren                  0.0%
-    2024 before round 13: Red Bull Racing         96.2%   champion McLaren                  0.0%
-    2024 before round  4: Red Bull Racing         96.1%   champion McLaren                  0.0%
+    2024 before round  8: Red Bull Racing         98.9%   champion McLaren                  0.0%
+    2024 before round  2: Red Bull Racing         98.4%   champion McLaren                  0.0%
+    2024 before round  5: Red Bull Racing         98.4%   champion McLaren                  0.0%
+    2024 before round 12: Red Bull Racing         98.0%   champion McLaren                  0.0%
+    2024 before round 13: Red Bull Racing         97.8%   champion McLaren                  0.0%
+    2024 before round 11: Red Bull Racing         97.2%   champion McLaren                  0.0%
+    2024 before round  4: Red Bull Racing         96.8%   champion McLaren                  0.0%
 
 === 2026 PROJECTION (data up to today) ===
-  after round 15, 8 weekends left (car-development drift 0.15, strength scale 1.02)
+  after round 15, 8 weekends left (car-development drift 0.15, new-car doubt 1.0)
   drivers:
-    Kimi Antonelli           title  95.8%   points now   302   expected final   387
-    George Russell           title   3.9%   points now   236   expected final   325
-    Lewis Hamilton           title   0.2%   points now   199   expected final   281
-    Lando Norris             title   0.1%   points now   186   expected final   271
-    Charles Leclerc          title   0.0%   points now   179   expected final   265
-    Pierre Gasly             title   0.0%   points now    50   expected final    77
+    Kimi Antonelli           title  95.9%   points now   302   expected final   385
+    George Russell           title   3.3%   points now   236   expected final   322
+    Lewis Hamilton           title   0.5%   points now   199   expected final   279
+    Lando Norris             title   0.2%   points now   186   expected final   269
+    Charles Leclerc          title   0.1%   points now   179   expected final   263
+    Max Verstappen           title   0.0%   points now   163   expected final   237
   constructors:
-    Mercedes                 title  99.9%   points now   538   expected final   712
-    Ferrari                  title   0.1%   points now   378   expected final   546
-    McLaren                  title   0.0%   points now   304   expected final   447
-    Red Bull Racing          title   0.0%   points now   260   expected final   388
-    Haas F1 Team             title   0.0%   points now    27   expected final    58
-    Williams                 title   0.0%   points now    12   expected final    34
+    Mercedes                 title  99.2%   points now   538   expected final   707
+    Ferrari                  title   0.8%   points now   378   expected final   542
+    McLaren                  title   0.0%   points now   304   expected final   445
+    Red Bull Racing          title   0.0%   points now   260   expected final   386
+    Haas F1 Team             title   0.0%   points now    27   expected final    60
+    Williams                 title   0.0%   points now    12   expected final    36
