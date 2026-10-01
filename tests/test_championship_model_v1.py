@@ -8,7 +8,6 @@ from championship_model_v1 import (
     Weekend,
     fit_grid_coef,
     fit_strengths,
-    new_car_sd,
     pl_loglik_grad,
     points_for,
     project_championship,
@@ -78,7 +77,7 @@ def test_grid_coef_is_learned_from_earlier_races():
     for i in range(1, 25):
         order = [((i + k) % 6) + 1 for k in range(6)]
         weekends.append(_weekend(i, order, grid={d: p for p, d in enumerate(order, start=1)}))
-    coef = fit_grid_coef(weekends, lambda before, era: fit_strengths(before, era=era))
+    coef = fit_grid_coef(weekends, lambda before, w: fit_strengths(before, era=w.era))
     assert coef > 1.0
 
 
@@ -109,21 +108,21 @@ def test_standings_include_sprints():
 
 
 def test_backtest_runs_on_the_synthetic_database(synthetic_db):
-    from championship_backtest_v1 import StrengthCache, championship_backtest
+    from championship_backtest_v1 import championship_backtest, strength_caches
     from championship_model_v1 import load_weekends
 
     with synthetic_db.connect() as db:
         weekends = load_weekends(db, start_year=2018)
     raced = [w for w in weekends if w.raced]
     assert len(raced) == 6 and all(len(w.race) == 12 for w in raced)
-    out = championship_backtest(weekends, StrengthCache(raced), 2022, 2024)
+    out = championship_backtest(weekends, strength_caches(raced), 2022, 2024)
     assert [c[0] for c in out["checks"]] == [2022, 2023, 2024]
     from championship_backtest_v1 import DEFAULT_SETTING, SETTINGS
     assert out["chosen"][2022] == DEFAULT_SETTING and out["setting_now"] in SETTINGS
-    assert out["chosen_drift"][2022][1] == 0.0
+    assert out["chosen_drift"][2022] == DEFAULT_SETTING and out["fixed_log_loss"]
     from championship_backtest_v1 import summarise_titles
     summary = summarise_titles(out["rounds"], "drivers")
-    assert summary["records"]["model, drift + new-car doubt"] and summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
+    assert summary["records"]["model, season cars + drift"] and summary["records"]["model, development drift"] and summary["records"]["points leader wins"]
 
 
 from test_race_strategy_backtest_v2 import synthetic_db  # noqa: E402,F401  (fixture)
@@ -143,16 +142,18 @@ def test_development_drift_lowers_overconfidence_far_from_the_end():
     assert sum(drifting.p_team_title.values()) == pytest.approx(1.0)
 
 
-def test_new_car_doubt_shrinks_with_races_and_gives_the_rival_a_chance():
-    assert new_car_sd(0.6, 0) == pytest.approx(0.6)
-    assert new_car_sd(0.6, 4) == pytest.approx(0.6 / 2 ** 0.5) and new_car_sd(0.6, 20) < new_car_sd(0.6, 4)
-    # team 1 dominated last season; before round 1 (no points yet) it must not be near-certain
-    weekends = [_weekend(i, [1, 2, 3, 4, 5, 6]) for i in range(1, 21)]
-    st = fit_strengths(weekends)
-    lineup = {d: (d + 1) // 2 for d in range(1, 7)}
-    remaining = [_weekend(i, [1, 2, 3, 4, 5, 6], season=2025) for i in range(1, 23)]
-    sure = project_championship(st, lineup, remaining, driver_points={}, team_points={}, dnf=0.1, sims=3000)
-    doubt = project_championship(st, lineup, remaining, driver_points={}, team_points={}, dnf=0.1, sims=3000,
-                                 car_uncertainty=new_car_sd(1.0, 0))
-    assert doubt.p_team_title[1] < sure.p_team_title[1] and doubt.p_team_title[2] > sure.p_team_title[2]
-    assert sum(doubt.p_team_title.values()) == pytest.approx(1.0)
+def test_season_cars_let_a_new_car_overtake_last_years_dominant_one():
+    # 2023: team 1 (drivers 1, 2) dominates 20 races; 2024: team 2 (drivers 3, 4) wins 6 races
+    old = [_weekend(i, [1, 2, 3, 4, 5, 6], season=2023) for i in range(1, 21)]
+    new = [_weekend(20 + i, [3, 4, 1, 2, 5, 6], season=2024) for i in range(1, 7)]
+    shared = fit_strengths(old + new)
+    season = fit_strengths(old + new, winter_sd=0.5, season=2024)
+    gap_shared = shared.car[2] - shared.car[1]
+    gap_season = season.car[2] - season.car[1]
+    assert gap_season > gap_shared and gap_season > 0
+    # before 2024 has been raced, the 2024 car is last year's car (the prior mean)
+    pre = fit_strengths(old, winter_sd=0.5, season=2024)
+    assert pre.car[1] > pre.car[2]
+    # season cars change nothing within one season
+    one = fit_strengths(old, winter_sd=0.5, season=2023)
+    assert one.car[1] == pytest.approx(fit_strengths(old).car[1], abs=1e-3)

@@ -34,7 +34,6 @@ from championship_model_v1 import (
     fit_grid_coef,
     fit_strengths,
     load_weekends,
-    new_car_sd,
     project_championship,
     race_probabilities,
     standings,
@@ -52,19 +51,28 @@ STAGES = ((0.0, 0.25, "first quarter"), (0.25, 0.5, "second quarter"), (0.5, 0.7
 
 
 class StrengthCache:
-    """Strengths fitted on the raced weekends before index i (prefix of the raced list)."""
+    """Strengths fitted on the raced weekends before index i (prefix of the raced list), for
+    a weekend of the given era and season. winter_sd: see fit_strengths (None = shared cars)."""
 
-    def __init__(self, raced: list[Weekend]):
-        self.raced, self.cache = raced, {}
+    def __init__(self, raced: list[Weekend], winter_sd: float | None = None):
+        self.raced, self.winter_sd, self.cache = raced, winter_sd, {}
 
-    def before(self, n: int, era: str | None):
-        key = (n, era)
+    def before(self, n: int, era: str | None, season: int | None = None):
+        key = (n, era, season if self.winter_sd is not None else None)
         if key not in self.cache:
-            self.cache[key] = fit_strengths(self.raced[:n], era=era)
+            self.cache[key] = fit_strengths(self.raced[:n], era=era, winter_sd=self.winter_sd, season=key[2])
         return self.cache[key]
 
-    def for_prefix(self, before: list[Weekend], era: str | None):
-        return self.before(len(before), era)
+    def for_prefix(self, before: list[Weekend], weekend: Weekend):
+        return self.before(len(before), weekend.era, weekend.season)
+
+
+CAR_MODELS = {"shared cars": None, "season cars, winter 0.3": 0.3, "season cars, winter 0.6": 0.6}
+CURRENT = "strength + grid"                # the race model the season-car variants must beat
+
+
+def strength_caches(raced: list[Weekend]) -> dict[str, StrengthCache]:
+    return {name: StrengthCache(raced, w) for name, w in CAR_MODELS.items()}
 
 
 def champion(points: dict[int, float]) -> int | None:
@@ -87,28 +95,34 @@ def log_loss(p: float) -> float:
     return -math.log(max(p, 1e-3))
 
 
-def race_backtest(weekends: list[Weekend], cache: StrengthCache, rates, start: int, end: int) -> dict:
+def race_backtest(weekends: list[Weekend], caches: dict[str, StrengthCache], rates, start: int, end: int) -> dict:
     from race_form_signal_v1 import race_clustered
 
-    raced = cache.raced
+    raced = caches["shared cars"].raced
     by_race = defaultdict(dict)
-    coef_by_season = {}
+    coef_by_season = defaultdict(dict)       # car model -> season -> grid effect
     for idx, w in enumerate(raced):
         if not (start <= w.season <= end) or idx < 10:
             continue
-        if w.season not in coef_by_season:
-            coef_by_season[w.season] = fit_grid_coef(raced[:idx], cache.for_prefix)
-        st = cache.before(idx, w.era)
         dnf = dnf_rate(raced[:idx], w.era)
         entrants = [(r.driver_id, r.team_id, r.grid) for r in w.race]
-        model = race_probabilities(st, entrants, grid_coef=coef_by_season[w.season], dnf=dnf, sims=BACKTEST_SIMS)
-        form_only = race_probabilities(st, entrants, grid_coef=0.0, dnf=dnf, sims=BACKTEST_SIMS)
+        with_grid = {}
+        for car_model, cache in caches.items():
+            if w.season not in coef_by_season[car_model]:
+                coef_by_season[car_model][w.season] = fit_grid_coef(raced[:idx], cache.for_prefix)
+            with_grid[car_model] = race_probabilities(cache.before(idx, w.era, w.season), entrants,
+                                                      grid_coef=coef_by_season[car_model][w.season], dnf=dnf,
+                                                      sims=BACKTEST_SIMS)
+        model = with_grid["shared cars"]
+        form_only = race_probabilities(caches["shared cars"].before(idx, w.era), entrants, grid_coef=0.0, dnf=dnf,
+                                       sims=BACKTEST_SIMS)
         slot = rates(w.race_date, w.era, len(entrants))
         winner = next((r.driver_id for r in w.race if r.finish == 1), None)
         podium = {r.driver_id for r in w.race if r.finish and r.finish <= 3}
         pole = min(w.race, key=lambda r: r.grid or 99).driver_id
         for name, p_win, p_pod in (
-            ("strength + grid", model.p_win, model.p_podium),
+            *((f"{CURRENT}, {cm}", p.p_win, p.p_podium) for cm, p in with_grid.items() if cm != "shared cars"),
+            (CURRENT, model.p_win, model.p_podium),
             ("strength only", form_only.p_win, form_only.p_podium),
             ("grid slot (production)", {r.driver_id: slot.get(r.grid or 99, (0, 0))[0] for r in w.race},
              {r.driver_id: slot.get(r.grid or 99, (0, 0))[1] for r in w.race}),
@@ -121,7 +135,7 @@ def race_backtest(weekends: list[Weekend], cache: StrengthCache, rates, start: i
                 "favourite_won": float(fav == winner),
             }
         by_race["pole sitter"][w.race_id] = {"favourite_won": float(pole == winner)}
-    out = {"races": len(by_race["strength + grid"]), "grid_coef": coef_by_season, "models": {}}
+    out = {"races": len(by_race[CURRENT]), "grid_coef": dict(coef_by_season), "models": {}}
     base = by_race["grid slot (production)"]
     for name, races in by_race.items():
         row = {}
@@ -135,33 +149,38 @@ def race_backtest(weekends: list[Weekend], cache: StrengthCache, rates, start: i
                          if v.get(metric) is not None and base.get(r, {}).get(metric) is not None}
                 if diffs:
                     row[metric + "_vs_production"] = race_clustered(diffs)
+            if name.startswith(CURRENT + ", "):
+                cur = by_race[CURRENT]
+                diffs = {r: [v[metric] - cur[r][metric]] for r, v in races.items()
+                         if v.get(metric) is not None and cur.get(r, {}).get(metric) is not None}
+                if diffs:
+                    row[metric + "_vs_current"] = race_clustered(diffs)
         out["models"][name] = row
     return out
 
 
 DRIFTS = (0.0, 0.06, 0.15)                 # car development per weekend
-UNCERTAINTIES = (0.0, 0.3, 0.6, 1.0)       # new-car doubt before round 1 (see new_car_sd)
-SETTINGS = tuple((d, u) for d in DRIFTS for u in UNCERTAINTIES)
-DEFAULT_SETTING = (0.06, 0.3)              # first season (no earlier season to choose on)
+SETTINGS = tuple((cm, d) for cm in CAR_MODELS for d in DRIFTS)
+DEFAULT_SETTING = ("shared cars", 0.06)    # first season (no earlier season to choose on)
 
 
-def _key(setting: tuple[float, float]) -> str:
-    return f"drift {setting[0]}, doubt {setting[1]}"
+def _key(setting: tuple[str, float]) -> str:
+    return f"{setting[0]}, drift {setting[1]}"
 
 
-def _choose(rounds: list[dict], options) -> tuple[float, float]:
+def _choose(rounds: list[dict], options) -> tuple[str, float]:
     """setting with the best total log score (both titles) over the given rounds."""
     return min(options, key=lambda st: sum(log_loss(r["probs"][_key(st)].get(r["champ"], 0.0)) for r in rounds))
 
 
-def championship_backtest(weekends: list[Weekend], cache: StrengthCache, start: int, end: int) -> dict:
-    """Title chances before every round of every completed season for every (drift, new-car
-    doubt) setting and the baselines. For season S each model uses the setting with the best
+def championship_backtest(weekends: list[Weekend], caches: dict[str, StrengthCache], start: int, end: int) -> dict:
+    """Title chances before every round of every completed season for every (car model,
+    drift) setting and the baselines. For season S each model uses the setting with the best
     log score on the seasons BEFORE S (walk-forward):
-      'model, drift + new-car doubt'  any setting
-      'model, development drift'      doubt fixed at 0 (the previous version)
-      'model, static cars'            no drift, no doubt"""
-    raced = cache.raced
+      'model, season cars + drift'   any setting
+      'model, development drift'     shared cars, drift chosen (the current version)
+      'model, static cars'           shared cars, no drift"""
+    raced = caches["shared cars"].raced
     position = {w.race_id: i for i, w in enumerate(raced)}
     rounds = []          # dicts: season, round, share, kind, champ, candidates, probs {model: {entity: p}}
     checks = []
@@ -176,14 +195,13 @@ def championship_backtest(weekends: list[Weekend], cache: StrengthCache, start: 
         for k in range(n):
             nxt = season_w[k]
             history_n = position[nxt.race_id]
-            st = cache.before(history_n, nxt.era)
             dnf = dnf_rate(raced[:history_n], nxt.era)
             lineup = {r.driver_id: r.team_id for r in nxt.race}        # entry list of the next race
             d_pts, t_pts = standings(season_w[:k], season)
-            by_setting = {(d, u): project_championship(st, lineup, season_w[k:], driver_points=d_pts,
-                                                       team_points=t_pts, dnf=dnf, sims=BACKTEST_SIMS, drift=d,
-                                                       car_uncertainty=new_car_sd(u, k))
-                          for d, u in SETTINGS}
+            by_setting = {(cm, d): project_championship(caches[cm].before(history_n, nxt.era, season), lineup,
+                                                        season_w[k:], driver_points=d_pts, team_points=t_pts,
+                                                        dnf=dnf, sims=BACKTEST_SIMS, drift=d)
+                          for cm, d in SETTINGS}
             for kind, pts, champ, candidates in (
                 ("drivers", d_pts, champ_d, sorted(set(lineup) | set(d_pts))),
                 ("constructors", t_pts, champ_t, sorted(set(lineup.values()) | set(t_pts))),
@@ -195,22 +213,24 @@ def championship_backtest(weekends: list[Weekend], cache: StrengthCache, start: 
                 rounds.append({"season": season, "round": k + 1, "share": k / n, "kind": kind, "champ": champ,
                                "candidates": candidates, "probs": probs})
     seasons = sorted({r["season"] for r in rounds})
-    drift_only = [(d, 0.0) for d in DRIFTS]
+    shared = [("shared cars", d) for d in DRIFTS]
     chosen, chosen_drift = {}, {}
     for season in seasons:
         earlier = [r for r in rounds if r["season"] < season]
         chosen[season] = _choose(earlier, SETTINGS) if earlier else DEFAULT_SETTING
-        chosen_drift[season] = _choose(earlier, drift_only) if earlier else (DEFAULT_SETTING[0], 0.0)
+        chosen_drift[season] = _choose(earlier, shared) if earlier else DEFAULT_SETTING
     for r in rounds:
-        r["probs"]["model, drift + new-car doubt"] = r["probs"][_key(chosen[r["season"]])]
+        r["probs"]["model, season cars + drift"] = r["probs"][_key(chosen[r["season"]])]
         r["probs"]["model, development drift"] = r["probs"][_key(chosen_drift[r["season"]])]
-        r["probs"]["model, static cars"] = r["probs"][_key((0.0, 0.0))]
+        r["probs"]["model, static cars"] = r["probs"][_key(("shared cars", 0.0))]
     setting_now = _choose(rounds, SETTINGS) if rounds else DEFAULT_SETTING
+    fixed = {_key(st_): mean(log_loss(r["probs"][_key(st_)].get(r["champ"], 0.0)) for r in rounds) for st_ in SETTINGS} \
+        if rounds else {}
     return {"rounds": rounds, "checks": checks, "chosen": chosen, "chosen_drift": chosen_drift,
-            "setting_now": setting_now}
+            "setting_now": setting_now, "fixed_log_loss": fixed}
 
 
-MODELS = ("model, drift + new-car doubt", "model, development drift", "model, static cars", "points leader wins",
+MODELS = ("model, season cars + drift", "model, development drift", "model, static cars", "points leader wins",
           "in proportion to points")
 
 
@@ -279,10 +299,10 @@ def main() -> int:
         rates = slot_rate_function(load_finishes(db))
         driver_names, team_names = names(db)
     raced = [w for w in weekends if w.raced]
-    cache = StrengthCache(raced)
+    caches = strength_caches(raced)
 
     print("=== CHECK: champions from the stored points vs the real ones ===")
-    champ = championship_backtest(weekends, cache, args.start_year, args.end_year)
+    champ = championship_backtest(weekends, caches, args.start_year, args.end_year)
     bad = 0
     for season, d, t in champ["checks"]:
         real = KNOWN_CHAMPIONS.get(season)
@@ -292,9 +312,10 @@ def main() -> int:
         print(f"  {season}: drivers {dn}, constructors {tn}  {'ok' if ok else 'MISMATCH -- check the points data'}")
 
     print("\n=== RACE WINNER (each race, grid known; lower Brier / log loss = better) ===")
-    race = race_backtest(weekends, cache, rates, max(args.start_year, 2019), args.end_year)
-    print(f"  {race['races']} races; grid effect per season: "
-          + ", ".join(f"{s}: {c:.2f}" for s, c in sorted(race["grid_coef"].items())))
+    race = race_backtest(weekends, caches, rates, max(args.start_year, 2019), args.end_year)
+    print(f"  {race['races']} races; grid effect per season:")
+    for car_model, coefs in race["grid_coef"].items():
+        print(f"    {car_model:26} " + ", ".join(f"{s}: {c:.2f}" for s, c in sorted(coefs.items())))
     for name, row in race["models"].items():
         cells = []
         for metric in ("favourite_won", "brier_win", "brier_podium", "log_loss_win"):
@@ -302,20 +323,24 @@ def main() -> int:
                 v = row[metric][0]
                 cells.append(f"{metric} {v:.1%}" if metric == "favourite_won" else f"{metric} {v:.4f}")
         print(f"  {name:24} " + "  ".join(cells))
-        for metric in ("brier_win", "brier_podium", "log_loss_win", "favourite_won"):
-            key = metric + "_vs_production"
-            if key in row:
-                d, lo, hi = row[key]
-                lower_better = metric != "favourite_won"
-                verdict = ("BETTER" if (hi < 0 if lower_better else lo > 0) else
-                           "WORSE" if (lo > 0 if lower_better else hi < 0) else "no clear difference")
-                print(f"      vs production {metric:14} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  {verdict}")
+        for versus in ("production", "current"):
+            for metric in ("brier_win", "brier_podium", "log_loss_win", "favourite_won"):
+                key = f"{metric}_vs_{versus}"
+                if key in row:
+                    d, lo, hi = row[key]
+                    lower_better = metric != "favourite_won"
+                    verdict = ("BETTER" if (hi < 0 if lower_better else lo > 0) else
+                               "WORSE" if (lo > 0 if lower_better else hi < 0) else "no clear difference")
+                    print(f"      vs {versus:10} {metric:14} {d:+.4f} [{lo:+.4f}, {hi:+.4f}]  {verdict}")
 
-    print("\n  (drift, new-car doubt) chosen walk-forward per season: "
-          + ", ".join(f"{k}: {v}" for k, v in sorted(champ["chosen"].items()))
+    print("\n  (car model, drift) chosen walk-forward per season: "
+          + ", ".join(f"{k}: {v[0]} / {v[1]}" for k, v in sorted(champ["chosen"].items()))
           + f"; for the projection: {champ['setting_now']}")
-    print("  drift chosen walk-forward (doubt 0, previous version): "
-          + ", ".join(f"{k}: {v[0]}" for k, v in sorted(champ["chosen_drift"].items())))
+    print("  drift chosen walk-forward with shared cars (current version): "
+          + ", ".join(f"{k}: {v[1]}" for k, v in sorted(champ["chosen_drift"].items())))
+    print("  every setting fixed for all seasons (title log loss, both titles; for reference only):")
+    for key, ll in sorted(champ["fixed_log_loss"].items(), key=lambda kv: kv[1]):
+        print(f"    {key:40} {ll:.3f}")
     for kind in ("drivers", "constructors"):
         summary = summarise_titles(champ["rounds"], kind)
         print(f"\n=== {kind.upper()} CHAMPIONSHIP ({args.start_year}-{args.end_year}, every round) ===")
@@ -347,20 +372,21 @@ def main() -> int:
     done = [w for w in season_w if w.raced]
     remaining = [w for w in season_w if not w.raced]
     if done:
-        st = cache.before(len(raced), done[-1].era)
-        drift_now, doubt_now = champ["setting_now"]
         lineup = {r.driver_id: r.team_id for r in done[-1].race}
         d_pts, t_pts = standings(done, args.season)
-        proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
-                                    dnf=dnf_rate(raced, done[-1].era), drift=drift_now,
-                                    car_uncertainty=new_car_sd(doubt_now, len(done)))
-        print(f"  after round {done[-1].round}, {len(remaining)} weekends left "
-              f"(car-development drift {drift_now}, new-car doubt {doubt_now})")
-        for label, probs, now, exp, nm in (("drivers", proj.p_driver_title, d_pts, proj.expected_driver_points, driver_names),
-                                           ("constructors", proj.p_team_title, t_pts, proj.expected_team_points, team_names)):
-            print(f"  {label}:")
-            for k in sorted(probs, key=lambda k: -probs[k])[:6]:
-                print(f"    {nm.get(k, k):24} title {probs[k]:6.1%}   points now {now.get(k, 0):5.0f}   expected final {exp.get(k, 0):5.0f}")
+        current_drift = _choose(champ["rounds"], [("shared cars", d) for d in DRIFTS])[1] if champ["rounds"] else 0.06
+        for label_v, (car_model, drift_now) in (("chosen setting", champ["setting_now"]),
+                                                ("current version", ("shared cars", current_drift))):
+            st = caches[car_model].before(len(raced), done[-1].era, args.season)
+            proj = project_championship(st, lineup, remaining, driver_points=d_pts, team_points=t_pts,
+                                        dnf=dnf_rate(raced, done[-1].era), drift=drift_now)
+            print(f"  {label_v}: {car_model}, drift {drift_now} -- after round {done[-1].round}, "
+                  f"{len(remaining)} weekends left")
+            for label, probs, now, exp, nm in (("drivers", proj.p_driver_title, d_pts, proj.expected_driver_points, driver_names),
+                                               ("constructors", proj.p_team_title, t_pts, proj.expected_team_points, team_names)):
+                print(f"    {label}:")
+                for k in sorted(probs, key=lambda k: -probs[k])[:6]:
+                    print(f"      {nm.get(k, k):24} title {probs[k]:6.1%}   points now {now.get(k, 0):5.0f}   expected final {exp.get(k, 0):5.0f}")
     return 1 if bad else 0
 
 
