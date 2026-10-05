@@ -100,7 +100,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
                        "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
                        "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
-                       "M wear + wear timing", "N wear neighbours' sequence", "O expected match"}
+                       "M wear + wear timing", "N wear neighbours' sequence", "O expected match",
+                       "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team", "P3 per car: grid + team"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -301,3 +302,47 @@ def test_sequence_scores_multiply_stop_share_and_sequence_share():
     assert scores[("MEDIUM", "HARD")] == pytest.approx(0.4)
     assert scores[("MEDIUM", "HARD", "HARD")] == pytest.approx(0.2)
     assert sum(scores.values()) == pytest.approx(1.0)
+
+
+def _banded_history():
+    """8 races, wear 0.03: front-runners (P1-5) run SOFT-HARD, the rest MEDIUM-HARD; team 99 always
+    HARD-MEDIUM. Team ids: grid slot g -> team (g + 1) // 2, except slots 19-20 -> team 99."""
+    hist, wear = [], {}
+    for i in range(8):
+        race, when = 30 + i, date(2024, 3 + i, 1)
+        wear[race] = 0.03
+        for g in range(1, 21):
+            seq, stops = ((("HARD", "MEDIUM"), [30]) if g >= 19 else
+                          (("SOFT", "HARD"), [15]) if g <= 5 else (("MEDIUM", "HARD"), [22]))
+            bounds = [0, *stops, 50]
+            hist.append(CarStrategy(race, when, 2024, i, "e", g, False, 50,
+                                    tuple(Stint(c, bounds[j] + 1, bounds[j + 1]) for j, c in enumerate(seq)),
+                                    99 if g >= 19 else (g + 1) // 2))
+    return hist, wear
+
+
+def test_per_car_plans_follow_grid_band_and_team_habit():
+    from race_strategy_timing_v1 import PerCarPredictor, car_grid_band
+
+    assert [car_grid_band(g) for g in (1, 5, 6, 12, 20, None)] == [0, 0, 1, 2, 3, None]
+    hist, wear = _banded_history()
+    kw = dict(wear=0.03, wear_by_race=wear, regulation_era="e", total_laps=50)
+    same_for_all = PerCarPredictor(hist, use_grid=False, use_team=False, **kw)
+    assert same_for_all.predict(grid=1, team_id=1).strategy.sequence == ("MEDIUM", "HARD")
+    by_grid = PerCarPredictor(hist, use_grid=True, use_team=False, **kw)
+    assert by_grid.predict(grid=2, team_id=1).strategy.sequence == ("SOFT", "HARD")
+    assert by_grid.predict(grid=12, team_id=6).strategy.sequence == ("MEDIUM", "HARD")
+    by_team = PerCarPredictor(hist, use_grid=False, use_team=True, **kw)
+    assert by_team.predict(grid=12, team_id=99).strategy.sequence == ("HARD", "MEDIUM")
+    # stop laps by the M rule: every 1-stopper in the similar races
+    assert by_grid.predict(grid=2, team_id=1).strategy.stop_laps == (22,)
+
+
+def test_likelihood_ratio_is_shrunk_to_one_for_thin_evidence():
+    from race_strategy_timing_v1 import likelihood_ratios
+
+    hist, _ = _banded_history()
+    share = {("MEDIUM", "HARD"): 0.5, ("SOFT", "HARD"): 0.5}
+    assert likelihood_ratios([], share) == {("MEDIUM", "HARD"): 1.0, ("SOFT", "HARD"): 1.0}
+    one = likelihood_ratios(hist[:1], share)                       # one SOFT-HARD car only
+    assert 1.0 < one[("SOFT", "HARD")] < 1.1

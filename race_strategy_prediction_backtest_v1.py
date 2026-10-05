@@ -41,6 +41,11 @@ Methods (history strictly before the race date):
      than M's same-stop-count cars). 2026 (229 cars): no clear difference either way. The
      single-plan ceiling stays 0.460: the gap is cars in one race running different plans,
      which no one-plan-for-every-car method can close.
+  P0 race chances   : O's pick with M's stop-lap rule (isolates O's timing problem)
+  P1/P2/P3 per car    : a different plan PER CAR after qualifying -- O's race-level sequence
+                        chances x how cars from the same grid band (P1) / the same team (P2) /
+                        both (P3) ran each sequence earlier in the era (shrunk to the era average),
+                        stop laps by M's rule. Compared with M.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -78,6 +83,7 @@ from race_strategy_timing_v1 import (
     predict_era_mode_track_timing,
     predict_expected_match,
     predict_from_wear_sequence,
+    PerCarPredictor,
     load_allocations,
     predict_from_allocation,
     predict_from_practice,
@@ -202,7 +208,14 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         expected = predict_expected_match(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                           regulation_era=era, total_laps=total_laps).strategy
         timed = {}
+        per_car = {name: PerCarPredictor(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                         regulation_era=era, total_laps=total_laps, use_grid=g, use_team=t)
+                   for name, g, t in (("P0 race chances, M timing", False, False),
+                                      ("P1 per car: grid", True, False), ("P2 per car: team", False, True),
+                                      ("P3 per car: grid + team", True, True))}
         for car in race_cars:
+            for name, predictor in per_car.items():
+                scores.append(score(race_id, name, predictor.predict(grid=car.grid, team_id=car.team_id).strategy, car))
             key = (car.grid or 99) <= 10
             if key not in dry_hierarchy:
                 dry_hierarchy[key] = predict_strategy(history, track_id=track, regulation_era=era,
@@ -292,6 +305,8 @@ def main() -> int:
     print(f"\n=== vs M, the method production serves (same cars) ===")
     for metric, method, value, cmp in summarise([s for s in scores if s.method in
                                                  (SERVED, "N wear neighbours' sequence", "O expected match",
+                                                  "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team",
+                                                  "P3 per car: grid + team",
                                                   "B era mode (real stints)", "G CEILING (hindsight)")],
                                                 baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
