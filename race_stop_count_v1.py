@@ -23,6 +23,18 @@ races before it, and a model for a target race is trained only on races before i
 
 The stop count then goes through M's sequence and stop-lap rules (predict_from_wear_timed
 with `stops`), so only the stop count differs from M.
+
+Q1-Q3 NOT PROMOTED 2026-10-05 (vs M, same cars). 2022-25 (1248 cars, 68 races):
+  stop count  Q1 0.466, Q2 0.446, Q3 0.426 vs M 0.470 (all n.s., all lower)
+  races right Q1 31/68, Q2 33/68, Q3 34/68 vs M 33/68; 3-stop races 0-1 of 7 for every method
+  sequence    Q1 0.208, Q2 0.198, Q3 0.185 vs 0.234 (Q3 WORSE, others n.s. and lower)
+  first stop within 3 laps Q1 0.331 vs 0.296 (+0.035 [+0.002, +0.072]): the only "better",
+  at the edge of the interval, on a side metric, among 3 methods x 4 metrics x 2 periods
+  tested -- read as chance, not a gain. 2026 (229 cars): no clear difference anywhere.
+Why: the signal medians by real stop count (1 / 2 / 3 stops, 2022-25) show only practice
+wear separates 1 from 2 stops (0.051 / 0.094 / 0.097 %/lap). Track history (1.67 / 1.76 /
+1.78), era average and pit loss (22.86 s for all three: most races fall back to the era
+median) barely move, and nothing marks a 3-stop race in advance. Wear is already M's signal.
 """
 
 from __future__ import annotations

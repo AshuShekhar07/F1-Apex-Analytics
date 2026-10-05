@@ -57,6 +57,8 @@ Methods (history strictly before the race date):
                         track history and era average; Q3 adds pit loss and practice track
                         temperature. Sequence and stop laps by M's rules. Compared with M, plus a
                         race-level stop count table and the signals by real stop count.
+     Q1-Q3 NOT PROMOTED 2026-10-05: stop count Q1 0.466 / Q2 0.446 / Q3 0.426 vs M 0.470 in 2022-25
+     (all n.s.); only practice wear separates the races' stop counts (see race_stop_count_v1).
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
