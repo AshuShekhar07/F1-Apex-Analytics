@@ -29,6 +29,11 @@ Methods (history strictly before the race date):
                         which it replaced). PROMOTED 2026-09-30: sequence and stop count equal
                         to I by construction; first stop 2026 9.53 vs 10.00 laps, within 3 laps
                         25.8% vs 18.6% (BETTER vs B where I was not); 2022-25 equal (8.20/8.21)
+  N  wear neighbours' sequence : the sequence most CARS ran in the 7 races with the closest
+                        practice wear, timed from them (M takes only the stop count from them)
+  O  expected match    : argmax over sequences of P(stop count | closest-wear races' cars) x
+                        P(sequence | stop count, era) -- does not commit to the majority stop
+                        count first. N and O are compared with M, the production method.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -64,6 +69,8 @@ from race_strategy_timing_v1 import (
     load_car_strategies,
     predict_era_mode,
     predict_era_mode_track_timing,
+    predict_expected_match,
+    predict_from_wear_sequence,
     load_allocations,
     predict_from_allocation,
     predict_from_practice,
@@ -183,6 +190,10 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                              regulation_era=era, total_laps=total_laps).strategy
         from_wear = predict_from_wear(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                       regulation_era=era, total_laps=total_laps).strategy
+        wear_sequence = predict_from_wear_sequence(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                                   regulation_era=era, total_laps=total_laps).strategy
+        expected = predict_expected_match(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                          regulation_era=era, total_laps=total_laps).strategy
         timed = {}
         for car in race_cars:
             key = (car.grid or 99) <= 10
@@ -200,6 +211,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
             scores.append(score(race_id, "I practice wear", from_wear, car))
             scores.append(score(race_id, "M wear + wear timing", wear_timed, car))
+            scores.append(score(race_id, "N wear neighbours' sequence", wear_sequence, car))
+            scores.append(score(race_id, "O expected match", expected, car))
             scores.append(score(race_id, "J practice wear + compounds", with_compounds, car))
             scores.append(score(race_id, "L Pirelli compounds", from_allocation, car))
             scores.append(score(race_id, "K era stops + compounds", era_compounds, car))
@@ -216,6 +229,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
 
 
 PRODUCTION = "B era mode (real stints)"
+SERVED = "M wear + wear timing"       # what strategy_service_v7 serves when practice wear is known
 
 
 def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple]:
@@ -266,6 +280,13 @@ def main() -> int:
           f"{args.start_year}-{args.end_year}, {n_cars} cars, truth = real stints) ===")
     print("metric               method                           value   vs B (production) [90% CI, races resampled]")
     for metric, method, value, cmp in summarise(scores):
+        tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
+        print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
+    print(f"\n=== vs M, the method production serves (same cars) ===")
+    for metric, method, value, cmp in summarise([s for s in scores if s.method in
+                                                 (SERVED, "N wear neighbours' sequence", "O expected match",
+                                                  "B era mode (real stints)", "G CEILING (hindsight)")],
+                                                baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
     wear_report(LAST_CARS, args.start_year, args.end_year)

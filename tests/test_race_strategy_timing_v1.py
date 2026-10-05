@@ -100,7 +100,7 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
                        "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
                        "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
-                       "M wear + wear timing"}
+                       "M wear + wear timing", "N wear neighbours' sequence", "O expected match"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -258,3 +258,46 @@ def test_stop_laps_follow_the_races_with_similar_practice_wear():
     assert timed.strategy.stop_laps == (12,) and era_timing.strategy.stop_laps != (12,)
     low = predict_from_wear_timed(history, wear=0.0009, wear_by_race=wear, regulation_era="e", total_laps=50, k=5)
     assert low.strategy.stop_laps == (30,)
+
+
+def _wear_history():
+    """8 earlier races, era 'e'. Low-wear races (wear 0.01): 1-stoppers, nearly all M-H.
+    High-wear races (wear 0.05): a split -- 12 two-stoppers spread over three sequences,
+    8 one-stoppers all M-H."""
+    mh = (("MEDIUM", "HARD"), [20])
+    two = [(("MEDIUM", "HARD", "HARD"), [15, 32]), (("SOFT", "HARD", "MEDIUM"), [12, 30]),
+           (("MEDIUM", "MEDIUM", "HARD"), [14, 30])]
+    hist, wear = [], {}
+    for i in range(4):
+        hist += _hist(10 + i, date(2024, 3 + i, 1), i, "e", [mh] * 20)
+        wear[10 + i] = 0.01
+    for i in range(4):
+        hist += _hist(20 + i, date(2024, 7 + i, 1), 10 + i, "e", [mh] * 8 + [two[j % 3] for j in range(12)])
+        wear[20 + i] = 0.05
+    return hist, wear
+
+
+def test_wear_sequence_and_expected_match_pick_the_most_common_car_strategy():
+    from race_strategy_timing_v1 import predict_expected_match, predict_from_wear_sequence, predict_from_wear_timed
+
+    hist, wear = _wear_history()
+    kw = dict(wear=0.05, wear_by_race=wear, regulation_era="e", total_laps=50)
+    # M: the high-wear races' majority is 2 stops -> the era's most common 2-stop sequence
+    assert len(predict_from_wear_timed(hist, **kw).strategy.sequence) == 3
+    # but no single 2-stop sequence is as common as M-H (8 of 20 cars in those races)
+    assert predict_from_wear_sequence(hist, **kw).strategy.sequence == ("MEDIUM", "HARD")
+    assert predict_expected_match(hist, **kw).strategy.sequence == ("MEDIUM", "HARD")
+    # without practice wear both fall back to M
+    none = dict(kw, wear=None)
+    assert predict_expected_match(hist, **none).strategy == predict_from_wear_timed(hist, **none).strategy
+
+
+def test_sequence_scores_multiply_stop_share_and_sequence_share():
+    from race_strategy_timing_v1 import sequence_scores
+
+    hist, _ = _wear_history()
+    scores = sequence_scores({1: 0.4, 2: 0.6}, hist)
+    # 112 one-stoppers, all M-H -> 0.4 x 1.0; 48 two-stoppers over 3 sequences -> 0.6 x 1/3 each
+    assert scores[("MEDIUM", "HARD")] == pytest.approx(0.4)
+    assert scores[("MEDIUM", "HARD", "HARD")] == pytest.approx(0.2)
+    assert sum(scores.values()) == pytest.approx(1.0)

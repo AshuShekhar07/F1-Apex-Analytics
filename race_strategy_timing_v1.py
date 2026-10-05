@@ -378,6 +378,98 @@ def predict_from_wear_timed(history: Sequence[CarStrategy], *, wear: float | Non
                               ((strategy, base.alternatives[0][1]), *base.alternatives[1:]))
 
 
+def _wear_neighbour_cars(history: Sequence[CarStrategy], *, wear: float, wear_by_race: dict[int, float | None],
+                         regulation_era: str, k: int = WEAR_NEIGHBOURS) -> list[CarStrategy]:
+    """Legal dry cars of the k earlier races with the closest practice wear (same era when it
+    has MIN_WEAR_RACES such races, else all eras); [] with fewer than k races."""
+    modes = race_modes(history)
+    known = [(abs(wear_by_race[r] - wear), r, era) for r, (era, _, _) in modes.items()
+             if wear_by_race.get(r) is not None]
+    same_era = [x for x in known if x[2] == regulation_era]
+    pool = same_era if len(same_era) >= MIN_WEAR_RACES else known
+    if len(pool) < k:
+        return []
+    races = {r for _, r, _ in sorted(pool)[:k]}
+    return [h for h in history if h.race_id in races and not h.wet and is_legal_dry(h.sequence)]
+
+
+def _timed(sequence: tuple[str, ...], cars: Sequence[CarStrategy], fallback: Sequence[CarStrategy],
+           total_laps: int) -> Strategy | None:
+    """Sequence with stop laps = median stop fractions of `cars` running it (else `fallback`)."""
+    same = [h for h in cars if h.sequence == sequence]
+    if len(same) < MIN_SEQUENCE_EXAMPLES:
+        same = [h for h in fallback if h.sequence == sequence]
+    if not same:
+        return None
+    return build_strategy(sequence, [round(median(h.stop_fractions[i] for h in same) * total_laps)
+                                     for i in range(len(sequence) - 1)], total_laps)
+
+
+def predict_from_wear_sequence(history: Sequence[CarStrategy], *, wear: float | None,
+                               wear_by_race: dict[int, float | None], regulation_era: str,
+                               total_laps: int) -> StrategyPrediction:
+    """Method N (research): the sequence most CARS ran in the races with the closest practice
+    wear, timed from those cars. Method M takes only the stop count from those races and the
+    compound order from the whole era. Without wear: M."""
+    base = predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                   regulation_era=regulation_era, total_laps=total_laps)
+    if wear is None:
+        return base
+    cars = _wear_neighbour_cars(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era)
+    if len(cars) < MIN_POOL_CARS:
+        return base
+    sequence = Counter(h.sequence for h in cars).most_common(1)[0][0]
+    era_pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)]
+    strategy = _timed(sequence, cars, era_pool, total_laps)
+    if strategy is None:
+        return base
+    return StrategyPrediction(strategy, f"most common sequence in the {WEAR_NEIGHBOURS} races with the closest "
+                                        f"practice wear ({len(cars)} cars)", ((strategy, 1.0),))
+
+
+def sequence_scores(stop_shares: dict[int, float], era_cars: Sequence[CarStrategy]) -> dict[tuple[str, ...], float]:
+    """P(sequence) = P(its stop count, from the similar races) x P(sequence | stop count, era)."""
+    by_stops: dict[int, Counter] = defaultdict(Counter)
+    for h in era_cars:
+        by_stops[_stop_count(h)][h.sequence] += 1
+    out = {}
+    for stops, counts in by_stops.items():
+        total = sum(counts.values())
+        for sequence, n in counts.items():
+            out[sequence] = stop_shares.get(stops, 0.0) * n / total
+    return out
+
+
+def predict_expected_match(history: Sequence[CarStrategy], *, wear: float | None,
+                           wear_by_race: dict[int, float | None], regulation_era: str,
+                           total_laps: int) -> StrategyPrediction:
+    """Method O (research): the single sequence most likely to match a car -- the stop-count
+    shares of the cars in the closest-wear races times each sequence's share among the era's
+    cars with that many stops. Unlike M it does not commit to the majority stop count first:
+    a weak 2-stop majority loses to a dominant 1-stop sequence. Without wear: M."""
+    base = predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                   regulation_era=regulation_era, total_laps=total_laps)
+    if wear is None:
+        return base
+    cars = _wear_neighbour_cars(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era)
+    era_cars = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)]
+    if len(cars) < MIN_POOL_CARS or len(era_cars) < MIN_POOL_CARS:
+        return base
+    stop_counts = Counter(_stop_count(h) for h in cars)
+    shares = {n: c / len(cars) for n, c in stop_counts.items()}
+    scores = sequence_scores(shares, era_cars)
+    if not scores:
+        return base
+    sequence = max(scores, key=lambda s: (scores[s], -len(s)))
+    strategy = _timed(sequence, cars, era_cars, total_laps)
+    if strategy is None:
+        return base
+    return StrategyPrediction(strategy, f"most likely sequence: {scores[sequence]:.0%} (stop count from {len(cars)} "
+                                        f"cars in the closest-wear races, compounds from the era)",
+                              tuple((st, scores[seq]) for seq in sorted(scores, key=lambda q: -scores[q])[:4]
+                                    if (st := _timed(seq, cars, era_cars, total_laps)) is not None))
+
+
 # Stop count from Pirelli's compound choice (research, method L). The same C-number set at
 # earlier races (e.g. C1/C2/C3: the hardest set, brought to tyre-punishing tracks) votes on the
 # stop count. C-numbers are only comparable within one numbering (pirelli_compounds_v1:
