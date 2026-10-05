@@ -70,3 +70,55 @@ export function evidenceLabel(source: string): string {
   }
   return `${n} earlier cars ${scope[level] ?? level}${start ? ` that started on ${start.toLowerCase()}` : ''}`
 }
+
+export const CONFIDENCE_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' }
+
+/** "pre_qualifying" -> "Before qualifying" */
+export function stageLabel(stage: string): string {
+  return stage === 'post_qualifying' ? 'After qualifying' : stage === 'pre_qualifying' ? 'Before qualifying' : stage
+}
+
+export interface ChartSeries {
+  id: number
+  name: string
+  points: { x: number; y: number }[]
+}
+
+/**
+ * The `top` entries with the highest chance in the latest round, as chart series
+ * (x = after round, y = title chance 0..1), ordered by that latest chance.
+ */
+export function topTitleSeries(
+  series: { id: number; name: string; rounds: { after_round: number; p_title: number }[] }[],
+  top = 4,
+): ChartSeries[] {
+  const latest = (s: (typeof series)[number]) =>
+    s.rounds.reduce((best, r) => (r.after_round >= best.after_round ? r : best), { after_round: -1, p_title: 0 }).p_title
+  return [...series]
+    .sort((a, b) => latest(b) - latest(a))
+    .slice(0, top)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      points: [...s.rounds].sort((a, b) => a.after_round - b.after_round).map((r) => ({ x: r.after_round, y: r.p_title })),
+    }))
+}
+
+/** "Before the season" for round 0, else "After round N". */
+export function roundLabel(afterRound: number): string {
+  return afterRound === 0 ? 'Before the season' : `After round ${afterRound}`
+}
+
+/** Chance for a label: never rounds up to a certain 100% or down to 0% that isn't exact. */
+export function pctLabel(value: number): string {
+  if (value > 0 && value < 0.005) return '<1%'
+  if (value < 1 && value >= 0.995) return '>99%'
+  return pct(value)
+}
+
+/** Short end-of-line name: a driver's surname, a team without its suffix ("Red Bull Racing" -> "Red Bull"). */
+export function shortName(name: string, kind: 'drivers' | 'constructors'): string {
+  if (kind === 'drivers') return name.split(' ').slice(-1)[0]
+  const short = name.replace(/\s+(Racing|F1 Team|Team)$/i, '').trim()
+  return short || name
+}

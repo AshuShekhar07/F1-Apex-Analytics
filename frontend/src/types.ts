@@ -155,3 +155,102 @@ export interface WhatIfResponse {
   note: string
   results: WhatIfResult[]
 }
+
+// --- predictions (championship_model_v1, winner_prediction_v1) ---------------------
+
+export type ConfidenceLevel = 'high' | 'medium' | 'low'
+
+export interface WinnerConfidence {
+  level: ConfidenceLevel
+  basis: string
+  data_basis?: string
+  favourite_won_historically?: number
+  races?: number
+}
+
+export interface WinnerDriver {
+  driver_id: number
+  driver_name: string | null
+  team_name: string | null
+  color_hex?: string | null
+  grid: number | null
+  p_win: number
+  p_podium: number
+}
+
+export interface WinnerStage {
+  favourite: {
+    driver_id: number
+    driver_name: string | null
+    team_name: string | null
+    color_hex?: string | null
+    p_win: number
+    p_podium: number
+  }
+  confidence: WinnerConfidence
+  drivers: WinnerDriver[]
+}
+
+export type PredictionStage = 'pre_qualifying' | 'post_qualifying'
+
+export interface WinnerPrediction {
+  race_id: number
+  season: number
+  round: number
+  track: string
+  race_date: string
+  stage: PredictionStage
+  grid_source: string | null
+  lineup_source: string
+  evidence: {
+    races_this_season: number
+    races_under_these_regulations: number
+    new_regulations: boolean
+    bucket: string
+  }
+  predicted_winner: WinnerStage['favourite']
+  confidence: WinnerConfidence
+  stages: Partial<Record<PredictionStage, WinnerStage>>
+}
+
+export interface TitleConfidence {
+  stage: string
+  level: ConfidenceLevel
+  basis: string
+  chance_basis?: string
+  measured?: boolean
+}
+
+export interface TitleEntry {
+  driver_id?: number
+  team_id?: number
+  driver_name?: string | null
+  team_name?: string | null
+  color_hex?: string | null
+  p_title: number
+  points_now: number
+  expected_points: number
+}
+
+export interface Championship {
+  season: number
+  stored: boolean
+  after_round: number
+  weekends_left: number
+  computed_at: string | null
+  drivers: TitleEntry[]
+  constructors: TitleEntry[]
+  confidence: { drivers: TitleConfidence; constructors: TitleConfidence }
+}
+
+export interface TitleSeries {
+  id: number
+  name: string
+  rounds: { after_round: number; p_title: number }[]
+}
+
+export interface ChampionshipHistory {
+  season: number
+  drivers: TitleSeries[]
+  constructors: TitleSeries[]
+}

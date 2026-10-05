@@ -5,6 +5,7 @@ import { ForecastTable, ResultsTable } from '../components/ForecastTable'
 import { DataNotes, ErrorBox, Loading } from '../components/Status'
 import { ActualStrategies, PredictedStrategy } from '../components/StrategySection'
 import { WhatIfPanel } from '../components/WhatIfPanel'
+import { WinnerPredictionPanel } from '../components/WinnerPredictionPanel'
 import { useAsync } from '../hooks'
 
 export function RacePage() {
@@ -12,6 +13,7 @@ export function RacePage() {
   const race = useAsync(() => api.race(raceId), [raceId])
   const forecast = useAsync(() => api.forecast(raceId), [raceId])
   const actual = useAsync(() => api.actualStrategy(raceId), [raceId])
+  const winner = useAsync(() => api.winnerPrediction(raceId), [raceId])
   const r = race.data
   const strategy = useAsync(
     () => (r ? api.strategyPrediction(r.track_id, r.race_date) : Promise.resolve(null)),
@@ -40,6 +42,16 @@ export function RacePage() {
         </div>
         <span className={`badge ${finished ? 'done' : 'upcoming'}`}>{finished ? 'Finished' : 'Upcoming'}</span>
       </div>
+
+      <section>
+        <h2>{finished ? 'Who we expected to win' : 'Who will win?'}</h2>
+        {winner.loading && <Loading what="winner prediction" />}
+        {winner.error && <ErrorBox error={winner.error} />}
+        {winner.data && <WinnerPredictionPanel prediction={winner.data} />}
+        {!winner.loading && !winner.error && !winner.data && (
+          <p className="muted">Not enough earlier races to predict a winner here.</p>
+        )}
+      </section>
 
       <section>
         <h2>{finished ? 'Forecast vs result' : 'Forecast'}</h2>

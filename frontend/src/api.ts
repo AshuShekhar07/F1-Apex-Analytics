@@ -1,11 +1,14 @@
 import type {
   ActualDriverStrategy,
+  Championship,
+  ChampionshipHistory,
   Forecast,
   RaceDetail,
   RaceListItem,
   StrategyPrediction,
   WhatIfRequest,
   WhatIfResponse,
+  WinnerPrediction,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -54,6 +57,11 @@ export const api = {
     optional(request<{ results: ActualDriverStrategy[] }>(`/races/${id}/strategy`)),
   strategyPrediction: (trackId: number, raceDate: string) =>
     optional(request<StrategyPrediction>(`/strategy/predict?track_id=${trackId}&race_date=${raceDate}`)),
+  winnerPrediction: (id: number) => optional(request<WinnerPrediction>(`/races/${id}/winner-prediction`)),
+  nextWinnerPrediction: () => optional(request<WinnerPrediction>('/races/next/winner-prediction')),
+  championship: (season: number) => optional(request<Championship>(`/championship/${season}`)),
+  championshipHistory: (season: number) =>
+    optional(request<ChampionshipHistory>(`/championship/${season}/history`)),
   whatIf: (id: number, body: WhatIfRequest) =>
     request<WhatIfResponse>(`/races/${id}/what-if`, { method: 'POST', body: JSON.stringify(body) }),
 }
