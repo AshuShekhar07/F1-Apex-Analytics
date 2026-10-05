@@ -34,6 +34,13 @@ Methods (history strictly before the race date):
   O  expected match    : argmax over sequences of P(stop count | closest-wear races' cars) x
                         P(sequence | stop count, era) -- does not commit to the majority stop
                         count first. N and O are compared with M, the production method.
+     N/O REJECTED 2026-10-05 (vs M, 2022-25, 1248 cars): N sequence 0.213 vs 0.234 (n.s.), first
+     stop 8.79 vs 8.20 laps and within 3 laps 0.243 vs 0.296 (both WORSE); O sequence 0.251 vs
+     0.234 (+0.017 [-0.008, +0.045], not clear), stop count 0.480 vs 0.470 (n.s.), first stop
+     8.67 vs 8.20 laps (WORSE: timed from the cars running the exact sequence, a thinner pool
+     than M's same-stop-count cars). 2026 (229 cars): no clear difference either way. The
+     single-plan ceiling stays 0.460: the gap is cars in one race running different plans,
+     which no one-plan-for-every-car method can close.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
