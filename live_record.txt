@@ -1,0 +1,3 @@
+race 190: froze pre_qualifying
+=== LIVE RECORD: race-winner predictions frozen before the race ===
+  no frozen prediction has been scored yet (the first one is scored after its race)
