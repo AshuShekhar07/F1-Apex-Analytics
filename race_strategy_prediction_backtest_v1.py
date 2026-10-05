@@ -46,6 +46,12 @@ Methods (history strictly before the race date):
                         chances x how cars from the same grid band (P1) / the same team (P2) /
                         both (P3) ran each sequence earlier in the era (shrunk to the era average),
                         stop laps by M's rule. Compared with M.
+     P0-P3 REJECTED 2026-10-05 (vs M, 2022-25, 1248 cars): sequence P0 0.251, P1 0.248, P2 0.247,
+     P3 0.239 vs 0.234 (all n.s.); stop count 0.445-0.481 vs 0.470 (n.s.); first stop P0 8.56,
+     P1 8.59, P2 8.62, P3 8.64 vs 8.20 laps (ALL WORSE, CIs exclude 0). 2026 (229 cars): no clear
+     difference on any metric (first stop 9.1-9.4 vs 9.53, within 3 laps 0.28-0.31 vs 0.26, n.s.).
+     Grid band and team habit add nothing measurable over the race-level chances, and any plan
+     other than M's moves the first stop away from the wear-timed lap.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
