@@ -325,13 +325,15 @@ def stops_from_wear(modes: dict[int, tuple[str, date, int]], wear_by_race: dict[
 
 
 def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
-                      regulation_era: str, total_laps: int) -> StrategyPrediction:
+                      regulation_era: str, total_laps: int, stops: int | None = None) -> StrategyPrediction:
     """Method I: stop count from practice wear, then the era's most common sequence with that
-    many stops and its median stop laps. Without wear or history: era mode (B)."""
+    many stops and its median stop laps. Without wear or history: era mode (B).
+    `stops` overrides the wear vote (a stop count decided elsewhere, race_stop_count_v1)."""
     base = predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps, top_k=1)
-    if wear is None:
+    if wear is None and stops is None:
         return base
-    stops = stops_from_wear(race_modes(history), wear_by_race, wear=wear, regulation_era=regulation_era)
+    if stops is None:
+        stops = stops_from_wear(race_modes(history), wear_by_race, wear=wear, regulation_era=regulation_era)
     pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)
             and _stop_count(h) == stops]
     if stops is None or not pool:
@@ -345,17 +347,20 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
     others = tuple((s, w) for s, w in predict_era_mode(history, regulation_era=regulation_era,
                                                        total_laps=total_laps).alternatives
                    if s.sequence != sequence)
-    return StrategyPrediction(strategy, f"practice wear {wear * 100:+.3f}%/lap -> {stops} stop(s), "
+    why = f"practice wear {wear * 100:+.3f}%/lap" if wear is not None else "stop count given"
+    return StrategyPrediction(strategy, f"{why} -> {stops} stop(s), "
                                         f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
 def predict_from_wear_timed(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
-                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS) -> StrategyPrediction:
+                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS,
+                            stops: int | None = None) -> StrategyPrediction:
     """Method M: method I's stop count and sequence; stop laps = median stop fractions of cars
     with that many stops in the k earlier races (same era) whose practice wear was closest.
-    High wear -> earlier stops. Fewer than MIN_SEQUENCE_EXAMPLES such cars: I's timing."""
+    High wear -> earlier stops. Fewer than MIN_SEQUENCE_EXAMPLES such cars: I's timing.
+    `stops` overrides the stop count as in predict_from_wear."""
     base = predict_from_wear(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
-                             total_laps=total_laps)
+                             total_laps=total_laps, stops=stops)
     if wear is None or base.strategy is None:
         return base
     stops = len(base.strategy.sequence) - 1
