@@ -342,3 +342,12 @@ def get_all_time_records(db: Session = Depends(get_db)):
     })
 
     return {"records": records}
+
+
+@router.get("/live-predictions")
+def get_live_predictions(db: Session = Depends(get_db)):
+    """Race-winner predictions frozen before each race (both stages) and how they scored.
+    Only raced weekends with a frozen prediction appear; replays are never included."""
+    from live_record_v1 import score
+
+    return score(db)

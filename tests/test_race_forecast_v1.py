@@ -539,3 +539,50 @@ def test_out_of_position_starter_counts_part_of_the_way_back():
     plain = cm.race_probabilities(st, entrants, grid_coef=1.0, dnf=0.0, sims=4000)
     with_quali = cm.race_probabilities(st, entrants, grid_coef=1.0, dnf=0.0, sims=4000, quali={1: 2, 2: 10})
     assert with_quali.p_win[1] > plain.p_win[1]
+
+
+def test_live_record_freezes_each_stage_only_while_it_is_open(forecast_db, monkeypatch):
+    import championship_model_v1
+    import live_record_v1 as lr
+
+    monkeypatch.setattr(championship_model_v1, "MIN_HISTORY", 3)
+    with forecast_db.connect() as db:
+        tx = db.begin()
+        try:
+            assert lr.freeze(db, 5) == []                                  # already raced: never touched
+            assert lr.freeze(db, 8) == ["pre_qualifying"]                  # no qualifying yet
+            assert lr.freeze(db, 7) == ["post_qualifying"]                 # grid known, race not run
+            assert lr.freeze(db, 7) == ["post_qualifying"]                 # rewritten, not duplicated
+            n = db.execute(text("SELECT COUNT(*) FROM winner_prediction_live WHERE race_id = 7")).scalar()
+            assert n == 12
+            assert lr.score(db)["calls"] == []                             # nothing raced yet
+            # race 7 is run: driver 12 (on pole) wins
+            s = db.execute(text("INSERT INTO sessions (race_id, session_type, start_time) VALUES (7, 'R', now()) "
+                                "RETURNING id")).scalar()
+            for d in range(1, 13):
+                e = db.execute(text("SELECT id FROM race_entries WHERE race_id = 7 AND driver_id = :d"), {"d": d}).scalar()
+                db.execute(text("INSERT INTO race_results (session_id, race_entry_id, finishing_position, status) "
+                                "VALUES (:s, :e, :p, 'Finished')"), {"s": s, "e": e, "p": 13 - d})
+            assert lr.freeze(db, 7) == []                                  # frozen for good now
+            record = lr.score(db)
+            call = record["calls"][0]
+            assert call["stage"] == "post_qualifying" and call["winner"].startswith("Driver")
+            assert record["summary"]["post_qualifying"]["calls"] == 1
+            assert call["favourite_won"] == (call["winner_rank"] == 1)
+            assert sum(v["calls"] for v in record["summary"]["post_qualifying"]["by_confidence"].values()) == 1
+        finally:
+            tx.rollback()
+
+
+def test_live_record_stage_rule():
+    import live_record_v1 as lr
+
+    both = {"stages": {"pre_qualifying": {}, "post_qualifying": {}}}
+    assert lr.frozen_stages(both, qualifying_done=False) == ["pre_qualifying"]
+    assert lr.frozen_stages(both, qualifying_done=True) == ["post_qualifying"]
+    assert lr.frozen_stages({"stages": {"pre_qualifying": {}}}, qualifying_done=True) == []
+
+
+def test_live_record_endpoint(client):
+    body = client.get("/records/live-predictions").json()
+    assert body["model_version"] == "winner_v1" and body["calls"] == [] and body["summary"] == {}

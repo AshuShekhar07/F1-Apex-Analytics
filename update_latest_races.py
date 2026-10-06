@@ -12,7 +12,9 @@ One command instead of a dozen scripts in the right order:
               (fetch_starting_grid_v1, penalties applied) is in
   5. titles   drivers' and constructors' title chances after the latest round, if not stored
               yet (championship_projection_v1)
-  6. score    optional (--score): the prediction scoreboard vs the saved baseline
+  6. live     the next race's winner prediction frozen for the live record: before
+              qualifying, then again once the grid is known (live_record_v1)
+  7. score    optional (--score): the prediction scoreboard vs the saved baseline
 
     python update_latest_races.py                     # current season
     python update_latest_races.py --season 2026
@@ -161,6 +163,18 @@ def main() -> int:
         print(f"  title chances stored after round(s) {rounds}" if rounds else "  nothing new to project")
     except ValueError as exc:
         print(f"  not projectable yet ({exc})")
+
+    print(f"\n=== LIVE RECORD ===")
+    from live_record_v1 import freeze
+    from winner_prediction_v1 import PredictionError, next_race_id
+    with engine.begin() as db:
+        try:
+            race_id = next_race_id(db)
+            stages = freeze(db, race_id)
+            print(f"  next race (id {race_id}): froze {', '.join(stages)}" if stages
+                  else f"  next race (id {race_id}): nothing to freeze yet")
+        except PredictionError as exc:
+            print(f"  nothing to freeze ({exc})")
 
     if args.score:
         print(f"\n=== SCOREBOARD vs {args.score} ===", flush=True)
