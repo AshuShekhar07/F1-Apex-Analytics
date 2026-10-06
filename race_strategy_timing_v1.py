@@ -67,6 +67,7 @@ class CarStrategy:
     race_laps: int
     stints: tuple[Stint, ...]
     team_id: int | None = None
+    finish: int | None = None
 
     @property
     def sequence(self) -> tuple[str, ...]:
@@ -694,12 +695,12 @@ def load_car_strategies(db: Any, *, before_date: date | None = None, start_year:
         if not laps:
             continue
         race_laps = max(l.lap_number for rows in laps.values() for l in rows)
-        grids, teams = {}, {}
-        for entry, grid, team in db.execute(text("""
-            SELECT rr.race_entry_id, rr.starting_grid_position, re.team_id FROM race_results rr
+        grids, teams, finishes = {}, {}, {}
+        for entry, grid, team, finish in db.execute(text("""
+            SELECT rr.race_entry_id, rr.starting_grid_position, re.team_id, rr.finishing_position FROM race_results rr
             JOIN race_entries re ON re.id = rr.race_entry_id WHERE rr.session_id = :s
         """), {"s": race["session_id"]}).all():
-            grids[entry], teams[entry] = grid, team
+            grids[entry], teams[entry], finishes[entry] = grid, team, finish
         for entry, rows in laps.items():
             if max(l.lap_number for l in rows) < min_distance * race_laps:
                 continue
@@ -707,5 +708,5 @@ def load_car_strategies(db: Any, *, before_date: date | None = None, start_year:
             if stints:
                 out.append(CarStrategy(race["id"], race["race_date"], race["season_year"], race["track_id"],
                                        race["regulation_era"], grids.get(entry), bool(race["wet"]),
-                                       race_laps, tuple(stints), teams.get(entry)))
+                                       race_laps, tuple(stints), teams.get(entry), finishes.get(entry)))
     return out
