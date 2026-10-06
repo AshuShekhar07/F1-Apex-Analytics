@@ -1,0 +1,556 @@
+race 82 (2022-03-20): 5 front-grid cars scored
+race 83 (2022-03-27): 5 front-grid cars scored
+race 84 (2022-04-10): 4 front-grid cars scored
+race 85 (2022-04-24): 4 front-grid cars scored
+race 87 (2022-05-22): 4 front-grid cars scored
+race 89 (2022-06-12): 3 front-grid cars scored
+race 90 (2022-06-19): 5 front-grid cars scored
+race 92 (2022-07-10): 3 front-grid cars scored
+race 93 (2022-07-24): 4 front-grid cars scored
+race 95 (2022-08-28): 4 front-grid cars scored
+race 96 (2022-09-04): 5 front-grid cars scored
+race 97 (2022-09-11): 4 front-grid cars scored
+race 100 (2022-10-23): 3 front-grid cars scored
+race 101 (2022-10-30): 5 front-grid cars scored
+race 102 (2022-11-13): 5 front-grid cars scored
+race 103 (2022-11-20): 5 front-grid cars scored
+race 104 (2023-03-05): 4 front-grid cars scored
+race 105 (2023-03-19): 4 front-grid cars scored
+race 106 (2023-04-02): 4 front-grid cars scored
+race 107 (2023-04-30): 5 front-grid cars scored
+race 108 (2023-05-07): 5 front-grid cars scored
+race 110 (2023-06-04): 5 front-grid cars scored
+race 111 (2023-06-18): 4 front-grid cars scored
+race 113 (2023-07-09): 5 front-grid cars scored
+race 114 (2023-07-23): 5 front-grid cars scored
+race 117 (2023-09-03): 5 front-grid cars scored
+race 118 (2023-09-17): 5 front-grid cars scored
+race 119 (2023-09-24): 4 front-grid cars scored
+race 120 (2023-10-08): 4 front-grid cars scored
+race 121 (2023-10-22): 5 front-grid cars scored
+race 122 (2023-10-29): 4 front-grid cars scored
+race 124 (2023-11-18): 5 front-grid cars scored
+race 125 (2023-11-26): 5 front-grid cars scored
+race 126 (2024-03-02): 5 front-grid cars scored
+race 127 (2024-03-09): 5 front-grid cars scored
+race 128 (2024-03-24): 4 front-grid cars scored
+race 129 (2024-04-07): 5 front-grid cars scored
+race 130 (2024-04-21): 5 front-grid cars scored
+race 131 (2024-05-05): 5 front-grid cars scored
+race 132 (2024-05-19): 5 front-grid cars scored
+race 133 (2024-05-26): 5 front-grid cars scored
+race 138 (2024-07-21): 5 front-grid cars scored
+race 139 (2024-07-28): 5 front-grid cars scored
+race 140 (2024-08-25): 5 front-grid cars scored
+race 141 (2024-09-01): 5 front-grid cars scored
+race 142 (2024-09-15): 5 front-grid cars scored
+race 143 (2024-09-22): 5 front-grid cars scored
+race 144 (2024-10-20): 5 front-grid cars scored
+race 145 (2024-10-27): 5 front-grid cars scored
+race 147 (2024-11-23): 4 front-grid cars scored
+race 148 (2024-12-01): 5 front-grid cars scored
+race 149 (2024-12-08): 5 front-grid cars scored
+race 151 (2025-03-23): 5 front-grid cars scored
+race 152 (2025-04-06): 5 front-grid cars scored
+race 153 (2025-04-13): 5 front-grid cars scored
+race 154 (2025-04-20): 5 front-grid cars scored
+race 156 (2025-05-18): 5 front-grid cars scored
+race 157 (2025-05-25): 5 front-grid cars scored
+race 158 (2025-06-01): 5 front-grid cars scored
+race 160 (2025-06-29): 5 front-grid cars scored
+race 163 (2025-08-03): 5 front-grid cars scored
+race 164 (2025-08-31): 5 front-grid cars scored
+race 165 (2025-09-07): 5 front-grid cars scored
+race 166 (2025-09-21): 5 front-grid cars scored
+race 168 (2025-10-19): 5 front-grid cars scored
+race 169 (2025-10-26): 5 front-grid cars scored
+race 170 (2025-11-09): 4 front-grid cars scored
+race 171 (2025-11-22): 5 front-grid cars scored
+race 172 (2025-11-30): 5 front-grid cars scored
+race 173 (2025-12-07): 5 front-grid cars scored
+
+=== WINNING STRATEGY BACKTEST (dry races 2022-2025, front grid = P1-P5, 70 races) ===
+
+--- vs M, production ---
+metric                 method                        value      n   vs M production (all cars) [90% CI]
+stop_count_hit         E era front grid               0.316    328   -0.162 [-0.251, -0.073]  WORSE
+stop_count_hit         H hybrid (wear stops, track plan)   0.478    328   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit         M production (all cars)        0.478    328   
+stop_count_hit         W winning strategy (track)     0.410    328   -0.068 [-0.168, +0.034]  no clear difference
+stop_count_hit_green   E era front grid               0.331    228   -0.242 [-0.347, -0.137]  WORSE
+stop_count_hit_green   H hybrid (wear stops, track plan)   0.573    228   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit_green   M production (all cars)        0.573    228   
+stop_count_hit_green   W winning strategy (track)     0.462    228   -0.111 [-0.232, +0.004]  no clear difference
+sequence_hit           E era front grid               0.175    328   -0.149 [-0.220, -0.080]  WORSE
+sequence_hit           H hybrid (wear stops, track plan)   0.308    328   -0.016 [-0.047, +0.013]  no clear difference
+sequence_hit           M production (all cars)        0.324    328   
+sequence_hit           W winning strategy (track)     0.245    328   -0.079 [-0.167, +0.009]  no clear difference
+sequence_hit_green     E era front grid               0.204    228   -0.198 [-0.288, -0.112]  WORSE
+sequence_hit_green     H hybrid (wear stops, track plan)   0.382    228   -0.019 [-0.054, +0.012]  no clear difference
+sequence_hit_green     M production (all cars)        0.402    228   
+sequence_hit_green     W winning strategy (track)     0.295    228   -0.107 [-0.214, -0.005]  WORSE
+first_window_hit       E era front grid               0.323    265   
+first_window_hit       H hybrid (wear stops, track plan)   0.386    265   
+first_window_hit       M production (all cars)          nan      0   
+first_window_hit       W winning strategy (track)     0.333    265   
+second_window_hit      E era front grid               0.362     47   
+second_window_hit      H hybrid (wear stops, track plan)   0.504     57   
+second_window_hit      M production (all cars)          nan      0   
+second_window_hit      W winning strategy (track)     0.389     71   
+first_stop_within_3    E era front grid               0.362    265   -0.100 [-0.178, -0.025]  WORSE
+first_stop_within_3    H hybrid (wear stops, track plan)   0.463    265   -0.010 [-0.060, +0.040]  no clear difference
+first_stop_within_3    M production (all cars)        0.468    260   
+first_stop_within_3    W winning strategy (track)     0.411    265   -0.063 [-0.142, +0.019]  no clear difference
+first_window_width     E era front grid               6.471    328   
+first_window_width     H hybrid (wear stops, track plan)   6.086    328   
+first_window_width     M production (all cars)          nan      0   
+first_window_width     W winning strategy (track)     5.686    328   
+winner_sequence_hit    E era front grid               0.182     66   -0.121 [-0.212, -0.030]  WORSE
+winner_sequence_hit    H hybrid (wear stops, track plan)   0.288     66   -0.015 [-0.061, +0.030]  no clear difference
+winner_sequence_hit    M production (all cars)        0.303     66   
+winner_sequence_hit    W winning strategy (track)     0.258     66   -0.045 [-0.152, +0.076]  no clear difference
+
+--- vs E, the era's front-grid plan (what the track history adds) ---
+metric                 method                        value      n   vs E era front grid [90% CI]
+stop_count_hit         E era front grid               0.316    328   
+stop_count_hit         W winning strategy (track)     0.410    328   +0.094 [-0.005, +0.191]  no clear difference
+stop_count_hit_green   E era front grid               0.331    228   
+stop_count_hit_green   W winning strategy (track)     0.462    228   +0.131 [+0.013, +0.250]  BETTER
+sequence_hit           E era front grid               0.175    328   
+sequence_hit           W winning strategy (track)     0.245    328   +0.070 [-0.018, +0.156]  no clear difference
+sequence_hit_green     E era front grid               0.204    228   
+sequence_hit_green     W winning strategy (track)     0.295    228   +0.091 [-0.018, +0.200]  no clear difference
+first_window_hit       E era front grid               0.323    265   
+first_window_hit       W winning strategy (track)     0.333    265   +0.010 [-0.072, +0.090]  no clear difference
+second_window_hit      E era front grid               0.362     47   
+second_window_hit      W winning strategy (track)     0.389     71   -0.062 [-0.188, +0.050]  no clear difference
+first_stop_within_3    E era front grid               0.362    265   
+first_stop_within_3    W winning strategy (track)     0.411    265   +0.049 [-0.037, +0.136]  no clear difference
+first_window_width     E era front grid               6.471    328   
+first_window_width     W winning strategy (track)     5.686    328   -0.786 [-1.157, -0.429]  BETTER
+winner_sequence_hit    E era front grid               0.182     66   
+winner_sequence_hit    W winning strategy (track)     0.258     66   +0.076 [-0.030, +0.182]  no clear difference
+
+--- H vs W, the track-only front-grid plan ---
+metric                 method                        value      n   vs W winning strategy (track) [90% CI]
+stop_count_hit         H hybrid (wear stops, track plan)   0.478    328   +0.068 [-0.034, +0.168]  no clear difference
+stop_count_hit         W winning strategy (track)     0.410    328   
+stop_count_hit_green   H hybrid (wear stops, track plan)   0.573    228   +0.111 [-0.004, +0.232]  no clear difference
+stop_count_hit_green   W winning strategy (track)     0.462    228   
+sequence_hit           H hybrid (wear stops, track plan)   0.308    328   +0.063 [-0.020, +0.146]  no clear difference
+sequence_hit           W winning strategy (track)     0.245    328   
+sequence_hit_green     H hybrid (wear stops, track plan)   0.382    228   +0.088 [-0.007, +0.193]  no clear difference
+sequence_hit_green     W winning strategy (track)     0.295    228   
+first_window_hit       H hybrid (wear stops, track plan)   0.386    265   +0.053 [-0.016, +0.121]  no clear difference
+first_window_hit       W winning strategy (track)     0.333    265   
+second_window_hit      H hybrid (wear stops, track plan)   0.504     57   +0.000 [+0.000, +0.000]  no clear difference
+second_window_hit      W winning strategy (track)     0.389     71   
+first_stop_within_3    H hybrid (wear stops, track plan)   0.463    265   +0.052 [-0.026, +0.130]  no clear difference
+first_stop_within_3    W winning strategy (track)     0.411    265   
+first_window_width     H hybrid (wear stops, track plan)   6.086    328   +0.400 [-0.014, +0.814]  no clear difference
+first_window_width     W winning strategy (track)     5.686    328   
+winner_sequence_hit    H hybrid (wear stops, track plan)   0.288     66   +0.030 [-0.076, +0.136]  no clear difference
+winner_sequence_hit    W winning strategy (track)     0.258     66   
+
+--- confidence levels, H hybrid (wear stops, track plan) (green-flag front-grid cars; 90% CI resamples races) ---
+level    races   cars   stop count right          main or alternative right   tyre order right
+high         1      5   1.000 [1.000, 1.000]      1.000 [1.000, 1.000]        0.600 [0.600, 0.600]
+medium      18     73   0.636 [0.472, 0.789]      0.906 [0.794, 0.989]        0.367 [0.200, 0.533]
+low         38    150   0.532 [0.412, 0.649]      0.800 [0.696, 0.893]        0.384 [0.272, 0.505]
+
+--- confidence levels, W winning strategy (track) (green-flag front-grid cars; 90% CI resamples races) ---
+level    races   cars   stop count right          main or alternative right   tyre order right
+high         1      5   1.000 [1.000, 1.000]      1.000 [1.000, 1.000]        0.600 [0.600, 0.600]
+medium      31    119   0.552 [0.426, 0.678]      0.902 [0.817, 0.971]        0.355 [0.232, 0.477]
+low         25    104   0.328 [0.192, 0.469]      0.797 [0.664, 0.917]        0.208 [0.099, 0.328]
+
+--- last 6 predictions ---
+race 168 (2025-10-19):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 23-31 (typical lap 25)
+  Confidence: low
+  Front-grid share: 40% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 54%
+    First pit window: laps 12-17 (typical lap 13)
+    Second pit window: laps 34-37 (typical lap 35)
+  Track record (last races here):
+    2024: winner from P4: MEDIUM -> HARD (1 stop), laps 26; front grid 1 stop x5
+    2023: winner from P6: MEDIUM -> MEDIUM -> HARD (2 stops), laps 16, 35; front grid 1 stop x1, 2 stops x4
+    2022: winner from P2: MEDIUM -> HARD -> MEDIUM (2 stops), laps 13, 35; front grid 2 stops x2, 3 stops x1
+  Based on: stop count from practice tyre wear (+0.012%/lap); tyre order and windows from 17.5 front-grid cars in 5 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 5
+  Green-flag stops inside their window: 1 of 5
+    P1: MEDIUM -> SOFT, stops 33 [out] different plan, finished P1
+    P2: MEDIUM -> SOFT, stops 32 [out] different plan, finished P2
+    P3: SOFT -> MEDIUM, stops 22 [out] different plan, finished P3
+    P4: MEDIUM -> SOFT, stops 33 [out] different plan, finished P6
+    P5: MEDIUM -> SOFT, stops 31 [in] different plan, finished P4
+    Winner (from P1): MEDIUM -> SOFT, stops 33 [out] different plan, finished P1
+race 169 (2025-10-26):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 25-31 (typical lap 29)
+  Confidence: medium
+  Front-grid share: 72% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> SOFT (2 stops), share 26%
+    First pit window: laps 16-23 (typical lap 18)
+    Second pit window: laps 42-49 (typical lap 45)
+  Track record (last races here):
+    2024: winner from P1: MEDIUM -> HARD (1 stop), laps 32; front grid 1 stop x4, 2 stops x1
+    2023: winner from P3: MEDIUM -> HARD -> HARD -> HARD (3 stops), laps 19, 33, 34 (a stop under SC/VSC); front grid 2 stops x3, 3 stops x1
+    2022: winner from P1: SOFT -> MEDIUM (1 stop), laps 25; front grid 1 stop x4, 2 stops x1
+  Based on: stop count from practice tyre wear (+0.077%/lap); tyre order and windows from 14.5 front-grid cars in 4 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 5
+  Green-flag stops inside their window: 2 of 5
+    P1: SOFT -> MEDIUM, stops 34 [out] different plan, finished P1
+    P2: SOFT -> MEDIUM, stops 31 [in] different plan, finished P2
+    P3: SOFT -> MEDIUM -> SOFT, stops 23, 47 [out SC/none] different plan, finished P8
+    P4: SOFT -> MEDIUM -> SOFT, stops 25, 48 [in SC/none] different plan, finished P7
+    P5: MEDIUM -> SOFT, stops 37 [out] different plan, finished P3
+    Winner (from P1): SOFT -> MEDIUM, stops 34 [out] different plan, finished P1
+race 170 (2025-11-09):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 24-33 (typical lap 28)
+  Confidence: low
+  Front-grid share: 32% of comparable front-grid cars ran 1 stop
+  Alternative: SOFT -> MEDIUM -> SOFT (2 stops), share 49%
+    First pit window: laps 23-25 (typical lap 24)
+    Second pit window: laps 47-49 (typical lap 48)
+  Track record (last races here):
+    2022: winner from P1: SOFT -> MEDIUM -> SOFT (2 stops), laps 24, 49; front grid 2 stops x3, 3 stops x2
+    2021: winner from P10: MEDIUM -> MEDIUM -> MEDIUM -> HARD -> HARD (4 stops), laps 7, 8, 26, 43 (a stop under SC/VSC); front grid 4 stops x3, 5 stops x2
+    2019: winner from P1: SOFT -> SOFT -> MEDIUM -> SOFT (3 stops), laps 21, 44, 54 (a stop under SC/VSC); front grid 2 stops x2, 3 stops x2
+  Based on: stop count from practice tyre wear (+0.107%/lap); tyre order and windows from 7.5 front-grid cars in 3 earlier race(s) here; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 4
+  Green-flag stops inside their window: 1 of 4
+    P1: MEDIUM -> SOFT -> MEDIUM, stops 30, 50 [in SC/none] different plan, finished P1
+    P2: SOFT -> MEDIUM -> MEDIUM, stops 21, 47 [out SC/none] different plan, finished P2
+    P4: MEDIUM -> SOFT -> MEDIUM, stops 38, 51 [out SC/none] different plan, finished P5
+    P5: SOFT -> MEDIUM -> MEDIUM, stops 18, 37 [out SC/none] different plan, finished P8
+    Winner (from P1): MEDIUM -> SOFT -> MEDIUM, stops 30, 50 [in SC/none] different plan, finished P1
+race 171 (2025-11-22):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 17-23 (typical lap 20)
+  Confidence: low
+  Front-grid share: 46% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 51%
+    First pit window: laps 9-11 (typical lap 10)
+    Second pit window: laps 27-31 (typical lap 28)
+  Track record (last races here):
+    2024: winner from P1: MEDIUM -> HARD -> HARD (2 stops), laps 12, 32; front grid 2 stops x4
+    2023: winner from P2: MEDIUM -> HARD -> HARD (2 stops), laps 16, 26 (a stop under SC/VSC); front grid 1 stop x3, 2 stops x2
+  Based on: stop count: the era's usual (no practice tyre wear measured); tyre order and windows from 7 front-grid cars in 2 earlier race(s) here; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 5 of 5
+  Green-flag stops inside their window: 4 of 5
+    P1: MEDIUM -> HARD, stops 22 [in] MATCH, finished P19
+    P2: MEDIUM -> HARD, stops 25 [out] MATCH, finished P1
+    P3: MEDIUM -> HARD, stops 22 [in] MATCH, finished P5
+    P4: MEDIUM -> HARD, stops 17 [in] MATCH, finished P2
+    P5: MEDIUM -> HARD, stops 21 [in] MATCH, finished P20
+    Winner (from P2): MEDIUM -> HARD, stops 25 [out] MATCH, finished P1
+race 172 (2025-11-30):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 19-26 (typical lap 22)
+  Confidence: low
+  Front-grid share: 32% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> MEDIUM -> HARD -> MEDIUM (3 stops), share 42%
+    First pit window: laps 9-14 (typical lap 11)
+    Second pit window: laps 24-32 (typical lap 27)
+    Third pit window: laps 39-44 (typical lap 43)
+  Track record (last races here):
+    2024: winner from P2: MEDIUM -> HARD -> HARD -> HARD (3 stops), laps 35, 36, 37 (a stop under SC/VSC); front grid 3 stops x3, 4 stops x2
+    2023: winner from P1: MEDIUM -> MEDIUM -> HARD -> MEDIUM (3 stops), laps 17, 34, 51; front grid 3 stops x3, 4 stops x1
+  Based on: stop count from practice tyre wear (-0.129%/lap); tyre order and windows from 3 front-grid cars in 1 earlier race(s) here; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 5
+  Green-flag stops inside their window: 2 of 2
+    P1: MEDIUM -> MEDIUM -> HARD, stops 24, 42 [in SC/none] different plan, finished P2
+    P2: MEDIUM -> MEDIUM -> HARD, stops 25, 44 [in SC/none] different plan, finished P4
+    P3: MEDIUM -> MEDIUM -> HARD, stops 7, 32 [SC/none SC/none] different plan, finished P1
+    P4: MEDIUM -> MEDIUM -> HARD, stops 7, 32 [SC/none SC/none] different plan, finished P6
+    P5: MEDIUM -> MEDIUM -> HARD, stops 7, 32 [SC/none SC/none] different plan, finished P5
+    Winner (from P3): MEDIUM -> MEDIUM -> HARD, stops 7, 32 [SC/none SC/none] different plan, finished P1
+race 173 (2025-12-07):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD -> HARD (2 stops)
+  First pit window: laps 13-17 (typical lap 14)
+  Second pit window: laps 33-40 (typical lap 35)
+  Confidence: low
+  Front-grid share: 48% of comparable front-grid cars ran 2 stops
+  Alternative: MEDIUM -> HARD (1 stop), share 50%
+    First pit window: laps 18-26 (typical lap 21)
+  Track record (last races here):
+    2024: winner from P1: MEDIUM -> HARD (1 stop), laps 26; front grid 1 stop x4, 2 stops x1
+    2023: winner from P1: MEDIUM -> HARD -> HARD (2 stops), laps 16, 43; front grid 2 stops x5
+    2022: winner from P1: MEDIUM -> HARD (1 stop), laps 20; front grid 1 stop x3, 2 stops x2
+  Based on: stop count from practice tyre wear (+0.088%/lap); tyre order and windows from 19 front-grid cars in 5 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD -> HARD (2 stops)
+  Front grid on the predicted tyre order: 1 of 5
+  Green-flag stops inside their window: 5 of 7
+    P1: MEDIUM -> HARD, stops 23 [out] different plan, finished P1
+    P2: MEDIUM -> HARD -> HARD, stops 16, 40 [in in] MATCH, finished P3
+    P3: HARD -> MEDIUM, stops 41 [out] different plan, finished P2
+    P4: MEDIUM -> HARD, stops 14 [in] different plan, finished P5
+    P5: MEDIUM -> HARD -> MEDIUM, stops 16, 39 [in in] different plan, finished P4
+    Winner (from P1): MEDIUM -> HARD, stops 23 [out] different plan, finished P1
+race 174 (2026-03-08): 3 front-grid cars scored
+race 175 (2026-03-15): 4 front-grid cars scored
+race 176 (2026-03-29): 5 front-grid cars scored
+race 178 (2026-05-24): 3 front-grid cars scored
+race 179 (2026-06-07): 3 front-grid cars scored
+race 180 (2026-06-14): 5 front-grid cars scored
+race 181 (2026-06-28): 5 front-grid cars scored
+race 182 (2026-07-05): 5 front-grid cars scored
+race 183 (2026-07-19): 4 front-grid cars scored
+race 184 (2026-07-26): 4 front-grid cars scored
+race 186 (2026-09-06): 4 front-grid cars scored
+race 187 (2026-09-13): 4 front-grid cars scored
+race 188 (2026-09-26): 4 front-grid cars scored
+
+=== WINNING STRATEGY BACKTEST (dry races 2026-2026, front grid = P1-P5, 13 races) ===
+
+--- vs M, production ---
+metric                 method                        value      n   vs M production (all cars) [90% CI]
+stop_count_hit         E era front grid               0.444     53   -0.008 [-0.254, +0.262]  no clear difference
+stop_count_hit         H hybrid (wear stops, track plan)   0.528     53   +0.077 [+0.000, +0.231]  no clear difference
+stop_count_hit         M production (all cars)        0.451     53   
+stop_count_hit         W winning strategy (track)     0.405     53   -0.046 [-0.246, +0.154]  no clear difference
+stop_count_hit_green   E era front grid               0.370     20   -0.130 [-0.444, +0.185]  no clear difference
+stop_count_hit_green   H hybrid (wear stops, track plan)   0.611     20   +0.111 [+0.000, +0.333]  no clear difference
+stop_count_hit_green   M production (all cars)        0.500     20   
+stop_count_hit_green   W winning strategy (track)     0.417     20   -0.083 [-0.361, +0.222]  no clear difference
+sequence_hit           E era front grid               0.231     53   -0.085 [-0.258, +0.108]  no clear difference
+sequence_hit           H hybrid (wear stops, track plan)   0.373     53   +0.058 [-0.038, +0.212]  no clear difference
+sequence_hit           M production (all cars)        0.315     53   
+sequence_hit           W winning strategy (track)     0.269     53   -0.046 [-0.215, +0.135]  no clear difference
+sequence_hit_green     E era front grid               0.222     20   -0.194 [-0.528, +0.139]  no clear difference
+sequence_hit_green     H hybrid (wear stops, track plan)   0.417     20   +0.000 [-0.222, +0.222]  no clear difference
+sequence_hit_green     M production (all cars)        0.417     20   
+sequence_hit_green     W winning strategy (track)     0.222     20   -0.194 [-0.528, +0.139]  no clear difference
+first_window_hit       E era front grid               0.228     30   
+first_window_hit       H hybrid (wear stops, track plan)   0.248     30   
+first_window_hit       M production (all cars)          nan      0   
+first_window_hit       W winning strategy (track)     0.148     30   
+second_window_hit      E era front grid               0.417      7   
+second_window_hit      H hybrid (wear stops, track plan)   0.000     13   
+second_window_hit      M production (all cars)          nan      0   
+second_window_hit      W winning strategy (track)     0.000      9   
+first_stop_within_3    E era front grid               0.228     30   -0.183 [-0.433, +0.056]  no clear difference
+first_stop_within_3    H hybrid (wear stops, track plan)   0.393     30   -0.000 [-0.211, +0.200]  no clear difference
+first_stop_within_3    M production (all cars)        0.326     29   
+first_stop_within_3    W winning strategy (track)     0.273     30   -0.133 [-0.400, +0.122]  no clear difference
+first_window_width     E era front grid               5.615     53   
+first_window_width     H hybrid (wear stops, track plan)   5.308     53   
+first_window_width     M production (all cars)          nan      0   
+first_window_width     W winning strategy (track)     5.846     53   
+winner_sequence_hit    E era front grid               0.250     12   +0.000 [-0.167, +0.167]  no clear difference
+winner_sequence_hit    H hybrid (wear stops, track plan)   0.333     12   +0.083 [+0.000, +0.250]  no clear difference
+winner_sequence_hit    M production (all cars)        0.250     12   
+winner_sequence_hit    W winning strategy (track)     0.250     12   +0.000 [-0.167, +0.167]  no clear difference
+
+--- vs E, the era's front-grid plan (what the track history adds) ---
+metric                 method                        value      n   vs E era front grid [90% CI]
+stop_count_hit         E era front grid               0.444     53   
+stop_count_hit         W winning strategy (track)     0.405     53   -0.038 [-0.231, +0.131]  no clear difference
+stop_count_hit_green   E era front grid               0.370     20   
+stop_count_hit_green   W winning strategy (track)     0.417     20   +0.046 [-0.074, +0.213]  no clear difference
+sequence_hit           E era front grid               0.231     53   
+sequence_hit           W winning strategy (track)     0.269     53   +0.038 [+0.000, +0.115]  no clear difference
+sequence_hit_green     E era front grid               0.222     20   
+sequence_hit_green     W winning strategy (track)     0.222     20   +0.000 [+0.000, +0.000]  no clear difference
+first_window_hit       E era front grid               0.228     30   
+first_window_hit       W winning strategy (track)     0.148     30   -0.080 [-0.275, +0.065]  no clear difference
+second_window_hit      E era front grid               0.417      7   
+second_window_hit      W winning strategy (track)     0.000      9   -0.500 [-0.500, -0.500]  WORSE
+first_stop_within_3    E era front grid               0.228     30   
+first_stop_within_3    W winning strategy (track)     0.273     30   +0.045 [+0.000, +0.095]  no clear difference
+first_window_width     E era front grid               5.615     53   
+first_window_width     W winning strategy (track)     5.846     53   +0.231 [-1.077, +1.538]  no clear difference
+winner_sequence_hit    E era front grid               0.250     12   
+winner_sequence_hit    W winning strategy (track)     0.250     12   +0.000 [+0.000, +0.000]  no clear difference
+
+--- H vs W, the track-only front-grid plan ---
+metric                 method                        value      n   vs W winning strategy (track) [90% CI]
+stop_count_hit         H hybrid (wear stops, track plan)   0.528     53   +0.123 [+0.000, +0.277]  no clear difference
+stop_count_hit         W winning strategy (track)     0.405     53   
+stop_count_hit_green   H hybrid (wear stops, track plan)   0.611     20   +0.194 [+0.000, +0.417]  no clear difference
+stop_count_hit_green   W winning strategy (track)     0.417     20   
+sequence_hit           H hybrid (wear stops, track plan)   0.373     53   +0.104 [+0.000, +0.219]  no clear difference
+sequence_hit           W winning strategy (track)     0.269     53   
+sequence_hit_green     H hybrid (wear stops, track plan)   0.417     20   +0.194 [+0.000, +0.417]  no clear difference
+sequence_hit_green     W winning strategy (track)     0.222     20   
+first_window_hit       H hybrid (wear stops, track plan)   0.248     30   +0.100 [+0.000, +0.300]  no clear difference
+first_window_hit       W winning strategy (track)     0.148     30   
+second_window_hit      H hybrid (wear stops, track plan)   0.000     13   +0.000 [+0.000, +0.000]  no clear difference
+second_window_hit      W winning strategy (track)     0.000      9   
+first_stop_within_3    H hybrid (wear stops, track plan)   0.393     30   +0.120 [+0.000, +0.300]  no clear difference
+first_stop_within_3    W winning strategy (track)     0.273     30   
+first_window_width     H hybrid (wear stops, track plan)   5.308     53   -0.538 [-1.385, +0.000]  no clear difference
+first_window_width     W winning strategy (track)     5.846     53   
+winner_sequence_hit    H hybrid (wear stops, track plan)   0.333     12   +0.083 [+0.000, +0.250]  no clear difference
+winner_sequence_hit    W winning strategy (track)     0.250     12   
+
+--- confidence levels, H hybrid (wear stops, track plan) (green-flag front-grid cars; 90% CI resamples races) ---
+level    races   cars   stop count right          main or alternative right   tyre order right
+high         1      1   0.000 [0.000, 0.000]      0.000 [0.000, 0.000]        0.000 [0.000, 0.000]
+medium       3      6   1.000 [1.000, 1.000]      1.000 [1.000, 1.000]        0.667 [0.333, 1.000]
+low          5     13   0.500 [0.150, 0.800]      0.767 [0.583, 0.950]        0.350 [0.000, 0.700]
+
+--- confidence levels, W winning strategy (track) (green-flag front-grid cars; 90% CI resamples races) ---
+level    races   cars   stop count right          main or alternative right   tyre order right
+high         1      1   0.000 [0.000, 0.000]      0.000 [0.000, 0.000]        0.000 [0.000, 0.000]
+medium       5     11   0.600 [0.200, 1.000]      0.950 [0.850, 1.000]        0.400 [0.000, 0.800]
+low          3      8   0.250 [0.000, 0.500]      0.694 [0.472, 0.917]        0.000 [0.000, 0.000]
+
+--- last 6 predictions ---
+race 182 (2026-07-05):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 17-21 (typical lap 18)
+  Confidence: low
+  Front-grid share: 43% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 42%
+    First pit window: laps 10-14 (typical lap 11)
+    Second pit window: laps 28-36 (typical lap 29)
+  Track record (last races here):
+    2023: winner from P1: MEDIUM -> SOFT (1 stop), laps 33 (a stop under SC/VSC); front grid 1 stop x4, 2 stops x1
+    2021: winner from P2: MEDIUM -> MEDIUM -> HARD (2 stops), laps 2, 27 (a stop under SC/VSC); front grid 2 stops x4
+    2020: winner from P4: HARD -> MEDIUM -> HARD (2 stops), laps 26, 32; front grid 2 stops x3, 3 stops x2
+  Based on: stop count from practice tyre wear (+0.032%/lap); tyre order and windows from 6.5 front-grid cars in 5 earlier race(s) here; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 5
+  Green-flag stops inside their window: 1 of 5
+    P1: MEDIUM -> HARD -> MEDIUM -> MEDIUM, stops 35, 41, 43 [out SC/none SC/none] different plan, finished P15
+    P2: MEDIUM -> HARD -> SOFT, stops 25, 48 [out SC/none] different plan, finished P1
+    P3: MEDIUM -> HARD -> SOFT, stops 23, 48 [out SC/none] different plan, finished P3
+    P4: MEDIUM -> HARD -> MEDIUM, stops 23, 34 [out SC/none] different plan, finished P2
+    P5: MEDIUM -> HARD -> MEDIUM -> SOFT, stops 19, 38, 47 [in SC/none SC/none] different plan, finished P5
+    Winner (from P2): MEDIUM -> HARD -> SOFT, stops 25, 48 [out SC/none] different plan, finished P1
+race 183 (2026-07-19):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 14-17 (typical lap 15)
+  Confidence: low
+  Front-grid share: 27% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 58%
+    First pit window: laps 11-14 (typical lap 12)
+    Second pit window: laps 25-29 (typical lap 27)
+  Track record (last races here):
+    2024: winner from P3: MEDIUM -> HARD -> HARD (2 stops), laps 11, 26; front grid 2 stops x4, 3 stops x1
+    2022: winner from P14: SOFT -> MEDIUM -> MEDIUM (2 stops), laps 15, 30; front grid 2 stops x4
+    2020: winner from P1: MEDIUM -> HARD (1 stop), laps 11 (a stop under SC/VSC); front grid 1 stop x5
+  Based on: stop count: the era's usual (no practice tyre wear measured); tyre order and windows from 6.5 front-grid cars in 3 earlier race(s) here; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 3 of 4
+  Green-flag stops inside their window: 1 of 1
+    P1: MEDIUM -> SOFT, stops 18 [SC/none] different plan, finished P1
+    P2: MEDIUM -> HARD, stops 17 [in] MATCH, finished P3
+    P4: MEDIUM -> HARD, stops 20 [SC/none] MATCH, finished P2
+    P5: MEDIUM -> HARD, stops 20 [SC/none] MATCH, finished P4
+    Winner (from P1): MEDIUM -> SOFT, stops 18 [SC/none] different plan, finished P1
+race 184 (2026-07-26):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD -> HARD (2 stops)
+  First pit window: laps 16-21 (typical lap 18)
+  Second pit window: laps 42-49 (typical lap 45)
+  Confidence: medium
+  Front-grid share: 62% of comparable front-grid cars ran 2 stops
+  Alternative: MEDIUM -> HARD (1 stop), share 28%
+    First pit window: laps 22-28 (typical lap 24)
+  Track record (last races here):
+    2025: winner from P3: MEDIUM -> HARD (1 stop), laps 31; front grid 1 stop x2, 2 stops x3
+    2024: winner from P2: MEDIUM -> HARD -> MEDIUM (2 stops), laps 18, 47; front grid 2 stops x5
+    2023: winner from P2: MEDIUM -> HARD -> MEDIUM (2 stops), laps 23, 51; front grid 2 stops x5
+  Based on: stop count from practice tyre wear (+0.195%/lap); tyre order and windows from 10.5 front-grid cars in 5 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD -> HARD (2 stops)
+  Front grid on the predicted tyre order: 0 of 4
+  Green-flag stops inside their window: 2 of 8
+    P1: MEDIUM -> HARD -> HARD -> SOFT, stops 17, 39, 56 [in out SC/none] different plan, finished P1
+    P2: SOFT -> HARD -> HARD -> SOFT, stops 16, 36, 56 [in out SC/none] different plan, finished P4
+    P4: MEDIUM -> HARD -> SOFT, stops 14, 41 [out out] different plan, finished P2
+    P5: SOFT -> HARD -> HARD -> SOFT, stops 13, 30, 56 [out out SC/none] different plan, finished P5
+    Winner (from P1): MEDIUM -> HARD -> HARD -> SOFT, stops 17, 39, 56 [in out SC/none] different plan, finished P1
+race 186 (2026-09-06):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 20-29 (typical lap 22)
+  Confidence: medium
+  Front-grid share: 61% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 30%
+    First pit window: laps 10-14 (typical lap 11)
+    Second pit window: laps 29-35 (typical lap 31)
+  Track record (last races here):
+    2025: winner from P1: MEDIUM -> HARD (1 stop), laps 37; front grid 1 stop x5
+    2024: winner from P4: MEDIUM -> HARD (1 stop), laps 15; front grid 1 stop x2, 2 stops x3
+    2023: winner from P2: MEDIUM -> HARD (1 stop), laps 20; front grid 1 stop x5
+  Based on: stop count from practice tyre wear (+0.002%/lap); tyre order and windows from 12.5 front-grid cars in 6 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 2 of 4
+  Green-flag stops inside their window: 0 of 0
+    P1: MEDIUM -> HARD, stops 3 [SC/none] MATCH, finished P7
+    P2: MEDIUM -> HARD, stops 3 [SC/none] MATCH, finished P2
+    P4: SOFT -> MEDIUM, stops 3 [SC/none] different plan, finished P6
+    P5: SOFT -> MEDIUM -> HARD, stops 3, 28 [SC/none SC/none] different plan, finished P3
+    Winner (from P19): HARD -> MEDIUM -> MEDIUM, stops 3, 28 [SC/none SC/none] different plan, finished P1
+race 187 (2026-09-13):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD -> HARD (2 stops)
+  First pit window: laps 11-15 (typical lap 12)
+  Second pit window: laps 31-37 (typical lap 33)
+  Confidence: low
+  Front-grid share: 44% of comparable front-grid cars ran 2 stops
+  Alternative: MEDIUM -> HARD (1 stop), share 33%
+    First pit window: laps 18-23 (typical lap 19)
+  Based on: stop count from practice tyre wear (+0.159%/lap); tyre order and windows from no earlier race here: the era's front-grid plans; windows from the era
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD -> HARD (2 stops)
+  Front grid on the predicted tyre order: 0 of 4
+  Green-flag stops inside their window: 0 of 1
+    P1: MEDIUM -> HARD, stops 15 [SC/none] different plan, finished P3
+    P2: MEDIUM -> HARD, stops 14 [SC/none] different plan, finished P1
+    P3: SOFT -> HARD, stops 14 [SC/none] different plan, finished P2
+    P5: HARD -> SOFT, stops 48 [out] different plan, finished P4
+    Winner (from P2): MEDIUM -> HARD, stops 14 [SC/none] different plan, finished P1
+race 188 (2026-09-26):
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 12-18 (typical lap 13)
+  Confidence: high
+  Front-grid share: 77% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 15%
+    First pit window: laps 10-14 (typical lap 11)
+    Second pit window: laps 28-33 (typical lap 30)
+  Track record (last races here):
+    2025: winner from P1: HARD -> MEDIUM (1 stop), laps 40; front grid 1 stop x5
+    2024: winner from P2: MEDIUM -> HARD (1 stop), laps 15; front grid 1 stop x5
+    2023: winner from P3: MEDIUM -> HARD (1 stop), laps 11 (a stop under SC/VSC); front grid 1 stop x5
+  Based on: stop count from practice tyre wear (-0.125%/lap); tyre order and windows from 9 front-grid cars in 5 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
+Did it play out? Predicted MEDIUM -> HARD (1 stop)
+  Front grid on the predicted tyre order: 0 of 4
+  Green-flag stops inside their window: 0 of 4
+    P1: MEDIUM -> SOFT -> SOFT, stops 31, 36 [out SC/none] different plan, finished P1
+    P2: SOFT -> MEDIUM -> MEDIUM, stops 31, 36 [out SC/none] different plan, finished P4
+    P3: SOFT -> MEDIUM -> MEDIUM, stops 31, 36 [out SC/none] different plan, finished P13
+    P4: SOFT -> MEDIUM -> MEDIUM, stops 31, 36 [out SC/none] different plan, finished P3
+    Winner (from P1): MEDIUM -> SOFT -> SOFT, stops 31, 36 [out SC/none] different plan, finished P1
+Marina Bay 2026 (race 190, 2026-10-11)
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 19-28 (typical lap 22)
+  Confidence: medium
+  Front-grid share: 65% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 26%
+    First pit window: laps 13-22 (typical lap 17)
+    Second pit window: laps 35-44 (typical lap 41)
+  Track record (last races here):
+    2025: winner from P1: MEDIUM -> HARD (1 stop), laps 25; front grid 1 stop x5
+    2024: winner from P1: MEDIUM -> HARD (1 stop), laps 30; front grid 1 stop x5
+    2023: winner from P1: MEDIUM -> HARD (1 stop), laps 20 (a stop under SC/VSC); front grid 1 stop x3, 2 stops x2
+  Based on: stop count: the era's usual (no practice tyre wear measured); tyre order and windows from 5 front-grid cars in 2 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.
