@@ -13,7 +13,8 @@ One command instead of a dozen scripts in the right order:
   5. titles   drivers' and constructors' title chances after the latest round, if not stored
               yet (championship_projection_v1)
   6. live     the next race's winner prediction frozen for the live record: before
-              qualifying, then again once the grid is known (live_record_v1)
+              qualifying, then again once the grid is known (live_record_v1); and its
+              predicted winning strategy, before and after practice (strategy_live_record_v1)
   7. score    optional (--score): the prediction scoreboard vs the saved baseline
 
     python update_latest_races.py                     # current season
@@ -175,6 +176,15 @@ def main() -> int:
                   else f"  next race (id {race_id}): nothing to freeze yet")
         except PredictionError as exc:
             print(f"  nothing to freeze ({exc})")
+    from strategy_live_record_v1 import freeze as freeze_strategy
+    with engine.begin() as db:
+        try:
+            race_id = next_race_id(db)
+            stages = freeze_strategy(db, race_id)
+            print(f"  next race (id {race_id}) winning strategy: froze {', '.join(stages)}" if stages
+                  else f"  next race (id {race_id}) winning strategy: nothing to freeze yet")
+        except PredictionError as exc:
+            print(f"  winning strategy: nothing to freeze ({exc})")
 
     if args.score:
         print(f"\n=== SCOREBOARD vs {args.score} ===", flush=True)

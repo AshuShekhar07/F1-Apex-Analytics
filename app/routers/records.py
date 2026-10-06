@@ -351,3 +351,12 @@ def get_live_predictions(db: Session = Depends(get_db)):
     from live_record_v1 import score
 
     return score(db)
+
+
+@router.get("/live-strategy")
+def get_live_strategy(db: Session = Depends(get_db)):
+    """Predicted winning strategies frozen before each race (pre/post practice) and how they
+    scored against the front grid's real stints. Replays are never included."""
+    from strategy_live_record_v1 import score
+
+    return score(db)

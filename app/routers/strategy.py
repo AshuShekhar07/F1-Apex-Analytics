@@ -182,6 +182,50 @@ def predict_strategy(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+_WINNING_TTL_SECONDS = 1800
+_winning_cache: dict = {}
+
+
+@router.get("/winning")
+def winning_strategy(
+    race_id: int = Query(..., ge=1, description="Database race ID"),
+    db: Session = Depends(get_db),
+):
+    """Predicted winning strategy for the FRONT of the grid (P1-P5), with pit windows.
+
+    Stop count from this weekend's practice tyre wear (else the era's usual count); tyre order
+    and pit windows from front-grid cars with that stop count at this track (stops under
+    SC/VSC/red flag left out; windows at most 10 laps). Also: the runner-up plan, a confidence
+    level, the last three races here and, once the race is run, how it played out.
+    Walk-forward 2022-25 (top-5 starters): stop count right 47.8%, tyre order 30.8%, first stop
+    inside its window 38.6% -- level with the all-car strategy (/strategy/predict).
+    """
+    import time
+
+    from race_winning_strategy_v1 import (predict_for_race, record_to_json, review_to_json,
+                                          strategy_to_json)
+    import strategy_service_v7
+
+    key = (strategy_service_v7.db_url(db), race_id)
+    hit = _winning_cache.get(key)
+    if hit and time.time() - hit[0] < _WINNING_TTL_SECONDS:
+        return hit[1]
+    try:
+        prediction, record, review, race = predict_for_race(db, race_id, "hybrid")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if prediction is None:
+        raise HTTPException(status_code=404, detail="no prediction: race distance, era or history unknown")
+    body = {
+        "race_id": race_id, "track": race["track_name"], "season": race["season_year"],
+        "race_date": str(race["race_date"]), "practice_wear_measured": race.get("practice_wear") is not None,
+        "prediction": strategy_to_json(prediction), "track_record": record_to_json(record),
+        "review": review_to_json(review) if review is not None else None,
+    }
+    _winning_cache[key] = (time.time(), body)
+    return body
+
+
 @router.get("/predict-v6", response_model=StrategyPrediction, deprecated=True)
 def predict_strategy_v6(
     track_id: int = Query(

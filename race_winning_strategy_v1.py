@@ -423,6 +423,61 @@ def format_review(p: WinningStrategy, review: RaceReview) -> str:
     return "\n".join(lines)
 
 
+# --- JSON (API and live record) -----------------------------------------------------------
+
+
+def _windows_json(windows: Sequence[PitWindow]) -> list[dict]:
+    return [{"stop": w.stop, "first_lap": w.first_lap, "last_lap": w.last_lap, "typical_lap": w.typical_lap}
+            for w in windows]
+
+
+def _windows_from_json(rows: Sequence[dict]) -> tuple[PitWindow, ...]:
+    return tuple(PitWindow(r["stop"], r["first_lap"], r["last_lap"], r["typical_lap"]) for r in rows)
+
+
+def strategy_to_json(p: WinningStrategy) -> dict:
+    return {
+        "sequence": list(p.sequence), "stops": p.stops, "pit_windows": _windows_json(p.windows),
+        "confidence": p.confidence, "front_grid_share": round(p.share, 4) if p.stop_chances else None,
+        "stop_chances": {str(n): round(v, 4) for n, v in p.stop_chances.items()},
+        "alternative": None if p.alternative is None else {
+            "sequence": list(p.alternative.sequence), "stops": p.alternative.stops,
+            "pit_windows": _windows_json(p.alternative.windows), "front_grid_share": round(p.alternative.share, 4)},
+        "track_cars": p.track_cars, "track_races": p.track_races, "window_source": p.window_source,
+        "source": p.source,
+        "note": "Green-flag plan for the front of the grid (P1-P5): a Safety Car or VSC can open an "
+                "earlier, cheaper stop.",
+    }
+
+
+def strategy_from_json(d: dict) -> WinningStrategy:
+    alt = d.get("alternative")
+    return WinningStrategy(
+        tuple(d["sequence"]), _windows_from_json(d["pit_windows"]),
+        {int(n): v for n, v in d.get("stop_chances", {}).items()}, d.get("track_cars", 0.0),
+        d.get("track_races", 0), d.get("window_source", ""), d.get("source", ""),
+        None if alt is None else AlternativePlan(tuple(alt["sequence"]), _windows_from_json(alt["pit_windows"]),
+                                                 alt["front_grid_share"]),
+        d.get("confidence", "low"))
+
+
+def record_to_json(record: Sequence[TrackRaceRecord]) -> list[dict]:
+    return [{"race_id": r.race_id, "season": r.season_year, "winner_grid": r.winner_grid,
+             "winner_sequence": list(r.winner_sequence) if r.winner_sequence else None,
+             "winner_stop_laps": list(r.winner_stop_laps), "winner_stopped_under_sc": r.winner_neutralised_stop,
+             "front_grid_stop_counts": {str(n): k for n, k in r.front_stop_counts.items()}} for r in record]
+
+
+def review_to_json(review: RaceReview) -> dict:
+    def car(c: CarReview) -> dict:
+        return {"grid": c.grid, "finish": c.finish, "sequence": list(c.sequence), "stop_laps": list(c.stop_laps),
+                "plan_match": c.plan_match, "in_window": list(c.in_window)}
+    hits, chances = review.window_hits
+    return {"front_grid_plan_matches": review.plan_matches, "front_grid_cars": len(review.cars),
+            "green_stops_in_window": hits, "green_stops_with_window": chances,
+            "cars": [car(c) for c in review.cars], "winner": car(review.winner) if review.winner else None}
+
+
 # --- command line -------------------------------------------------------------------------
 
 
@@ -468,6 +523,7 @@ def predict_for_race(db: Any, race_id: int, method: str = "track"
         prediction = predict_hybrid(front, history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                     track_id=race["track_id"], regulation_era=race["regulation_era"],
                                     total_laps=int(total_laps))
+        race = {**race, "practice_wear": wear_by_race.get(race_id)}
     else:
         prediction = predict_winning_strategy(front, track_id=race["track_id"],
                                               regulation_era=race["regulation_era"], total_laps=int(total_laps))
