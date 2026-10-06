@@ -85,7 +85,7 @@ def test_window_scoring_ignores_safety_car_stops():
 def test_backtest_end_to_end(synthetic_db):
     with synthetic_db.connect() as db:
         rows = run(db, start_year=2024, end_year=2024)
-    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M}
+    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M, "W0 old wet rule (history)"}
     table = summarise(rows, M)
     assert {t[0] for t in table} >= {"stop_count_hit", "first_window_hit", "winner_sequence_hit"}
 

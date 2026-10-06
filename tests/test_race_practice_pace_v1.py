@@ -69,3 +69,26 @@ def test_load_practice_gaps_from_the_database(synthetic_db):
             assert load_practice_gaps(db, 5) == ({}, None)          # wet practice is not used
         finally:
             tx.rollback()
+
+
+def test_weekend_wear_can_ignore_the_rain_flag(synthetic_db):
+    from race_practice_pace_v1 import load_weekend_wear
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            fp2 = db.execute(text("INSERT INTO sessions (race_id, session_type, start_time) "
+                                  "VALUES (5, 'FP2', now()) RETURNING id")).scalar()
+            db.execute(text("INSERT INTO session_weather (session_id, rainfall) VALUES (:s, true)"), {"s": fp2})
+            entries = dict(db.execute(text("SELECT driver_id, id FROM race_entries WHERE race_id = 5")).all())
+            for driver, entry in entries.items():
+                for n in range(1, 11):   # 10-lap run, 0.05 s/lap slower each lap
+                    db.execute(text("""INSERT INTO laps (session_id, race_entry_id, lap_number, lap_time, tire_compound)
+                                       VALUES (:s, :e, :n, :t, 'MEDIUM')"""),
+                               {"s": fp2, "e": entry, "n": n, "t": 92.0 + 0.05 * n + 0.01 * driver})
+            assert load_weekend_wear(db, 5) is None                         # rain flag: skipped
+            assert load_weekend_wear(db, 5, use_rain_flag=False) > 0         # slicks only: measured
+            db.execute(text("UPDATE laps SET tire_compound = 'INTERMEDIATE' WHERE session_id = :s"), {"s": fp2})
+            assert load_weekend_wear(db, 5, use_rain_flag=False) is None     # wet tyres: still skipped
+        finally:
+            tx.rollback()

@@ -678,6 +678,17 @@ RACE_WET_SQL = f"""COALESCE((
     FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL), FALSE)"""
 
 
+def load_legacy_wet_races(db: Any) -> set[int]:
+    """Races wet under the shared rule (rain flag first, race_pace_from_quali_v1.SESSION_WET_SQL):
+    the rule strategy used before 2026-10-06, kept so backtests can compare on the same races."""
+    from race_pace_from_quali_v1 import SESSION_WET_SQL
+
+    return {int(r) for r, wet in db.execute(text(f"""
+        SELECT s.race_id, {SESSION_WET_SQL} FROM sessions s
+        LEFT JOIN session_weather sw ON sw.session_id = s.id WHERE s.session_type = 'R'
+    """)) if wet}
+
+
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
                         end_year: int = 2026, min_distance: float = 0.9) -> list[CarStrategy]:
     """Real stints for every car that covered >= min_distance of a race (R sessions)."""

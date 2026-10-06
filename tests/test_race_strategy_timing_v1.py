@@ -102,7 +102,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
                        "M wear + wear timing", "N wear neighbours' sequence", "O expected match",
                        "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team", "P3 per car: grid + team",
-                       "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals"}
+                       "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
+                       "M0 old wet rule (history)", "M2 tyre-based practice wear"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -363,5 +364,20 @@ def test_rain_flag_alone_does_not_make_a_race_wet(synthetic_db):
             db.execute(sql("""UPDATE laps SET tire_compound = 'INTERMEDIATE'
                               WHERE session_id = :s AND lap_number <= 5"""), {"s": race_session})
             assert all(c.wet for c in load_car_strategies(db) if c.race_id == 1)   # 5 of 30 laps on inters
+        finally:
+            tx.rollback()
+
+
+def test_legacy_wet_races_follow_the_rain_flag(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_strategy_timing_v1 import load_legacy_wet_races
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            assert load_legacy_wet_races(db) == set()
+            db.execute(sql("""UPDATE session_weather SET rainfall = TRUE WHERE session_id =
+                              (SELECT id FROM sessions WHERE race_id = 2 AND session_type = 'R')"""))
+            assert load_legacy_wet_races(db) == {2}
         finally:
             tx.rollback()

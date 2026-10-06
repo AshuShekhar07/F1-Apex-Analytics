@@ -218,9 +218,11 @@ def run_wear(run: list[tuple[int, float]]) -> float | None:
     return (sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den) / median(ys) if den else None
 
 
-def load_weekend_wear(db: Any, race_id: int) -> float | None:
+def load_weekend_wear(db: Any, race_id: int, *, use_rain_flag: bool = True) -> float | None:
     """Median long-run wear over all drivers' runs in FP2 (else FP1); None if too few runs
-    or the session was wet."""
+    or the session was wet. use_rain_flag=False judges wet by the tyres alone (research: the
+    rainfall flag is set by any rain sample, and 13 FP2 sessions flagged as rained-on had no
+    lap on a wet tyre)."""
     for session_type in ("FP2", "FP1"):
         session = db.execute(text("""
             SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
@@ -229,7 +231,7 @@ def load_weekend_wear(db: Any, race_id: int) -> float | None:
         """), {"r": race_id, "t": session_type}).mappings().first()
         if session is None:
             continue
-        if session_is_wet(db, session["id"], session["wet"]):
+        if session_is_wet(db, session["id"], session["wet"] if use_rain_flag else None):
             return None
         laps = defaultdict(list)
         for driver, n, t, c in db.execute(text("""

@@ -55,6 +55,7 @@ from race_winning_strategy_v1 import (
 )
 
 W, E, M = "W winning strategy (track)", "E era front grid", "M production (all cars)"
+W0 = "W0 old wet rule (history)"
 METRICS = (("stop_count_hit", False), ("stop_count_hit_green", False), ("sequence_hit", False),
            ("sequence_hit_green", False), ("first_window_hit", False), ("second_window_hit", False),
            ("first_stop_within_3", False), ("first_window_width", True), ("winner_sequence_hit", False))
@@ -117,6 +118,8 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
     neutralised = load_neutralised_laps(db, race_ids)
     wear_by_race = {r: load_weekend_wear(db, r) for r in race_ids}
     clean = clean_front_cars(cars, neutralised)
+    from race_strategy_timing_v1 import load_legacy_wet_races
+    reclassified = load_legacy_wet_races(db) & {c.race_id for c in cars if not c.wet}
     targets = defaultdict(list)
     for c in cars:
         if start_year <= c.season_year <= end_year and not c.wet:
@@ -133,11 +136,13 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
         kwargs = dict(regulation_era=first.regulation_era, total_laps=first.race_laps)
         w = predict_winning_strategy(history, track_id=first.track_id, **kwargs)
         e = predict_winning_strategy(history, track_id=-1, **kwargs)
+        w0 = predict_winning_strategy([c for c in history if c.race_id not in reclassified],
+                                      track_id=first.track_id, **kwargs)
         m = predict_from_wear_timed([c for c in cars if c.race_date < race_date], wear=wear_by_race.get(race_id),
                                     wear_by_race=wear_by_race, **kwargs).strategy
         m_plan = (m.sequence, None, m.stop_laps[0] if m.stop_laps else None) if m else (None, None, None)
         for car in front:
-            for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan)):
+            for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan), (W0, _plan(w0))):
                 rows.append(score_car(race_id, name, car, sequence=sequence, windows=windows,
                                       first_stop=first_stop, neutralised=neutralised.get(race_id)))
         if w is not None:
@@ -230,7 +235,9 @@ def main() -> int:
     print("\n--- vs M, production ---")
     print_table(rows, M)
     print("\n--- vs E, the era's front-grid plan (what the track history adds) ---")
-    print_table([r for r in rows if r.method != M], E)
+    print_table([r for r in rows if r.method in (W, E)], E)
+    print("\n--- wet-rule fix: W (races dry by their tyres kept) vs W0 (old rule), same cars ---")
+    print_table([r for r in rows if r.method in (W, W0)], W0)
     level_report()
     print(f"\n--- last {args.examples} predictions ---")
     for example in EXAMPLES[-args.examples:]:
