@@ -34,8 +34,11 @@ from race_winning_strategy_v1 import (
     FRONT_GRID,
     WinningStrategy,
     clean_front_cars,
+    format_review,
     format_strategy,
     is_front,
+    review_race,
+    track_record,
     load_neutralised_laps,
     predict_winning_strategy,
     stop_in_laps,
@@ -93,6 +96,7 @@ def _plan(p: WinningStrategy | None):
 
 
 EXAMPLES: list[str] = []
+LEVELS: list[tuple[int, str, int, int, int]] = []   # (race_id, level, stop count hit, main-or-alternative hit, sequence hit)
 
 
 def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
@@ -109,6 +113,7 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
             targets[(c.race_date, c.race_id)].append(c)
     rows: list[Row] = []
     EXAMPLES.clear()
+    LEVELS.clear()
     for (race_date, race_id), race_cars in sorted(targets.items()):
         front = [c for c in race_cars if is_front(c)]
         if not front:
@@ -125,10 +130,18 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
             for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan)):
                 rows.append(score_car(race_id, name, car, sequence=sequence, windows=windows,
                                       first_stop=first_stop, neutralised=neutralised.get(race_id)))
-        if w is not None and len(EXAMPLES) < 400:
-            real = "; ".join(f"P{c.grid} {'-'.join(x[0] for x in c.sequence)} stops {stop_in_laps(c)}"
-                             f"{' (won)' if c.finish == 1 else ''}" for c in sorted(front, key=lambda c: c.grid))
-            EXAMPLES.append(f"race {race_id} ({race_date}):\n{format_strategy(w)}\n  Real front grid: {real}")
+        if w is not None:
+            laps = neutralised.get(race_id)
+            for car in front:
+                if laps is None or any(lap in laps for lap in stop_in_laps(car)):
+                    continue                       # level record on green-flag front-grid cars only
+                real = len(car.stints) - 1
+                alt = w.alternative.stops if w.alternative else None
+                LEVELS.append((race_id, w.confidence, int(real == w.stops), int(real in (w.stops, alt)),
+                               int(car.sequence == w.sequence)))
+            record = track_record([c for c in cars if c.race_date < race_date], neutralised, track_id=first.track_id)
+            EXAMPLES.append(f"race {race_id} ({race_date}):\n{format_strategy(w, record)}\n"
+                            f"{format_review(w, review_race(w, race_cars, laps))}")
         print(f"race {race_id} ({race_date}): {len(front)} front-grid cars scored", flush=True)
     return rows
 
@@ -169,6 +182,26 @@ def print_table(rows: Sequence[Row], baseline: str) -> None:
         print(f"{metric:22} {method:28} {value:7.3f} {n:6}   {tail}")
 
 
+def level_report() -> None:
+    """How often each confidence level was right, walk-forward (green-flag front-grid cars)."""
+    print("\n--- confidence levels (green-flag front-grid cars; 90% CI resamples races) ---")
+    print("level    races   cars   stop count right          main or alternative right   tyre order right")
+
+    class _R:
+        def __init__(self, race_id, value):
+            self.race_id, self.value = race_id, value
+    for level in ("high", "medium", "low"):
+        rows = [r for r in LEVELS if r[1] == level]
+        if not rows:
+            print(f"{level:7}      0      0")
+            continue
+        cells = []
+        for k in (2, 3, 4):
+            v, lo, hi = race_clustered_ci([_R(r[0], r[k]) for r in rows], lambda r: r.value)
+            cells.append(f"{v:.3f} [{lo:.3f}, {hi:.3f}]")
+        print(f"{level:7} {len({r[0] for r in rows}):6} {len(rows):6}   {cells[0]:25} {cells[1]:27} {cells[2]}")
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -188,6 +221,7 @@ def main() -> int:
     print_table(rows, M)
     print("\n--- vs E, the era's front-grid plan (what the track history adds) ---")
     print_table([r for r in rows if r.method != M], E)
+    level_report()
     print(f"\n--- last {args.examples} predictions ---")
     for example in EXAMPLES[-args.examples:]:
         print(example)

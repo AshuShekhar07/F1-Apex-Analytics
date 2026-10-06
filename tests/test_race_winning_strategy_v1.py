@@ -88,3 +88,60 @@ def test_backtest_end_to_end(synthetic_db):
     assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M}
     table = summarise(rows, M)
     assert {t[0] for t in table} >= {"stop_count_hit", "first_window_hit", "winner_sequence_hit"}
+
+
+def test_alternative_plan_and_confidence():
+    from race_winning_strategy_v1 import confidence_level
+
+    p = predict_winning_strategy(clean_front_cars(_history(), {}), track_id=1, regulation_era="e", total_laps=60)
+    assert p.alternative is not None and p.alternative.sequence == ONE and len(p.alternative.windows) == 1
+    assert abs(sum(p.stop_chances.values()) - 1) < 1e-9 and p.share > p.alternative.share
+    assert p.confidence == confidence_level(p.share, p.track_races)
+    assert confidence_level(0.8, 3) == "high" and confidence_level(0.8, 1) == "medium"
+    assert confidence_level(0.6, 0) == "medium" and confidence_level(0.5, 5) == "low"
+    text = format_strategy(p, confidence_record={p.confidence: "right 7 of 10 in 2022-25"})
+    assert "Alternative: MEDIUM -> HARD (1 stop)" in text and "right 7 of 10 in 2022-25" in text
+
+
+def test_track_record_lists_the_last_winners_most_recent_first():
+    from race_winning_strategy_v1 import track_record
+
+    cars = _history()
+    cars.append(_car(3, 1, 7, ONE, [12], finish=1))                    # race 3 won from P7 on a 1-stop
+    cars.append(_car(2, 1, 1, TWO, [10, 42], finish=1))                # race 2 winner stopped under SC
+    record = track_record(cars, {2: frozenset(range(9, 12))}, track_id=1)
+    assert [r.race_id for r in record] == [3, 2, 1]
+    assert record[0].winner_grid == 7 and record[0].winner_sequence == ONE and record[0].winner_stop_laps == (12,)
+    assert record[1].winner_neutralised_stop and not record[0].winner_neutralised_stop
+    assert record[2].winner_sequence is None and record[0].front_stop_counts == {2: 5}
+    text = format_strategy(predict_winning_strategy(clean_front_cars(cars, {}), track_id=1, regulation_era="e",
+                                                    total_laps=60), record)
+    assert "winner from P7: MEDIUM -> HARD (1 stop), laps 12" in text and "(a stop under SC/VSC)" in text
+
+
+def test_race_review_counts_matches_and_window_hits():
+    from race_winning_strategy_v1 import format_review, review_race
+
+    p = predict_winning_strategy(clean_front_cars(_history(), {}), track_id=1, regulation_era="e", total_laps=60)
+    race = [_car(50, 1, 1, TWO, [20, 43], finish=2), _car(50, 1, 2, TWO, [25, 43], finish=1),
+            _car(50, 1, 3, ONE, [30], finish=3), _car(50, 1, 4, TWO, [21, 50]), _car(50, 1, 9, ONE, [30])]
+    review = review_race(p, race, frozenset({50}))
+    assert review.plan_matches == 3 and len(review.cars) == 4
+    assert review.cars[0].in_window == (True, True) and review.cars[1].in_window == (False, True)
+    assert review.cars[3].in_window == (True, None)                     # second stop under SC
+    assert review.window_hits == (4, 6)                                  # P3 single stop at 30 is outside
+    assert review.winner.grid == 2
+    text = format_review(p, review)
+    assert "Front grid on the predicted tyre order: 3 of 4" in text and "Winner (from P2)" in text
+
+
+def test_predict_for_race_end_to_end(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_winning_strategy_v1 import predict_for_race
+
+    with synthetic_db.connect() as db:
+        race_id = db.execute(sql("SELECT MAX(id) FROM races")).scalar()
+        prediction, record, review, race = predict_for_race(db, race_id)
+    assert race["id"] == race_id
+    if prediction is not None:
+        assert prediction.confidence in ("high", "medium", "low")
