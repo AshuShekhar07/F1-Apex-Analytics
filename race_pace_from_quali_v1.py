@@ -37,9 +37,18 @@ MAX_QUALI_GAP = 0.07
 # on intermediates/wets. Needs `s` (sessions) and a LEFT JOINed `sw` (session_weather). Without
 # the fallback, a race with no weather row silently vanished from the pace history and the
 # scoreboard.
-SESSION_WET_SQL = """COALESCE(sw.rainfall, (
-    SELECT AVG((upper(COALESCE(lw.tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int) >= 0.1
-    FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL), FALSE)"""
+# Which sessions count as wet. "rain_flag" (production): the session_weather rainfall flag,
+# else >= 10% of timed laps on intermediates/wets. The flag is set by any rain sample: 27 races
+# 2018-26 flagged as rained-on had no lap on a wet tyre (wet_flag_check.txt, 2026-10-06).
+# "tyres": the wet-tyre share alone. APEX21_WET_RULE=tyres switches every user of
+# SESSION_WET_SQL (and practice, race_practice_pace_v1.session_is_wet) for a scoreboard
+# experiment; production stays on the rain flag until the experiment passes.
+WET_TYRE_SHARE_SQL = """(SELECT AVG((upper(COALESCE(lw.tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int) >= 0.1
+    FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL)"""
+RAIN_FLAG_WET_SQL = f"COALESCE(sw.rainfall, {WET_TYRE_SHARE_SQL}, FALSE)"
+TYRE_WET_SQL = f"COALESCE({WET_TYRE_SHARE_SQL}, FALSE)"
+WET_RULE = os.environ.get("APEX21_WET_RULE", "rain_flag")
+SESSION_WET_SQL = {"rain_flag": RAIN_FLAG_WET_SQL, "tyres": TYRE_WET_SQL}[WET_RULE]
 CLEAN_LAP_FACTOR = 1.05
 MIN_CLEAN_LAPS = 10
 

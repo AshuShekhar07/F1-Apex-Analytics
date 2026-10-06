@@ -95,7 +95,9 @@ WET_TYRE_SHARE = 0.1   # a session with >= 10% of timed laps on intermediates/we
 def session_is_wet(db: Any, session_id: int, weather_says_wet: bool | None) -> bool:
     """Rain per session_weather where it is loaded (R, Q, FP2), else from the tyres used:
     weather is not loaded for FP1 or sprints, and a wet session is not a dry pace sample."""
-    if weather_says_wet:
+    from race_pace_from_quali_v1 import WET_RULE
+
+    if weather_says_wet and WET_RULE != "tyres":     # APEX21_WET_RULE=tyres: judge by tyres alone
         return True
     share = db.execute(text("""
         SELECT AVG((upper(COALESCE(tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int)

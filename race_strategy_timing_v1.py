@@ -684,9 +684,9 @@ RACE_WET_SQL = f"""COALESCE((
 
 def race_wet_flags(db: Any, wet_rule: str = "rain_flag") -> dict[int, bool]:
     """race_id -> wet under the given rule (see RACE_WET_SQL), for re-labelling loaded cars."""
-    from race_pace_from_quali_v1 import SESSION_WET_SQL
+    from race_pace_from_quali_v1 import RAIN_FLAG_WET_SQL
 
-    wet_sql = {"rain_flag": SESSION_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
+    wet_sql = {"rain_flag": RAIN_FLAG_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
     return {int(r): bool(w) for r, w in db.execute(text(f"""
         SELECT s.race_id, {wet_sql} FROM sessions s
         LEFT JOIN session_weather sw ON sw.session_id = s.id WHERE s.session_type = 'R'
@@ -698,9 +698,9 @@ def load_car_strategies(db: Any, *, before_date: date | None = None, start_year:
                         wet_rule: str = "rain_flag") -> list[CarStrategy]:
     """Real stints for every car that covered >= min_distance of a race (R sessions).
     wet_rule: "rain_flag" (prediction history) or "tyres" (facts shown, e.g. the track record)."""
-    from race_pace_from_quali_v1 import SESSION_WET_SQL
+    from race_pace_from_quali_v1 import RAIN_FLAG_WET_SQL
 
-    wet_sql = {"rain_flag": SESSION_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
+    wet_sql = {"rain_flag": RAIN_FLAG_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
     races = db.execute(text(f"""
         SELECT r.id, r.race_date, r.season_year, r.track_id, r.regulation_era, s.id AS session_id,
                {wet_sql} AS wet

@@ -194,6 +194,28 @@ def summarise(scores: Sequence[DriverScore], model: str, races: Iterable[int] | 
     return out
 
 
+DUMP_FIELDS = ("race_id", "model", "driver_id", "grid", "predicted", "finish", "classified", "p_win", "p_podium")
+
+
+def dump_scores(scores: Sequence[DriverScore], path: str) -> None:
+    import csv
+
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(DUMP_FIELDS)
+        for s in scores:
+            w.writerow([getattr(s, k) for k in DUMP_FIELDS])
+
+
+def load_dump(path: str) -> list[DriverScore]:
+    import csv
+
+    with open(path) as f:
+        return [DriverScore(int(r["race_id"]), r["model"], int(r["driver_id"]), int(r["grid"]), int(r["predicted"]),
+                            int(r["finish"]), r["classified"] == "True", float(r["p_win"]), float(r["p_podium"]))
+                for r in csv.DictReader(f)]
+
+
 def paired(scores: Sequence[DriverScore], a: str, b: str, metric: str) -> tuple[float, float, float]:
     """Mean over shared races of metric(a) - metric(b), with race-resampled CI."""
     per = {m: defaultdict(list) for m in (a, b)}
@@ -853,6 +875,8 @@ def main() -> int:
                         help="also show the rejected pace/weight candidates (blend_wetq, blend_track, ...)")
     parser.add_argument("--save", help="write the headline summary to this JSON file")
     parser.add_argument("--compare", help="fail (exit 1) if worse than this saved summary")
+    parser.add_argument("--dump", help="write every driver score of grid and blend to this CSV "
+                                       "(scoreboard_compare_v1.py compares two runs race by race)")
     args = parser.parse_args()
 
     from race_pace_from_quali_v1 import load_observations
@@ -960,6 +984,9 @@ def main() -> int:
               f"{'REAL signal' if hi < 0 else 'WORSE than a flat rate' if lo > 0 else 'no clear signal'}")
     LAST_SUMMARY.clear()
     LAST_SUMMARY.update({"range": [args.start_year, args.end_year], "models": summary})
+    if args.dump:
+        dump_scores([s for s in scores if s.model in ("grid", "blend")], args.dump)
+        print(f"\nwrote driver scores to {args.dump}")
     if args.save:
         with open(args.save, "w") as f:
             json.dump({"range": [args.start_year, args.end_year], "models": summary}, f, indent=2)
