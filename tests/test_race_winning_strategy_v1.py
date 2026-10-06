@@ -145,3 +145,13 @@ def test_predict_for_race_end_to_end(synthetic_db):
     assert race["id"] == race_id
     if prediction is not None:
         assert prediction.confidence in ("high", "medium", "low")
+
+
+def test_track_history_from_an_earlier_era_only():
+    # new era: the era's front grid only ever one-stopped; this track's history is old-era three-stops
+    cars = [_car(r, 1, g, ("SOFT", "MEDIUM", "HARD", "HARD"), [12, 25, 40], era="old") for r in (1, 2) for g in range(1, 6)]
+    cars += [_car(r, 100 + r, g, ONE, [30], era="new") for r in range(3, 6) for g in range(1, 6)]
+    for k in (5.0, 0.1):     # whichever stop count wins, both plans must be buildable
+        p = predict_winning_strategy(clean_front_cars(cars, {}), track_id=1, regulation_era="new", total_laps=60, k=k)
+        assert p is not None and p.alternative is not None
+    assert p.sequence == ("SOFT", "MEDIUM", "HARD", "HARD") and p.window_source == "track"
