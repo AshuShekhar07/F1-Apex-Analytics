@@ -5,6 +5,8 @@ earlier races:
   W  winning strategy : this track's front-grid plans (SC/VSC stops left out), era fallback
   E  era front grid   : the same rule with no track history (shows what the track adds)
   M  production       : today's one-plan-for-every-car method (practice wear)
+  H  hybrid           : M's stop count (practice wear); tyre order and pit windows from W's
+                        front-grid cars with that stop count; windows capped at 10 laps
 
 Metrics (per front-grid car, then averaged per race; 90% intervals resample races):
   stop_count_hit / sequence_hit          : every front-grid car
@@ -53,11 +55,13 @@ from race_winning_strategy_v1 import (
     review_race,
     track_record,
     load_neutralised_laps,
+    predict_hybrid,
     predict_winning_strategy,
     stop_in_laps,
 )
 
 W, E, M = "W winning strategy (track)", "E era front grid", "M production (all cars)"
+H = "H hybrid (wear stops, track plan)"
 METRICS = (("stop_count_hit", False), ("stop_count_hit_green", False), ("sequence_hit", False),
            ("sequence_hit_green", False), ("first_window_hit", False), ("second_window_hit", False),
            ("first_stop_within_3", False), ("first_window_width", True), ("winner_sequence_hit", False))
@@ -109,7 +113,7 @@ def _plan(p: WinningStrategy | None):
 
 
 EXAMPLES: list[str] = []
-LEVELS: list[tuple[int, str, int, int, int]] = []   # (race_id, level, stop count hit, main-or-alternative hit, sequence hit)
+LEVELS: list[tuple[str, int, str, int, int, int]] = []   # (method, race_id, level, stop hit, main-or-alt hit, sequence hit)
 
 
 def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
@@ -139,22 +143,27 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
         m = predict_from_wear_timed([c for c in cars if c.race_date < race_date], wear=wear_by_race.get(race_id),
                                     wear_by_race=wear_by_race, **kwargs).strategy
         m_plan = (m.sequence, None, m.stop_laps[0] if m.stop_laps else None) if m else (None, None, None)
+        h = predict_hybrid(history, [c for c in cars if c.race_date < race_date], wear=wear_by_race.get(race_id),
+                           wear_by_race=wear_by_race, track_id=first.track_id, **kwargs)
         for car in front:
-            for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan)):
+            for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan), (H, _plan(h))):
                 rows.append(score_car(race_id, name, car, sequence=sequence, windows=windows,
                                       first_stop=first_stop, neutralised=neutralised.get(race_id)))
-        if w is not None:
-            laps = neutralised.get(race_id)
+        laps = neutralised.get(race_id)
+        for name, p in ((W, w), (H, h)):
+            if p is None:
+                continue
             for car in front:
                 if laps is None or any(lap in laps for lap in stop_in_laps(car)):
                     continue                       # level record on green-flag front-grid cars only
                 real = len(car.stints) - 1
-                alt = w.alternative.stops if w.alternative else None
-                LEVELS.append((race_id, w.confidence, int(real == w.stops), int(real in (w.stops, alt)),
-                               int(car.sequence == w.sequence)))
+                alt = p.alternative.stops if p.alternative else None
+                LEVELS.append((name, race_id, p.confidence, int(real == p.stops), int(real in (p.stops, alt)),
+                               int(car.sequence == p.sequence)))
+        if h is not None:
             record = track_record([c for c in cars if c.race_date < race_date], neutralised, track_id=first.track_id)
-            EXAMPLES.append(f"race {race_id} ({race_date}):\n{format_strategy(w, record)}\n"
-                            f"{format_review(w, review_race(w, race_cars, laps))}")
+            EXAMPLES.append(f"race {race_id} ({race_date}):\n{format_strategy(h, record)}\n"
+                            f"{format_review(h, review_race(h, race_cars, laps))}")
         print(f"race {race_id} ({race_date}): {len(front)} front-grid cars scored", flush=True)
     return rows
 
@@ -195,16 +204,16 @@ def print_table(rows: Sequence[Row], baseline: str) -> None:
         print(f"{metric:22} {method:28} {value:7.3f} {n:6}   {tail}")
 
 
-def level_report() -> None:
+def level_report(method: str) -> None:
     """How often each confidence level was right, walk-forward (green-flag front-grid cars)."""
-    print("\n--- confidence levels (green-flag front-grid cars; 90% CI resamples races) ---")
+    print(f"\n--- confidence levels, {method} (green-flag front-grid cars; 90% CI resamples races) ---")
     print("level    races   cars   stop count right          main or alternative right   tyre order right")
 
     class _R:
         def __init__(self, race_id, value):
             self.race_id, self.value = race_id, value
     for level in ("high", "medium", "low"):
-        rows = [r for r in LEVELS if r[1] == level]
+        rows = [r[1:] for r in LEVELS if r[0] == method and r[2] == level]
         if not rows:
             print(f"{level:7}      0      0")
             continue
@@ -234,7 +243,10 @@ def main() -> int:
     print_table(rows, M)
     print("\n--- vs E, the era's front-grid plan (what the track history adds) ---")
     print_table([r for r in rows if r.method in (W, E)], E)
-    level_report()
+    print("\n--- H vs W, the track-only front-grid plan ---")
+    print_table([r for r in rows if r.method in (W, H)], W)
+    level_report(H)
+    level_report(W)
     print(f"\n--- last {args.examples} predictions ---")
     for example in EXAMPLES[-args.examples:]:
         print(example)

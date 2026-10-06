@@ -33,7 +33,7 @@ Shown with it (display only -- none of this changes the predicted plan):
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable, Sequence
 
 from race_strategy_timing_v1 import CarStrategy, is_legal_dry
@@ -147,19 +147,33 @@ def _shares(rows: Sequence[tuple[CarStrategy, float]], key) -> dict:
     return out
 
 
-def _windows(rows: Sequence[tuple[CarStrategy, float]], stops: int, total_laps: int) -> tuple[PitWindow, ...]:
+def cap_window(first: int, last: int, typical: int, max_width: int | None) -> tuple[int, int]:
+    """Narrow a window wider than max_width laps to max_width laps around the typical lap,
+    staying inside the original window."""
+    if max_width is None or last - first + 1 <= max_width:
+        return first, last
+    start = min(max(first, typical - (max_width - 1) // 2), last - max_width + 1)
+    return start, start + max_width - 1
+
+
+def _windows(rows: Sequence[tuple[CarStrategy, float]], stops: int, total_laps: int,
+             max_width: int | None = None) -> tuple[PitWindow, ...]:
     windows = []
     for i in range(stops):
         pairs = [(c.stop_fractions[i], w) for c, w in rows]
         lo, mid, hi = (_weighted_quantile(pairs, q) for q in (WINDOW_LOW, 0.5, WINDOW_HIGH))
         first, typical, last = (max(1, min(total_laps - 1, round(f * total_laps))) for f in (lo, mid, hi))
+        first, last = cap_window(first, last, typical, max_width)
         windows.append(PitWindow(i + 1, first, last, typical))
     return tuple(windows)
 
 
 def predict_winning_strategy(history: Sequence[CarStrategy], *, track_id: int, regulation_era: str,
-                             total_laps: int, k: float = TRACK_SHRINK) -> WinningStrategy | None:
-    """history: clean front-grid cars from strictly earlier races (clean_front_cars)."""
+                             total_laps: int, k: float = TRACK_SHRINK, stops: int | None = None,
+                             max_window: int | None = None) -> WinningStrategy | None:
+    """history: clean front-grid cars from strictly earlier races (clean_front_cars).
+    stops: use this stop count instead of the front grid's most common one (the hybrid);
+    None when no front-grid car in the history ran it. max_window: cap on window width (laps)."""
     era_cars = [c for c in history if c.regulation_era == regulation_era]
     if not era_cars:
         era_cars = list(history)
@@ -195,9 +209,13 @@ def predict_winning_strategy(history: Sequence[CarStrategy], *, track_id: int, r
             window_rows, window_source = track_same, "track"
         else:
             window_rows, window_source = [(c, 1.0) for c in era_same], "era"
-        return sequence, (_windows(window_rows, stops, total_laps) if stops else ()), window_source
+        return sequence, (_windows(window_rows, stops, total_laps, max_window) if stops else ()), window_source
 
     ranked = sorted(stop_chances, key=lambda n: (-stop_chances[n], n))
+    if stops is not None:
+        if stops not in stop_chances:
+            return None
+        ranked = [stops, *(n for n in ranked if n != stops)]
     stops = ranked[0]
     sequence, windows, window_source = plan_for(stops)
     alternative = None
@@ -209,6 +227,38 @@ def predict_winning_strategy(history: Sequence[CarStrategy], *, track_id: int, r
     return WinningStrategy(sequence, windows, dict(sorted(stop_chances.items())), track_total, races,
                            window_source, source, alternative,
                            confidence_level(stop_chances[stops], races))
+
+
+MAX_WINDOW = 10            # hybrid: no pit window wider than this many laps
+FALLBACK_HALF_WIDTH = 3    # hybrid without front-grid history: production's stop lap +- 3
+
+
+def predict_hybrid(front_history: Sequence[CarStrategy], all_history: Sequence[CarStrategy], *,
+                   wear: float | None, wear_by_race: dict[int, float | None], track_id: int,
+                   regulation_era: str, total_laps: int) -> WinningStrategy | None:
+    """The hybrid: stop count from production (method M -- this weekend's practice tyre wear,
+    else the era's usual count), tyre order and pit windows from front-grid cars with that
+    stop count at this track (era fallback), windows capped at MAX_WINDOW laps. When no
+    front-grid car ever ran that stop count: production's plan with +-FALLBACK_HALF_WIDTH
+    windows. front_history: clean_front_cars(...); all_history: every earlier car (for M)."""
+    from race_strategy_timing_v1 import predict_from_wear_timed
+
+    m = predict_from_wear_timed(all_history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
+                                total_laps=total_laps)
+    if m.strategy is None:
+        return predict_winning_strategy(front_history, track_id=track_id, regulation_era=regulation_era,
+                                        total_laps=total_laps, max_window=MAX_WINDOW)
+    stops = len(m.strategy.sequence) - 1
+    why = (f"stop count from practice tyre wear ({wear * 100:+.3f}%/lap)" if wear is not None
+           else "stop count: the era's usual (no practice tyre wear measured)")
+    p = predict_winning_strategy(front_history, track_id=track_id, regulation_era=regulation_era,
+                                 total_laps=total_laps, stops=stops, max_window=MAX_WINDOW)
+    if p is not None:
+        return replace(p, source=f"{why}; tyre order and windows from {p.source}")
+    windows = tuple(PitWindow(i + 1, max(1, lap - FALLBACK_HALF_WIDTH), min(total_laps - 1, lap + FALLBACK_HALF_WIDTH), lap)
+                    for i, lap in enumerate(m.strategy.stop_laps))
+    return WinningStrategy(m.strategy.sequence, windows, {}, 0.0, 0, "production",
+                           f"{why}; no front-grid car ran {stops} stop(s): production's plan", None, "low")
 
 
 def load_neutralised_laps(db: Any, race_ids: Iterable[int]) -> dict[int, frozenset[int] | None]:
@@ -332,8 +382,9 @@ def format_strategy(p: WinningStrategy, record: Sequence[TrackRaceRecord] = (),
     lines += _windows_text(p.windows)
     measured = f" -- {confidence_record[p.confidence]}" if confidence_record and p.confidence in confidence_record else ""
     lines.append(f"  Confidence: {p.confidence}{measured}")
-    lines.append(f"  Front-grid share: {p.share:.0%} of comparable front-grid cars ran "
-                 f"{p.stops} stop{'s' if p.stops != 1 else ''}")
+    if p.stop_chances:
+        lines.append(f"  Front-grid share: {p.share:.0%} of comparable front-grid cars ran "
+                     f"{p.stops} stop{'s' if p.stops != 1 else ''}")
     if p.alternative is not None:
         lines.append(f"  Alternative: {_plan_text(p.alternative.sequence)}, share {p.alternative.share:.0%}")
         lines += _windows_text(p.alternative.windows, indent="    ")
@@ -385,9 +436,10 @@ def load_race_context(db: Any, race_id: int) -> dict | None:
     """), {"r": race_id}).mappings().first()
 
 
-def predict_for_race(db: Any, race_id: int) -> tuple[WinningStrategy | None, list[TrackRaceRecord], RaceReview | None, dict]:
+def predict_for_race(db: Any, race_id: int, method: str = "track"
+                     ) -> tuple[WinningStrategy | None, list[TrackRaceRecord], RaceReview | None, dict]:
     """Prediction from races strictly before this one, the track record and, when the race has
-    been run, its review."""
+    been run, its review. method: "track" (front-grid history) or "hybrid" (predict_hybrid)."""
     from dataclasses import replace
 
     from race_strategy_timing_v1 import load_car_strategies, race_wet_flags
@@ -408,8 +460,17 @@ def predict_for_race(db: Any, race_id: int) -> tuple[WinningStrategy | None, lis
         return None, [], None, dict(race)
     neutralised = load_neutralised_laps(db, {c.race_id for c in cars if c.track_id == race["track_id"]
                                              or c.race_date < race["race_date"]})
-    prediction = predict_winning_strategy(clean_front_cars(history, neutralised), track_id=race["track_id"],
-                                          regulation_era=race["regulation_era"], total_laps=int(total_laps))
+    front = clean_front_cars(history, neutralised)
+    if method == "hybrid":
+        from race_practice_pace_v1 import load_weekend_wear
+
+        wear_by_race = {r: load_weekend_wear(db, r) for r in {c.race_id for c in history} | {race_id}}
+        prediction = predict_hybrid(front, history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                    track_id=race["track_id"], regulation_era=race["regulation_era"],
+                                    total_laps=int(total_laps))
+    else:
+        prediction = predict_winning_strategy(front, track_id=race["track_id"],
+                                              regulation_era=race["regulation_era"], total_laps=int(total_laps))
     record = track_record([c for c in fact_cars if c.race_date < race["race_date"]], neutralised,
                           track_id=race["track_id"])
     review = None
@@ -429,9 +490,10 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--race-id", type=int, required=True)
+    parser.add_argument("--method", choices=("track", "hybrid"), default="track")
     args = parser.parse_args()
     with create_engine(os.environ["DATABASE_URL"]).connect() as db:
-        prediction, record, review, race = predict_for_race(db, args.race_id)
+        prediction, record, review, race = predict_for_race(db, args.race_id, args.method)
     print(f"{race['track_name']} {race['season_year']} (race {args.race_id}, {race['race_date']})")
     if prediction is None:
         print("No prediction: race distance or regulation era unknown, or no history.")

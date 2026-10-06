@@ -85,7 +85,7 @@ def test_window_scoring_ignores_safety_car_stops():
 def test_backtest_end_to_end(synthetic_db):
     with synthetic_db.connect() as db:
         rows = run(db, start_year=2024, end_year=2024)
-    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M}
+    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M, "H hybrid (wear stops, track plan)"}
     table = summarise(rows, M)
     assert {t[0] for t in table} >= {"stop_count_hit", "first_window_hit", "winner_sequence_hit"}
 
@@ -155,3 +155,61 @@ def test_track_history_from_an_earlier_era_only():
         p = predict_winning_strategy(clean_front_cars(cars, {}), track_id=1, regulation_era="new", total_laps=60, k=k)
         assert p is not None and p.alternative is not None
     assert p.sequence == ("SOFT", "MEDIUM", "HARD", "HARD") and p.window_source == "track"
+
+
+def test_window_cap_keeps_the_typical_lap_inside():
+    from race_winning_strategy_v1 import cap_window
+
+    assert cap_window(12, 38, 17, 10) == (13, 22)
+    assert cap_window(12, 38, 13, 10) == (12, 21)
+    assert cap_window(12, 38, 37, 10) == (29, 38)
+    assert cap_window(20, 25, 22, 10) == (20, 25)
+    assert cap_window(12, 38, 17, None) == (12, 38)
+
+
+def test_hybrid_takes_the_stop_count_from_practice_wear_and_the_plan_from_the_front_grid():
+    from race_winning_strategy_v1 import predict_hybrid
+
+    # whole field: low-wear races one-stop, high-wear races two-stop (method M's signal)
+    field, wear = [], {}
+    for race in range(20, 36):
+        high = race % 2 == 0
+        wear[race] = 0.004 if high else 0.001
+        for grid in range(1, 11):
+            if high:
+                field.append(_car(race, 200 + race, grid, ("MEDIUM", "HARD", "HARD"), [18, 40]))
+            else:
+                field.append(_car(race, 200 + race, grid, ONE, [30]))
+    history = _history() + field          # track 1: front grid two-stops at laps ~20 / ~42
+    front = clean_front_cars(history, {})
+    high = predict_hybrid(front, history, wear=0.0041, wear_by_race=wear, track_id=1, regulation_era="e", total_laps=60)
+    assert high.stops == 2 and high.sequence == TWO
+    assert (high.windows[0].first_lap, high.windows[0].last_lap) == (20, 21)       # track 1's front grid
+    assert "practice tyre wear" in high.source
+    low = predict_hybrid(front, history, wear=0.0009, wear_by_race=wear, track_id=1, regulation_era="e", total_laps=60)
+    assert low.stops == 1 and low.sequence == ONE                                  # wear says one stop
+    assert all(w.last_lap - w.first_lap + 1 <= 10 for w in low.windows)
+    assert low.alternative is not None and low.alternative.stops == 2
+
+
+def test_hybrid_falls_back_to_production_when_no_front_car_ran_that_stop_count():
+    from race_winning_strategy_v1 import predict_hybrid
+
+    three = ("SOFT", "MEDIUM", "HARD", "HARD")
+    field = [_car(r, 300 + r, g, three, [12, 25, 40]) for r in range(40, 60) for g in range(6, 16)]
+    front = clean_front_cars(_history(), {})          # front grid: only one- and two-stops
+    p = predict_hybrid(front, _history() + field, wear=None, wear_by_race={}, track_id=1, regulation_era="e",
+                       total_laps=60)
+    assert p.sequence == three and p.window_source == "production" and p.confidence == "low"
+    assert [(w.first_lap, w.last_lap) for w in p.windows] == [(9, 15), (22, 28), (37, 43)]
+    assert "Front-grid share" not in format_strategy(p)
+
+
+def test_predict_for_race_hybrid(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_winning_strategy_v1 import predict_for_race
+
+    with synthetic_db.connect() as db:
+        race_id = db.execute(sql("SELECT MAX(id) FROM races")).scalar()
+        prediction, _, _, _ = predict_for_race(db, race_id, "hybrid")
+    assert prediction is not None and "stop count" in prediction.source
