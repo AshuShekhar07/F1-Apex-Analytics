@@ -59,6 +59,11 @@ Methods (history strictly before the race date):
                         race-level stop count table and the signals by real stop count.
      Q1-Q3 NOT PROMOTED 2026-10-05: stop count Q1 0.466 / Q2 0.446 / Q3 0.426 vs M 0.470 in 2022-25
      (all n.s.); only practice wear separates the races' stop counts (see race_stop_count_v1).
+  Wet-rule fix (2026-10-06, same cars, 2022-25, 80 races; wet_fix_same_cars.txt): 26 races
+     flagged as rained-on but run on slicks only were added to M's history (M0 = old history):
+     tyre order 0.201 vs M0 0.223 (WORSE), others n.s. -> REJECTED, history keeps the rain flag.
+     Practice wear judged by tyres instead of the rain flag (+~16 FP2 sessions): tyre order
+     +0.012, stop count +0.021, within 3 laps +0.014, all n.s. -> NOT PROMOTED (no clear gain).
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -93,7 +98,6 @@ from race_stop_count_v1 import clip_stops, load_signals, model_stops, race_label
 from race_strategy_timing_v1 import (
     CarStrategy,
     load_car_strategies,
-    load_legacy_wet_races,
     predict_era_mode,
     predict_era_mode_track_timing,
     predict_expected_match,
@@ -138,7 +142,6 @@ def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int) -> 
 WEAR: dict[int, float | None] = {}     # last run's practice wear per race (for the report)
 LAST_CARS: list[CarStrategy] = []
 ALLOCATION_COVERAGE: list[int] = [0, 0]
-RECLASSIFIED: list[int] = []   # races wet under the old rule, dry by their tyres
 RACE_STOPS: list[tuple[int, int, dict[str, int | None]]] = []   # (race_id, real race stop count, predicted)
 STOP_SIGNALS: list = [{}, {}]                                    # last run's signals and labels
 STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals")
@@ -187,9 +190,6 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     precedent_cache: dict = {}
     from race_practice_pace_v1 import load_weekend_wear
     wear_by_race = {race_id: load_weekend_wear(db, race_id) for race_id in {c.race_id for c in cars}}
-    tyre_wear = {race_id: load_weekend_wear(db, race_id, use_rain_flag=False) for race_id in wear_by_race}
-    reclassified = load_legacy_wet_races(db) & {c.race_id for c in cars if not c.wet}
-    RECLASSIFIED[:] = sorted(reclassified)
     LAST_CARS[:] = cars
     from race_practice_pace_v1 import load_weekend_compounds
     allocations = load_allocations(db)
@@ -235,14 +235,6 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         expected = predict_expected_match(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                           regulation_era=era, total_laps=total_laps).strategy
         wear = wear_by_race.get(race_id)
-        legacy_history = [c for c in history if c.race_id not in reclassified]
-        data_fixes = {
-            "M0 old wet rule (history)": predict_from_wear_timed(legacy_history, wear=wear, wear_by_race=wear_by_race,
-                                                                 regulation_era=era, total_laps=total_laps).strategy,
-            "M2 tyre-based practice wear": predict_from_wear_timed(history, wear=tyre_wear.get(race_id),
-                                                                   wear_by_race=tyre_wear, regulation_era=era,
-                                                                   total_laps=total_laps).strategy,
-        }
         stop_counts = {
             "Q1 wear + track votes": stops_wear_and_track(labels, wear_by_race, wear=wear, track_id=track,
                                                           regulation_era=era, before=race_date),
@@ -266,7 +258,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                       ("P1 per car: grid", True, False), ("P2 per car: team", False, True),
                                       ("P3 per car: grid + team", True, True))}
         for car in race_cars:
-            for name, strategy in (*stop_methods.items(), *data_fixes.items()):
+            for name, strategy in stop_methods.items():
                 scores.append(score(race_id, name, strategy, car))
             for name, predictor in per_car.items():
                 scores.append(score(race_id, name, predictor.predict(grid=car.grid, team_id=car.team_id).strategy, car))
@@ -335,23 +327,6 @@ def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple
     return rows
 
 
-DATA_FIX_METHODS = (SERVED, "M0 old wet rule (history)", "M2 tyre-based practice wear")
-
-
-def data_fix_report(scores: Sequence[Score]) -> None:
-    """The wet-rule fix judged on the SAME cars: M (fixed history) vs M0 (old history), and
-    M2 (practice wear judged by tyres) vs M -- on every scored race and on the races that
-    were dry under the old rule too."""
-    picked = [s for s in scores if s.method in DATA_FIX_METHODS]
-    for label, rows in (("all scored races", picked),
-                        ("races dry under the old rule too", [s for s in picked if s.race_id not in RECLASSIFIED])):
-        print(f"\n=== wet-rule fix vs M, {label} ({len({s.race_id for s in rows})} races; "
-              f"{len(RECLASSIFIED)} races reclassified dry) ===")
-        for metric, method, value, cmp in summarise(rows, baseline=SERVED):
-            tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
-            print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
-
-
 def stop_count_report() -> None:
     """Race-level stop count: how often each method names the race's most common stop count."""
     if not RACE_STOPS:
@@ -398,7 +373,6 @@ def main() -> int:
                                                 baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
-    data_fix_report(scores)
     stop_count_report()
     wear_report(LAST_CARS, args.start_year, args.end_year)
     print(f"Pirelli compound set known for {ALLOCATION_COVERAGE[0]} of {ALLOCATION_COVERAGE[1]} scored races")

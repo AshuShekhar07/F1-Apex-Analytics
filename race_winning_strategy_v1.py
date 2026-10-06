@@ -388,12 +388,18 @@ def load_race_context(db: Any, race_id: int) -> dict | None:
 def predict_for_race(db: Any, race_id: int) -> tuple[WinningStrategy | None, list[TrackRaceRecord], RaceReview | None, dict]:
     """Prediction from races strictly before this one, the track record and, when the race has
     been run, its review."""
-    from race_strategy_timing_v1 import load_car_strategies
+    from dataclasses import replace
+
+    from race_strategy_timing_v1 import load_car_strategies, race_wet_flags
 
     race = load_race_context(db, race_id)
     if race is None:
         raise ValueError(f"race {race_id} not found")
-    cars = load_car_strategies(db, start_year=2018, end_year=race["season_year"])
+    # facts (track record, review) call a race wet by its tyres; the prediction's history keeps
+    # the rain-flag rule (the tyre rule was tested for prediction and rejected, see RACE_WET_SQL)
+    fact_cars = load_car_strategies(db, start_year=2018, end_year=race["season_year"], wet_rule="tyres")
+    flags = race_wet_flags(db, "rain_flag")
+    cars = [replace(c, wet=flags.get(c.race_id, c.wet)) for c in fact_cars]
     history = [c for c in cars if c.race_date < race["race_date"]]
     race_cars = [c for c in cars if c.race_id == race_id]
     total_laps = (race_cars[0].race_laps if race_cars else race["total_race_laps"]
@@ -404,9 +410,11 @@ def predict_for_race(db: Any, race_id: int) -> tuple[WinningStrategy | None, lis
                                              or c.race_date < race["race_date"]})
     prediction = predict_winning_strategy(clean_front_cars(history, neutralised), track_id=race["track_id"],
                                           regulation_era=race["regulation_era"], total_laps=int(total_laps))
-    record = track_record(history, neutralised, track_id=race["track_id"])
+    record = track_record([c for c in fact_cars if c.race_date < race["race_date"]], neutralised,
+                          track_id=race["track_id"])
     review = None
-    if prediction is not None and race_cars and not race_cars[0].wet:
+    fact_race = [c for c in fact_cars if c.race_id == race_id]
+    if prediction is not None and fact_race and not fact_race[0].wet:
         review = review_race(prediction, race_cars, neutralised.get(race_id))
     return prediction, record, review, dict(race)
 

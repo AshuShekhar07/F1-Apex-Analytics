@@ -102,8 +102,7 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
                        "M wear + wear timing", "N wear neighbours' sequence", "O expected match",
                        "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team", "P3 per car: grid + team",
-                       "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
-                       "M0 old wet rule (history)", "M2 tyre-based practice wear"}
+                       "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -350,7 +349,7 @@ def test_likelihood_ratio_is_shrunk_to_one_for_thin_evidence():
     assert 1.0 < one[("SOFT", "HARD")] < 1.1
 
 
-def test_rain_flag_alone_does_not_make_a_race_wet(synthetic_db):
+def test_tyre_rule_ignores_a_rain_flag_without_wet_tyres(synthetic_db):
     from sqlalchemy import text as sql
     from race_strategy_timing_v1 import load_car_strategies
 
@@ -359,25 +358,26 @@ def test_rain_flag_alone_does_not_make_a_race_wet(synthetic_db):
         try:
             race_session = db.execute(sql("SELECT id FROM sessions WHERE race_id = 1 AND session_type = 'R'")).scalar()
             db.execute(sql("UPDATE session_weather SET rainfall = TRUE WHERE session_id = :s"), {"s": race_session})
-            cars = [c for c in load_car_strategies(db) if c.race_id == 1]
+            cars = [c for c in load_car_strategies(db, wet_rule="tyres") if c.race_id == 1]
             assert cars and not any(c.wet for c in cars)            # rain sample, no wet tyres: dry
+            assert all(c.wet for c in load_car_strategies(db) if c.race_id == 1)   # default: rain flag
             db.execute(sql("""UPDATE laps SET tire_compound = 'INTERMEDIATE'
                               WHERE session_id = :s AND lap_number <= 5"""), {"s": race_session})
-            assert all(c.wet for c in load_car_strategies(db) if c.race_id == 1)   # 5 of 30 laps on inters
+            assert all(c.wet for c in load_car_strategies(db, wet_rule="tyres") if c.race_id == 1)
         finally:
             tx.rollback()
 
 
-def test_legacy_wet_races_follow_the_rain_flag(synthetic_db):
+def test_race_wet_flags_by_rule(synthetic_db):
     from sqlalchemy import text as sql
-    from race_strategy_timing_v1 import load_legacy_wet_races
+    from race_strategy_timing_v1 import race_wet_flags
 
     with synthetic_db.connect() as db:
         tx = db.begin()
         try:
-            assert load_legacy_wet_races(db) == set()
+            assert not any(race_wet_flags(db).values())
             db.execute(sql("""UPDATE session_weather SET rainfall = TRUE WHERE session_id =
                               (SELECT id FROM sessions WHERE race_id = 2 AND session_type = 'R')"""))
-            assert load_legacy_wet_races(db) == {2}
+            assert race_wet_flags(db)[2] and not race_wet_flags(db, "tyres")[2]
         finally:
             tx.rollback()
