@@ -1,0 +1,29 @@
+race 82 (2022-03-20): 5 front-grid cars scored
+race 83 (2022-03-27): 5 front-grid cars scored
+race 84 (2022-04-10): 4 front-grid cars scored
+race 85 (2022-04-24): 4 front-grid cars scored
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 198, in <module>
+    raise SystemExit(main())
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 181, in main
+    rows = run(db, start_year=args.start_year, end_year=args.end_year)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 119, in run
+    w = predict_winning_strategy(history, track_id=first.track_id, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_winning_strategy_v1.py", line 147, in predict_winning_strategy
+    sequence = max(sequence_chances, key=lambda s: (sequence_chances[s], s))
+ValueError: max() arg is an empty sequence
+race 174 (2026-03-08): 3 front-grid cars scored
+race 175 (2026-03-15): 4 front-grid cars scored
+race 176 (2026-03-29): 5 front-grid cars scored
+race 178 (2026-05-24): 3 front-grid cars scored
+race 179 (2026-06-07): 3 front-grid cars scored
+Traceback (most recent call last):
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 198, in <module>
+    raise SystemExit(main())
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 181, in main
+    rows = run(db, start_year=args.start_year, end_year=args.end_year)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/winning_strategy_backtest_v1.py", line 119, in run
+    w = predict_winning_strategy(history, track_id=first.track_id, **kwargs)
+  File "/home/ashushekhar07/projects/F1-Apex-Analytics/race_winning_strategy_v1.py", line 147, in predict_winning_strategy
+    sequence = max(sequence_chances, key=lambda s: (sequence_chances[s], s))
+ValueError: max() arg is an empty sequence
