@@ -15,6 +15,16 @@ Metrics (per front-grid car, then averaged per race; 90% intervals resample race
   winner_sequence_hit                    : the race winner ran the predicted tyre order
 
     python winning_strategy_backtest_v1.py --start-year 2022 --end-year 2025
+
+RESULT 2026-10-06 (2022-25, 70 races, 328 front-grid cars). W NOT PROMOTED over M:
+  stop count W 0.410 vs M 0.478 (n.s.), green 0.462 vs 0.573 (n.s.); tyre order 0.245 vs
+  0.324 (n.s.), green 0.295 vs 0.402 (WORSE); first stop within 3 laps 0.411 vs 0.468 (n.s.);
+  winner's tyre order 0.258 vs 0.303 (n.s.). Practice wear (M) beats track history even for
+  the front grid. Track history does beat the era alone (green stop count +0.131, BETTER;
+  first window 5.7 vs 6.5 laps wide, BETTER). First window hit 0.333 at 5.7 laps wide.
+  Confidence levels are ordered: stop count right medium 0.552 (119 cars), low 0.328 (104);
+  main or alternative right medium 0.902, low 0.797; high had 1 race (too few to judge).
+  2026 (13 races): no clear difference vs M anywhere.
 """
 
 from __future__ import annotations
