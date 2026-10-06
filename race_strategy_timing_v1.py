@@ -668,17 +668,24 @@ def predict_from_practice(history: Sequence[CarStrategy], *, wear: float | None,
 
 # --- database ------------------------------------------------------------------
 
+# A race is wet for strategy when >= RACE_WET_TYRE_SHARE of its timed laps were on intermediates
+# or wets. The session_weather rainfall flag is NOT used: it is set by any rain sample, and 27
+# races from 2018-2026 flagged as rained-on had no lap on a wet tyre (e.g. Marina Bay 2025,
+# race 167), which dropped them from every dry strategy history (wet_flag_check.txt, 2026-10-06).
+RACE_WET_TYRE_SHARE = 0.1
+RACE_WET_SQL = f"""COALESCE((
+    SELECT AVG((upper(COALESCE(lw.tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int) >= {RACE_WET_TYRE_SHARE}
+    FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL), FALSE)"""
+
+
 def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
                         end_year: int = 2026, min_distance: float = 0.9) -> list[CarStrategy]:
     """Real stints for every car that covered >= min_distance of a race (R sessions)."""
-    from race_pace_from_quali_v1 import SESSION_WET_SQL
-
     races = db.execute(text(f"""
         SELECT r.id, r.race_date, r.season_year, r.track_id, r.regulation_era, s.id AS session_id,
-               {SESSION_WET_SQL} AS wet
+               {RACE_WET_SQL} AS wet
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
-        LEFT JOIN session_weather sw ON sw.session_id = s.id
         WHERE r.season_year BETWEEN :a AND :b AND r.regulation_era IS NOT NULL
           AND (CAST(:before AS DATE) IS NULL OR r.race_date < :before)
         ORDER BY r.race_date

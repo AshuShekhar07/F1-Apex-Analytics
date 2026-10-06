@@ -347,3 +347,21 @@ def test_likelihood_ratio_is_shrunk_to_one_for_thin_evidence():
     assert likelihood_ratios([], share) == {("MEDIUM", "HARD"): 1.0, ("SOFT", "HARD"): 1.0}
     one = likelihood_ratios(hist[:1], share)                       # one SOFT-HARD car only
     assert 1.0 < one[("SOFT", "HARD")] < 1.1
+
+
+def test_rain_flag_alone_does_not_make_a_race_wet(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_strategy_timing_v1 import load_car_strategies
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            race_session = db.execute(sql("SELECT id FROM sessions WHERE race_id = 1 AND session_type = 'R'")).scalar()
+            db.execute(sql("UPDATE session_weather SET rainfall = TRUE WHERE session_id = :s"), {"s": race_session})
+            cars = [c for c in load_car_strategies(db) if c.race_id == 1]
+            assert cars and not any(c.wet for c in cars)            # rain sample, no wet tyres: dry
+            db.execute(sql("""UPDATE laps SET tire_compound = 'INTERMEDIATE'
+                              WHERE session_id = :s AND lap_number <= 5"""), {"s": race_session})
+            assert all(c.wet for c in load_car_strategies(db) if c.race_id == 1)   # 5 of 30 laps on inters
+        finally:
+            tx.rollback()
