@@ -27,6 +27,14 @@ RESULT 2026-10-06 (2022-25, 70 races, 328 front-grid cars). W NOT PROMOTED over 
   Confidence levels are ordered: stop count right medium 0.552 (119 cars), low 0.328 (104);
   main or alternative right medium 0.902, low 0.797; high had 1 race (too few to judge).
   2026 (13 races): no clear difference vs M anywhere.
+HYBRID H 2026-10-06 (same cars). 2022-25 (70 races, 328 front-grid cars), H vs M: stop count
+  0.478 = 0.478 (same by construction), green 0.573 = 0.573; tyre order 0.308 vs 0.324
+  (-0.016 [-0.047, +0.013], n.s.), green 0.382 vs 0.402 (n.s.); first stop within 3 laps 0.463
+  vs 0.468 (n.s.); winner's tyre order 0.288 vs 0.303 (n.s.). Worse nowhere, better nowhere:
+  a TIE with production on the plan, plus pit windows production does not give (first window
+  hit 0.386 at 6.1 laps wide, second 0.504). H vs W: higher on every metric, none clear.
+  2026 (13 races): H >= M on every metric, none clear. Confidence levels (H, 2022-25): stop
+  count right medium 0.636 (73 cars), low 0.532 (150); main or alternative 0.906 / 0.800.
 WET-RULE FIX 2026-10-06 (same cars, 80 races): W with rain-flagged slick races in its history vs
   W0 without -- no clear difference anywhere (green stop count +0.032 [+0.000, +0.063]); not
   adopted. The track record (facts) uses the tyre rule, so it lists those races.
