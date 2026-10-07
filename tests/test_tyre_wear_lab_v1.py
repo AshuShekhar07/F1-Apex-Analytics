@@ -89,3 +89,12 @@ def test_lab_runs_on_the_database(synthetic_db):
     with synthetic_db.connect() as db:
         pairs = run(db)
     assert all(isinstance(p, Pair) for p in pairs)
+
+
+def test_race_wear_index_averages_the_compounds_with_practice():
+    from tyre_wear_lab_v1 import race_wear_index
+
+    runs = [_run("FP2", "MEDIUM", 0.06), _run("FP2", "MEDIUM", 0.06, base=91),
+            _run("FP3", "HARD", 0.02), _run("FP3", "HARD", 0.02, base=91), _run("FP1", "SOFT", 0.5)]
+    assert race_wear_index(runs) == pytest.approx(0.04)     # one soft run: not enough for SOFT
+    assert race_wear_index([]) is None

@@ -83,6 +83,11 @@ Methods (history strictly before the race date):
      WORSE. A changed stop count also moves the stop laps, so M's timing does not rescue it.
      Tyre-wear line of work CLOSED: practice wear stays as run_wear.
   W3                  : W2's stop count with M's sequence and stop-lap rules on the current wear
+  W4                  : M on the wear measure the tyre wear lab chose (tyre_wear_lab_v1.race_wear_index:
+                        every FP1-FP3 long run, warm-up dropped, fuel added back, pooled per compound,
+                        averaged) -- picked by how well it ranks REAL race wear, then tested here once.
+                        Pre-registered bar: better somewhere and worse nowhere in 2022-25, and worse
+                        nowhere in 2026.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -165,8 +170,9 @@ RACE_STOPS: list[tuple[int, int, dict[str, int | None]]] = []   # (race_id, real
 STOP_SIGNALS: list = [{}, {}]                                    # last run's signals and labels
 W1, W2 = "W1 robust wear (v2, pooled)", "W2 per-compound wear (v2)"
 W3 = "W3 W2 stop count, M timing"
+W4 = "W4 lab wear (pooled practice)"
 STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
-                W1, W2, W3)
+                W1, W2, W3, W4)
 WEAR_V2: dict[str, dict] = {"robust": {}, "per_compound": {}}   # last run, per target race (report)
 
 
@@ -219,6 +225,9 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     robust_wear = {race_id: weekend_wear_robust(w) for race_id, w in wears_v2.items()}
     race_date_of = {c.race_id: c.race_date for c in cars}
     WEAR_V2["robust"], WEAR_V2["per_compound"] = dict(robust_wear), {}
+    from tyre_wear_lab_v1 import load_practice_runs, race_wear_index
+    lab_wear = {race_id: race_wear_index(runs) for race_id, runs in load_practice_runs(db, wear_by_race).items()}
+    WEAR_V2["lab"] = dict(lab_wear)
     LAST_CARS[:] = cars
     from race_practice_pace_v1 import load_weekend_compounds
     allocations = load_allocations(db)
@@ -286,6 +295,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         # W3: W2's stop count, M's sequence and stop-lap rules on the CURRENT wear (W2's
         # neighbours timed the stops worse in 2026); M itself when W2 has no wear
         w2 = stop_methods[W2]
+        stop_methods[W4] = predict_from_wear_timed(history, wear=lab_wear.get(race_id), wear_by_race=lab_wear,
+                                                   regulation_era=era, total_laps=total_laps).strategy
         stop_methods[W3] = (wear_timed if pc_wear.get(race_id) is None or w2 is None else
                             predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
                                                     regulation_era=era, total_laps=total_laps,
@@ -377,7 +388,8 @@ def wear_v2_report() -> None:
     modes = race_modes(LAST_CARS)
     print("\n=== tyre wear measures: median by the race's most common stop count (scored races) ===")
     for label, values, scale in (("M  run_wear (current)", WEAR, 100), ("W1 robust, pooled", WEAR_V2["robust"], 100),
-                                 ("W2 per-compound ratio", WEAR_V2["per_compound"], 1)):
+                                 ("W2 per-compound ratio", WEAR_V2["per_compound"], 1),
+                                 ("W4 lab wear (s/lap)", WEAR_V2.get("lab", {}), 1)):
         by_stops = defaultdict(list)
         targets = WEAR_V2["per_compound"].keys()
         for r in targets:
@@ -429,7 +441,7 @@ def main() -> int:
     for metric, method, value, cmp in summarise([s for s in scores if s.method in
                                                  (SERVED, "N wear neighbours' sequence", "O expected match",
                                                   "Q1 wear + track votes", "Q2 model: wear + track",
-                                                  "Q3 model: all signals", W1, W2, W3,
+                                                  "Q3 model: all signals", W1, W2, W3, W4,
                                                   "B era mode (real stints)", "G CEILING (hindsight)")],
                                                 baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"

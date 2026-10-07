@@ -33,6 +33,23 @@ The winner is decided here, by how well it predicts real wear, and only then tes
 the strategy backtest -- so the strategy test is not one more try among many.
 
     python tyre_wear_lab_v1.py --start-year 2022 --end-year 2025
+
+RESULT 2026-10-07 (tyre_wear_lab.txt). Rank correlation with the real wear, 2022-25 (146 pairs,
+67 races) / 2026 (32 pairs, 13 races):
+  practice_pooled   +0.463 [+0.274, +0.615] / +0.735 [+0.426, +0.864]   best in both periods
+  practice_v2       +0.404 / +0.521      practice_current  +0.391 / +0.535
+  track_history     +0.368 / +0.139      stacked           +0.323 / +0.337
+  era_compound      +0.023 / -0.229      c_compound        -0.075 / +0.133   (no signal)
+Calibrated error (s/lap): everything ~0.016-0.019 in 2022-25 against a real wear of ~0.023-0.029,
+so wear stays hard to pin down in seconds; stacked beat era_compound in both periods, pooled
+practice beat it in 2026 (-0.0096 [-0.0127, -0.0069]) and was level-to-slightly-worse than
+practice_current in 2022-25 (+0.0013 [+0.0000, +0.0025]).
+Findings: practice is the only real signal, and pooling every FP1-FP3 run ranks races best; the
+Pirelli C-number and the season average say nothing about how hard a race is on tyres; a
+compound's race wear barely differs by compound (medians SOFT 0.027, MEDIUM 0.029, HARD 0.023
+s/lap), so averaging compounds is safe. CHOSEN for the single strategy test: race_wear_index
+(mean over compounds of practice_pooled) -- the strategy method only compares races by
+nearness of wear, so the ranking is what matters and no calibration is needed.
 """
 
 from __future__ import annotations
@@ -151,6 +168,13 @@ def practice_pooled(runs: Sequence[PracticeRun], compound: str) -> float | None:
     if n_runs < MIN_RUNS or n_laps < MIN_POOLED_LAPS or den == 0:
         return None
     return num / den
+
+
+def race_wear_index(runs: Sequence[PracticeRun]) -> float | None:
+    """One number per weekend for the strategy method: practice_pooled averaged over the
+    compounds that have it (s/lap of tyre age); None without any."""
+    values = [v for c in COMPOUNDS if (v := practice_pooled(runs, c)) is not None]
+    return mean(values) if values else None
 
 
 # --- history measures ------------------------------------------------------------------------
