@@ -68,6 +68,13 @@ Methods (history strictly before the race date):
                         f1-race-replay's tyre model): warm-up laps dropped, fuel burn added back,
                         Theil-Sen slope; W1 pools compounds, W2 divides each run by its compound's
                         median over earlier weekends. Compared with M; wear medians by stop count.
+     W1/W2 NOT PROMOTED 2026-10-07 (vs M, same cars). 2022-25 (1248 cars): W2 stop count 0.490 vs
+     0.470, tyre order 0.242 vs 0.234, within 3 laps 0.320 vs 0.296 -- all n.s.; W1 lower on stop
+     count and first stop. 2026 (229 cars): W1 = W2 stop count 0.506 vs 0.447 (n.s.) but first stop
+     10.61 vs 9.53 laps and within 3 laps 0.114 vs 0.258 (both WORSE): M's stop laps come from the
+     races with the closest wear, and the new wear picks worse neighbours for timing. Wear medians
+     by real stop count (W2, 2026): 1 stop 0.41, 2 stops 2.51 vs M 0.080 / 0.195 -- W2 separates
+     them more, but 2022-25 barely (1.39 / 1.56). 3-stop races have LOWER wear on every measure.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
