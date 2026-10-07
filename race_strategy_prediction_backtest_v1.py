@@ -75,6 +75,13 @@ Methods (history strictly before the race date):
      races with the closest wear, and the new wear picks worse neighbours for timing. Wear medians
      by real stop count (W2, 2026): 1 stop 0.41, 2 stops 2.51 vs M 0.080 / 0.195 -- W2 separates
      them more, but 2022-25 barely (1.39 / 1.56). 3-stop races have LOWER wear on every measure.
+     W3 NOT PROMOTED 2026-10-07 (bar raised: third variant of one idea, so clearly better in one
+     period AND worse nowhere in both). 2022-25: within 3 laps 0.326 vs 0.296 (+0.030 [+0.003,
+     +0.060], at the edge), stop count 0.483 vs 0.470 and first stop 8.03 vs 8.20 n.s.; races
+     right 32/68 vs 33/68. 2026: nothing better; first stop 10.59 vs 9.53 laps (+1.07 [+0.000,
+     +2.351]) and within 3 laps 0.161 vs 0.258 (-0.097 [-0.225, +0.000]), both at the edge of
+     WORSE. A changed stop count also moves the stop laps, so M's timing does not rescue it.
+     Tyre-wear line of work CLOSED: practice wear stays as run_wear.
   W3                  : W2's stop count with M's sequence and stop-lap rules on the current wear
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
