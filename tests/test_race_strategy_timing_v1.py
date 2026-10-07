@@ -103,7 +103,8 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "M wear + wear timing", "N wear neighbours' sequence", "O expected match",
                        "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team", "P3 per car: grid + team",
                        "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
-                       "W1 robust wear (v2, pooled)", "W2 per-compound wear (v2)"}
+                       "W1 robust wear (v2, pooled)", "W2 per-compound wear (v2)",
+                       "W3 W2 stop count, M timing"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)

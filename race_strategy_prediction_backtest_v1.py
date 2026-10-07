@@ -75,6 +75,7 @@ Methods (history strictly before the race date):
      races with the closest wear, and the new wear picks worse neighbours for timing. Wear medians
      by real stop count (W2, 2026): 1 stop 0.41, 2 stops 2.51 vs M 0.080 / 0.195 -- W2 separates
      them more, but 2022-25 barely (1.39 / 1.56). 3-stop races have LOWER wear on every measure.
+  W3                  : W2's stop count with M's sequence and stop-lap rules on the current wear
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -156,8 +157,9 @@ ALLOCATION_COVERAGE: list[int] = [0, 0]
 RACE_STOPS: list[tuple[int, int, dict[str, int | None]]] = []   # (race_id, real race stop count, predicted)
 STOP_SIGNALS: list = [{}, {}]                                    # last run's signals and labels
 W1, W2 = "W1 robust wear (v2, pooled)", "W2 per-compound wear (v2)"
+W3 = "W3 W2 stop count, M timing"
 STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
-                W1, W2)
+                W1, W2, W3)
 WEAR_V2: dict[str, dict] = {"robust": {}, "per_compound": {}}   # last run, per target race (report)
 
 
@@ -274,6 +276,13 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
         for name, wears in ((W1, robust_wear), (W2, pc_wear)):
             stop_methods[name] = predict_from_wear_timed(history, wear=wears.get(race_id), wear_by_race=wears,
                                                          regulation_era=era, total_laps=total_laps).strategy
+        # W3: W2's stop count, M's sequence and stop-lap rules on the CURRENT wear (W2's
+        # neighbours timed the stops worse in 2026); M itself when W2 has no wear
+        w2 = stop_methods[W2]
+        stop_methods[W3] = (wear_timed if pc_wear.get(race_id) is None or w2 is None else
+                            predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                                    regulation_era=era, total_laps=total_laps,
+                                                    stops=len(w2.sequence) - 1).strategy)
         if race_id in labels:
             RACE_STOPS.append((race_id, labels[race_id].stops, {
                 name: (len(strategy.sequence) - 1 if strategy else None)
@@ -413,7 +422,7 @@ def main() -> int:
     for metric, method, value, cmp in summarise([s for s in scores if s.method in
                                                  (SERVED, "N wear neighbours' sequence", "O expected match",
                                                   "Q1 wear + track votes", "Q2 model: wear + track",
-                                                  "Q3 model: all signals", W1, W2,
+                                                  "Q3 model: all signals", W1, W2, W3,
                                                   "B era mode (real stints)", "G CEILING (hindsight)")],
                                                 baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
