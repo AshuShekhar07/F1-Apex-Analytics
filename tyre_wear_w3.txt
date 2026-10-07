@@ -1,0 +1,431 @@
+race 82 (2022-03-20): 19 cars scored
+race 83 (2022-03-27): 14 cars scored
+race 84 (2022-04-10): 17 cars scored
+race 85 (2022-04-24): 18 cars scored
+race 87 (2022-05-22): 18 cars scored
+race 89 (2022-06-12): 16 cars scored
+race 90 (2022-06-19): 17 cars scored
+race 92 (2022-07-10): 17 cars scored
+race 93 (2022-07-24): 16 cars scored
+race 95 (2022-08-28): 18 cars scored
+race 96 (2022-09-04): 18 cars scored
+race 97 (2022-09-11): 16 cars scored
+race 100 (2022-10-23): 17 cars scored
+race 101 (2022-10-30): 19 cars scored
+race 102 (2022-11-13): 17 cars scored
+race 103 (2022-11-20): 19 cars scored
+race 104 (2023-03-05): 17 cars scored
+race 105 (2023-03-19): 18 cars scored
+race 106 (2023-04-02): 17 cars scored
+race 107 (2023-04-30): 18 cars scored
+race 108 (2023-05-07): 20 cars scored
+race 110 (2023-06-04): 20 cars scored
+race 111 (2023-06-18): 18 cars scored
+race 113 (2023-07-09): 17 cars scored
+race 114 (2023-07-23): 18 cars scored
+race 117 (2023-09-03): 18 cars scored
+race 118 (2023-09-17): 16 cars scored
+race 119 (2023-09-24): 15 cars scored
+race 120 (2023-10-08): 17 cars scored
+race 121 (2023-10-22): 17 cars scored
+race 122 (2023-10-29): 17 cars scored
+race 124 (2023-11-18): 19 cars scored
+race 125 (2023-11-26): 20 cars scored
+race 126 (2024-03-02): 20 cars scored
+race 127 (2024-03-09): 18 cars scored
+race 128 (2024-03-24): 17 cars scored
+race 129 (2024-04-07): 17 cars scored
+race 130 (2024-04-21): 17 cars scored
+race 131 (2024-05-05): 19 cars scored
+race 132 (2024-05-19): 19 cars scored
+race 133 (2024-05-26): 16 cars scored
+race 138 (2024-07-21): 19 cars scored
+race 139 (2024-07-28): 19 cars scored
+race 140 (2024-08-25): 20 cars scored
+race 141 (2024-09-01): 19 cars scored
+race 142 (2024-09-15): 18 cars scored
+race 143 (2024-09-22): 19 cars scored
+race 144 (2024-10-20): 19 cars scored
+race 145 (2024-10-27): 17 cars scored
+race 147 (2024-11-23): 18 cars scored
+race 148 (2024-12-01): 15 cars scored
+race 149 (2024-12-08): 17 cars scored
+race 151 (2025-03-23): 19 cars scored
+race 152 (2025-04-06): 20 cars scored
+race 153 (2025-04-13): 19 cars scored
+race 154 (2025-04-20): 18 cars scored
+race 156 (2025-05-18): 18 cars scored
+race 157 (2025-05-25): 18 cars scored
+race 158 (2025-06-01): 17 cars scored
+race 160 (2025-06-29): 16 cars scored
+race 163 (2025-08-03): 19 cars scored
+race 164 (2025-08-31): 18 cars scored
+race 165 (2025-09-07): 18 cars scored
+race 166 (2025-09-21): 19 cars scored
+race 168 (2025-10-19): 19 cars scored
+race 169 (2025-10-26): 17 cars scored
+race 170 (2025-11-09): 17 cars scored
+race 171 (2025-11-22): 17 cars scored
+race 172 (2025-11-30): 18 cars scored
+race 173 (2025-12-07): 20 cars scored
+
+=== STRATEGY PREDICTION BACKTEST (dry races 2022-2025, 1248 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.245   -0.010 [-0.030, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.255   
+sequence_hit         C hierarchy                       0.191   -0.064 [-0.109, -0.021]  WORSE
+sequence_hit         D pre-start (known start tyre)    0.287   +0.032 [+0.002, +0.060]  BETTER
+sequence_hit         E track-adjusted                  0.209   -0.046 [-0.088, -0.005]  WORSE
+sequence_hit         F last race here                  0.170   -0.086 [-0.138, -0.034]  WORSE
+sequence_hit         G CEILING (hindsight)             0.460   +0.205 [+0.163, +0.250]  BETTER
+sequence_hit         H era mode + track timing         0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.234   -0.021 [-0.068, +0.025]  no clear difference
+sequence_hit         J practice wear + compounds       0.203   -0.053 [-0.094, -0.014]  WORSE
+sequence_hit         K era stops + compounds           0.255   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         L Pirelli compounds               0.224   -0.031 [-0.078, +0.016]  no clear difference
+sequence_hit         M wear + wear timing              0.234   -0.021 [-0.068, +0.025]  no clear difference
+sequence_hit         N wear neighbours' sequence       0.213   -0.042 [-0.079, -0.009]  WORSE
+sequence_hit         O expected match                  0.251   -0.004 [-0.044, +0.035]  no clear difference
+sequence_hit         P0 race chances, M timing         0.251   -0.004 [-0.044, +0.035]  no clear difference
+sequence_hit         P1 per car: grid                  0.248   -0.008 [-0.040, +0.024]  no clear difference
+sequence_hit         P2 per car: team                  0.247   -0.008 [-0.044, +0.026]  no clear difference
+sequence_hit         P3 per car: grid + team           0.239   -0.017 [-0.047, +0.012]  no clear difference
+sequence_hit         Q1 wear + track votes             0.208   -0.047 [-0.094, -0.001]  WORSE
+sequence_hit         Q2 model: wear + track            0.198   -0.057 [-0.108, -0.009]  WORSE
+sequence_hit         Q3 model: all signals             0.185   -0.070 [-0.125, -0.019]  WORSE
+sequence_hit         W1 robust wear (v2, pooled)       0.228   -0.027 [-0.083, +0.027]  no clear difference
+sequence_hit         W2 per-compound wear (v2)         0.242   -0.013 [-0.064, +0.037]  no clear difference
+sequence_hit         W3 W2 stop count, M timing        0.235   -0.020 [-0.072, +0.030]  no clear difference
+stop_count_hit       A old production                  0.394   -0.009 [-0.029, +0.002]  no clear difference
+stop_count_hit       B era mode (real stints)          0.403   
+stop_count_hit       C hierarchy                       0.428   +0.026 [-0.043, +0.097]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.427   +0.024 [-0.023, +0.074]  no clear difference
+stop_count_hit       E track-adjusted                  0.448   +0.045 [-0.029, +0.122]  no clear difference
+stop_count_hit       F last race here                  0.427   +0.024 [-0.054, +0.106]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.750   +0.347 [+0.268, +0.428]  BETTER
+stop_count_hit       H era mode + track timing         0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       J practice wear + compounds       0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       K era stops + compounds           0.403   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       L Pirelli compounds               0.446   +0.043 [-0.032, +0.118]  no clear difference
+stop_count_hit       M wear + wear timing              0.470   +0.068 [+0.000, +0.139]  BETTER
+stop_count_hit       N wear neighbours' sequence       0.453   +0.050 [-0.008, +0.109]  no clear difference
+stop_count_hit       O expected match                  0.480   +0.077 [+0.016, +0.141]  BETTER
+stop_count_hit       P0 race chances, M timing         0.480   +0.077 [+0.016, +0.141]  BETTER
+stop_count_hit       P1 per car: grid                  0.481   +0.078 [+0.022, +0.137]  BETTER
+stop_count_hit       P2 per car: team                  0.463   +0.060 [+0.006, +0.116]  BETTER
+stop_count_hit       P3 per car: grid + team           0.445   +0.043 [-0.002, +0.088]  no clear difference
+stop_count_hit       Q1 wear + track votes             0.466   +0.064 [-0.015, +0.143]  no clear difference
+stop_count_hit       Q2 model: wear + track            0.446   +0.043 [-0.041, +0.128]  no clear difference
+stop_count_hit       Q3 model: all signals             0.426   +0.024 [-0.063, +0.111]  no clear difference
+stop_count_hit       W1 robust wear (v2, pooled)       0.445   +0.042 [-0.047, +0.132]  no clear difference
+stop_count_hit       W2 per-compound wear (v2)         0.490   +0.088 [+0.012, +0.166]  BETTER
+stop_count_hit       W3 W2 stop count, M timing        0.483   +0.080 [+0.003, +0.159]  BETTER
+first_stop_error     A old production                  8.344   +0.008 [-0.197, +0.233]  no clear difference
+first_stop_error     B era mode (real stints)          8.336   
+first_stop_error     C hierarchy                       8.660   +0.323 [-0.206, +0.865]  no clear difference
+first_stop_error     D pre-start (known start tyre)    7.986   -0.359 [-0.905, +0.205]  no clear difference
+first_stop_error     E track-adjusted                  8.562   +0.225 [-0.240, +0.689]  no clear difference
+first_stop_error     F last race here                  9.420   +1.185 [+0.374, +2.028]  WORSE
+first_stop_error     G CEILING (hindsight)             5.732   -2.628 [-3.477, -1.862]  BETTER
+first_stop_error     H era mode + track timing         8.650   +0.314 [+0.044, +0.601]  WORSE
+first_stop_error     I practice wear                   8.208   -0.129 [-0.560, +0.313]  no clear difference
+first_stop_error     J practice wear + compounds       8.169   -0.167 [-0.530, +0.206]  no clear difference
+first_stop_error     K era stops + compounds           8.336   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_error     L Pirelli compounds               8.220   -0.116 [-0.630, +0.408]  no clear difference
+first_stop_error     M wear + wear timing              8.196   -0.140 [-0.547, +0.282]  no clear difference
+first_stop_error     N wear neighbours' sequence       8.788   +0.461 [-0.048, +0.964]  no clear difference
+first_stop_error     O expected match                  8.670   +0.334 [-0.227, +0.891]  no clear difference
+first_stop_error     P0 race chances, M timing         8.559   +0.222 [-0.270, +0.717]  no clear difference
+first_stop_error     P1 per car: grid                  8.587   +0.250 [-0.211, +0.714]  no clear difference
+first_stop_error     P2 per car: team                  8.622   +0.286 [-0.165, +0.734]  no clear difference
+first_stop_error     P3 per car: grid + team           8.641   +0.305 [-0.134, +0.747]  no clear difference
+first_stop_error     Q1 wear + track votes             7.985   -0.351 [-0.824, +0.117]  no clear difference
+first_stop_error     Q2 model: wear + track            8.057   -0.280 [-0.818, +0.272]  no clear difference
+first_stop_error     Q3 model: all signals             8.105   -0.232 [-0.761, +0.320]  no clear difference
+first_stop_error     W1 robust wear (v2, pooled)       8.606   +0.269 [-0.209, +0.771]  no clear difference
+first_stop_error     W2 per-compound wear (v2)         8.221   -0.116 [-0.591, +0.406]  no clear difference
+first_stop_error     W3 W2 stop count, M timing        8.028   -0.308 [-0.708, +0.100]  no clear difference
+first_stop_within_3  A old production                  0.265   -0.003 [-0.026, +0.016]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.269   
+first_stop_within_3  C hierarchy                       0.316   +0.048 [+0.005, +0.094]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.313   +0.053 [+0.008, +0.098]  BETTER
+first_stop_within_3  E track-adjusted                  0.303   +0.034 [-0.011, +0.081]  no clear difference
+first_stop_within_3  F last race here                  0.308   +0.033 [-0.025, +0.090]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.544   +0.281 [+0.221, +0.340]  BETTER
+first_stop_within_3  H era mode + track timing         0.248   -0.021 [-0.043, -0.001]  WORSE
+first_stop_within_3  I practice wear                   0.293   +0.024 [-0.019, +0.066]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.299   +0.031 [-0.011, +0.072]  no clear difference
+first_stop_within_3  K era stops + compounds           0.269   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_within_3  L Pirelli compounds               0.295   +0.026 [-0.002, +0.057]  no clear difference
+first_stop_within_3  M wear + wear timing              0.296   +0.027 [-0.015, +0.071]  no clear difference
+first_stop_within_3  N wear neighbours' sequence       0.243   -0.022 [-0.072, +0.023]  no clear difference
+first_stop_within_3  O expected match                  0.278   +0.009 [-0.035, +0.051]  no clear difference
+first_stop_within_3  P0 race chances, M timing         0.283   +0.014 [-0.036, +0.063]  no clear difference
+first_stop_within_3  P1 per car: grid                  0.274   +0.006 [-0.042, +0.052]  no clear difference
+first_stop_within_3  P2 per car: team                  0.277   +0.008 [-0.039, +0.054]  no clear difference
+first_stop_within_3  P3 per car: grid + team           0.267   -0.002 [-0.047, +0.043]  no clear difference
+first_stop_within_3  Q1 wear + track votes             0.331   +0.062 [+0.016, +0.109]  BETTER
+first_stop_within_3  Q2 model: wear + track            0.326   +0.057 [+0.010, +0.102]  BETTER
+first_stop_within_3  Q3 model: all signals             0.313   +0.044 [-0.001, +0.089]  no clear difference
+first_stop_within_3  W1 robust wear (v2, pooled)       0.311   +0.042 [+0.009, +0.074]  BETTER
+first_stop_within_3  W2 per-compound wear (v2)         0.320   +0.051 [+0.010, +0.090]  BETTER
+first_stop_within_3  W3 W2 stop count, M timing        0.326   +0.057 [+0.013, +0.099]  BETTER
+
+=== vs M, the method production serves (same cars) ===
+sequence_hit         B era mode (real stints)          0.255   +0.021 [-0.025, +0.068]  no clear difference
+sequence_hit         G CEILING (hindsight)             0.460   +0.226 [+0.181, +0.273]  BETTER
+sequence_hit         M wear + wear timing              0.234   
+sequence_hit         N wear neighbours' sequence       0.213   -0.021 [-0.054, +0.009]  no clear difference
+sequence_hit         O expected match                  0.251   +0.017 [-0.008, +0.045]  no clear difference
+sequence_hit         Q1 wear + track votes             0.208   -0.026 [-0.075, +0.022]  no clear difference
+sequence_hit         Q2 model: wear + track            0.198   -0.036 [-0.088, +0.014]  no clear difference
+sequence_hit         Q3 model: all signals             0.185   -0.049 [-0.101, -0.002]  WORSE
+sequence_hit         W1 robust wear (v2, pooled)       0.228   -0.006 [-0.047, +0.035]  no clear difference
+sequence_hit         W2 per-compound wear (v2)         0.242   +0.008 [-0.035, +0.052]  no clear difference
+sequence_hit         W3 W2 stop count, M timing        0.235   +0.001 [-0.042, +0.043]  no clear difference
+stop_count_hit       B era mode (real stints)          0.403   -0.068 [-0.139, -0.000]  WORSE
+stop_count_hit       G CEILING (hindsight)             0.750   +0.279 [+0.208, +0.354]  BETTER
+stop_count_hit       M wear + wear timing              0.470   
+stop_count_hit       N wear neighbours' sequence       0.453   -0.018 [-0.067, +0.030]  no clear difference
+stop_count_hit       O expected match                  0.480   +0.009 [-0.021, +0.040]  no clear difference
+stop_count_hit       Q1 wear + track votes             0.466   -0.004 [-0.073, +0.061]  no clear difference
+stop_count_hit       Q2 model: wear + track            0.446   -0.024 [-0.097, +0.050]  no clear difference
+stop_count_hit       Q3 model: all signals             0.426   -0.044 [-0.113, +0.024]  no clear difference
+stop_count_hit       W1 robust wear (v2, pooled)       0.445   -0.026 [-0.088, +0.037]  no clear difference
+stop_count_hit       W2 per-compound wear (v2)         0.490   +0.020 [-0.035, +0.075]  no clear difference
+stop_count_hit       W3 W2 stop count, M timing        0.483   +0.012 [-0.042, +0.065]  no clear difference
+first_stop_error     B era mode (real stints)          8.336   +0.140 [-0.282, +0.547]  no clear difference
+first_stop_error     G CEILING (hindsight)             5.732   -2.486 [-3.314, -1.710]  BETTER
+first_stop_error     M wear + wear timing              8.196   
+first_stop_error     N wear neighbours' sequence       8.788   +0.601 [+0.136, +1.073]  WORSE
+first_stop_error     O expected match                  8.670   +0.474 [+0.078, +0.898]  WORSE
+first_stop_error     Q1 wear + track votes             7.985   -0.211 [-0.742, +0.292]  no clear difference
+first_stop_error     Q2 model: wear + track            8.057   -0.140 [-0.734, +0.458]  no clear difference
+first_stop_error     Q3 model: all signals             8.105   -0.092 [-0.680, +0.505]  no clear difference
+first_stop_error     W1 robust wear (v2, pooled)       8.606   +0.409 [-0.019, +0.867]  no clear difference
+first_stop_error     W2 per-compound wear (v2)         8.221   +0.025 [-0.428, +0.462]  no clear difference
+first_stop_error     W3 W2 stop count, M timing        8.028   -0.168 [-0.476, +0.136]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.269   -0.027 [-0.071, +0.015]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.544   +0.253 [+0.195, +0.311]  BETTER
+first_stop_within_3  M wear + wear timing              0.296   
+first_stop_within_3  N wear neighbours' sequence       0.243   -0.050 [-0.084, -0.020]  WORSE
+first_stop_within_3  O expected match                  0.278   -0.018 [-0.057, +0.020]  no clear difference
+first_stop_within_3  Q1 wear + track votes             0.331   +0.035 [+0.002, +0.072]  BETTER
+first_stop_within_3  Q2 model: wear + track            0.326   +0.030 [-0.009, +0.071]  no clear difference
+first_stop_within_3  Q3 model: all signals             0.313   +0.017 [-0.024, +0.060]  no clear difference
+first_stop_within_3  W1 robust wear (v2, pooled)       0.311   +0.015 [-0.026, +0.057]  no clear difference
+first_stop_within_3  W2 per-compound wear (v2)         0.320   +0.024 [-0.011, +0.059]  no clear difference
+first_stop_within_3  W3 W2 stop count, M timing        0.326   +0.030 [+0.003, +0.060]  BETTER
+
+=== race stop count (69 races; truth = the race's most common stop count, 1-3) ===
+method                           races right   share   when real = 1 / 2 / 3
+M wear + wear timing               33/68     0.485   21/32 / 12/29 / 0/7
+Q1 wear + track votes              31/68     0.456   17/32 / 14/29 / 0/7
+Q2 model: wear + track             33/68     0.485   19/32 / 13/29 / 1/7
+Q3 model: all signals              34/68     0.500   19/32 / 14/29 / 1/7
+W1 robust wear (v2, pooled)        31/68     0.456   16/32 / 15/29 / 0/7
+W2 per-compound wear (v2)          33/68     0.485   18/32 / 15/29 / 0/7
+W3 W2 stop count, M timing         32/68     0.471   17/32 / 15/29 / 0/7
+
+signal medians by the race's most common stop count (scored races):
+stops  races   wear %/lap   track history   era average   pit loss s   track temp C
+    1     32      0.051 (n=25)      1.674 (n=32)      1.719 (n=32)     22.865 (n=31)     34.500 (n=27)
+    2     29      0.094 (n=25)      1.756 (n=29)      1.783 (n=29)     22.865 (n=29)     34.800 (n=25)
+    3      8      0.097 (n=6)      1.780 (n=8)      1.717 (n=8)     22.863 (n=7)     30.150 (n=6)
+
+=== tyre wear measures: median by the race's most common stop count (scored races) ===
+  M  run_wear (current)    measured 57/70 scored races; 1 stop(s): 0.051 (n=25), 2 stop(s): 0.094 (n=25), 3 stop(s): 0.063 (n=5), 4 stop(s): 0.334 (n=1)
+  W1 robust, pooled        measured 55/70 scored races; 1 stop(s): 0.148 (n=24), 2 stop(s): 0.176 (n=25), 3 stop(s): 0.115 (n=5)
+  W2 per-compound ratio    measured 55/70 scored races; 1 stop(s): 1.389 (n=24), 2 stop(s): 1.560 (n=25), 3 stop(s): 0.812 (n=5)
+
+practice wear measured for 132 of 167 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.051%/lap (n=25), 2 stop(s): +0.094%/lap (n=25), 3 stop(s): +0.063%/lap (n=5), 4 stop(s): +0.334%/lap (n=1)
+Pirelli compound set known for 70 of 70 scored races
+race 174 (2026-03-08): 16 cars scored
+race 175 (2026-03-15): 15 cars scored
+race 176 (2026-03-29): 20 cars scored
+race 178 (2026-05-24): 16 cars scored
+race 179 (2026-06-07): 16 cars scored
+race 180 (2026-06-14): 17 cars scored
+race 181 (2026-06-28): 18 cars scored
+race 182 (2026-07-05): 20 cars scored
+race 183 (2026-07-19): 19 cars scored
+race 184 (2026-07-26): 19 cars scored
+race 186 (2026-09-06): 19 cars scored
+race 187 (2026-09-13): 18 cars scored
+race 188 (2026-09-26): 16 cars scored
+
+=== STRATEGY PREDICTION BACKTEST (dry races 2026-2026, 229 cars, truth = real stints) ===
+metric               method                           value   vs B (production) [90% CI, races resampled]
+sequence_hit         A old production                  0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         B era mode (real stints)          0.225   
+sequence_hit         C hierarchy                       0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         D pre-start (known start tyre)    0.267   +0.042 [+0.013, +0.074]  BETTER
+sequence_hit         E track-adjusted                  0.124   -0.101 [-0.223, +0.009]  no clear difference
+sequence_hit         F last race here                  0.201   -0.024 [-0.097, +0.039]  no clear difference
+sequence_hit         G CEILING (hindsight)             0.462   +0.237 [+0.133, +0.347]  BETTER
+sequence_hit         H era mode + track timing         0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         I practice wear                   0.237   +0.012 [-0.047, +0.069]  no clear difference
+sequence_hit         J practice wear + compounds       0.245   +0.020 [-0.047, +0.084]  no clear difference
+sequence_hit         K era stops + compounds           0.225   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         L Pirelli compounds               0.087   -0.138 [-0.283, -0.021]  WORSE
+sequence_hit         M wear + wear timing              0.237   +0.012 [-0.047, +0.069]  no clear difference
+sequence_hit         N wear neighbours' sequence       0.263   +0.038 [+0.000, +0.115]  no clear difference
+sequence_hit         O expected match                  0.237   +0.012 [+0.000, +0.036]  no clear difference
+sequence_hit         P0 race chances, M timing         0.237   +0.012 [+0.000, +0.036]  no clear difference
+sequence_hit         P1 per car: grid                  0.234   +0.009 [-0.031, +0.049]  no clear difference
+sequence_hit         P2 per car: team                  0.253   +0.028 [-0.013, +0.073]  no clear difference
+sequence_hit         P3 per car: grid + team           0.242   +0.018 [-0.028, +0.066]  no clear difference
+sequence_hit         Q1 wear + track votes             0.228   +0.003 [-0.059, +0.063]  no clear difference
+sequence_hit         Q2 model: wear + track            0.237   +0.012 [-0.047, +0.069]  no clear difference
+sequence_hit         Q3 model: all signals             0.197   -0.027 [-0.166, +0.067]  no clear difference
+sequence_hit         W1 robust wear (v2, pooled)       0.258   +0.034 [+0.000, +0.076]  no clear difference
+sequence_hit         W2 per-compound wear (v2)         0.258   +0.034 [+0.000, +0.076]  no clear difference
+sequence_hit         W3 W2 stop count, M timing        0.233   +0.008 [-0.051, +0.064]  no clear difference
+stop_count_hit       A old production                  0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       B era mode (real stints)          0.339   
+stop_count_hit       C hierarchy                       0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       D pre-start (known start tyre)    0.327   -0.012 [-0.058, +0.031]  no clear difference
+stop_count_hit       E track-adjusted                  0.347   +0.008 [-0.187, +0.204]  no clear difference
+stop_count_hit       F last race here                  0.414   +0.075 [-0.064, +0.227]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.695   +0.356 [+0.196, +0.520]  BETTER
+stop_count_hit       H era mode + track timing         0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       I practice wear                   0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       J practice wear + compounds       0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       K era stops + compounds           0.339   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       L Pirelli compounds               0.220   -0.119 [-0.295, +0.045]  no clear difference
+stop_count_hit       M wear + wear timing              0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       N wear neighbours' sequence       0.378   +0.038 [+0.000, +0.115]  no clear difference
+stop_count_hit       O expected match                  0.380   +0.040 [+0.000, +0.121]  no clear difference
+stop_count_hit       P0 race chances, M timing         0.380   +0.040 [+0.000, +0.121]  no clear difference
+stop_count_hit       P1 per car: grid                  0.415   +0.075 [-0.001, +0.160]  no clear difference
+stop_count_hit       P2 per car: team                  0.409   +0.070 [-0.005, +0.151]  no clear difference
+stop_count_hit       P3 per car: grid + team           0.442   +0.102 [+0.018, +0.192]  BETTER
+stop_count_hit       Q1 wear + track votes             0.432   +0.093 [-0.059, +0.257]  no clear difference
+stop_count_hit       Q2 model: wear + track            0.447   +0.107 [-0.043, +0.271]  no clear difference
+stop_count_hit       Q3 model: all signals             0.424   +0.084 [-0.090, +0.259]  no clear difference
+stop_count_hit       W1 robust wear (v2, pooled)       0.506   +0.166 [+0.040, +0.314]  BETTER
+stop_count_hit       W2 per-compound wear (v2)         0.506   +0.166 [+0.040, +0.314]  BETTER
+stop_count_hit       W3 W2 stop count, M timing        0.463   +0.123 [-0.043, +0.290]  no clear difference
+first_stop_error     A old production                 10.233   +0.089 [-0.222, +0.423]  no clear difference
+first_stop_error     B era mode (real stints)         10.144   
+first_stop_error     C hierarchy                      10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     D pre-start (known start tyre)   10.416   +0.577 [-0.415, +1.562]  no clear difference
+first_stop_error     E track-adjusted                 10.041   -0.103 [-1.460, +1.221]  no clear difference
+first_stop_error     F last race here                 11.053   +1.314 [-1.036, +3.617]  no clear difference
+first_stop_error     G CEILING (hindsight)             5.646   -4.407 [-6.744, -2.311]  BETTER
+first_stop_error     H era mode + track timing        10.242   +0.098 [-0.144, +0.362]  no clear difference
+first_stop_error     I practice wear                  10.002   -0.142 [-1.024, +0.607]  no clear difference
+first_stop_error     J practice wear + compounds       9.603   -0.541 [-1.367, +0.009]  no clear difference
+first_stop_error     K era stops + compounds          10.144   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_error     L Pirelli compounds               9.575   -0.570 [-1.387, -0.028]  BETTER
+first_stop_error     M wear + wear timing              9.526   -0.618 [-1.378, -0.026]  BETTER
+first_stop_error     N wear neighbours' sequence       9.748   -0.579 [-1.747, +0.409]  no clear difference
+first_stop_error     O expected match                  9.802   -0.342 [-1.607, +0.782]  no clear difference
+first_stop_error     P0 race chances, M timing         9.356   -0.788 [-2.046, +0.179]  no clear difference
+first_stop_error     P1 per car: grid                  9.217   -0.927 [-2.168, +0.002]  no clear difference
+first_stop_error     P2 per car: team                  9.125   -1.020 [-2.242, -0.059]  BETTER
+first_stop_error     P3 per car: grid + team           9.255   -0.889 [-2.130, +0.062]  no clear difference
+first_stop_error     Q1 wear + track votes             9.578   -0.566 [-1.345, +0.044]  no clear difference
+first_stop_error     Q2 model: wear + track            9.526   -0.618 [-1.378, -0.026]  BETTER
+first_stop_error     Q3 model: all signals             9.461   -0.683 [-1.445, -0.083]  BETTER
+first_stop_error     W1 robust wear (v2, pooled)      10.612   +0.467 [-0.148, +1.164]  no clear difference
+first_stop_error     W2 per-compound wear (v2)        10.612   +0.467 [-0.148, +1.164]  no clear difference
+first_stop_error     W3 W2 stop count, M timing       10.593   +0.449 [-0.164, +1.161]  no clear difference
+first_stop_within_3  A old production                  0.122   +0.005 [-0.022, +0.035]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.117   
+first_stop_within_3  C hierarchy                       0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  D pre-start (known start tyre)    0.160   +0.043 [+0.014, +0.078]  BETTER
+first_stop_within_3  E track-adjusted                  0.194   +0.076 [-0.024, +0.190]  no clear difference
+first_stop_within_3  F last race here                  0.176   +0.027 [-0.055, +0.130]  no clear difference
+first_stop_within_3  G CEILING (hindsight)             0.642   +0.537 [+0.404, +0.672]  BETTER
+first_stop_within_3  H era mode + track timing         0.132   +0.014 [+0.004, +0.028]  BETTER
+first_stop_within_3  I practice wear                   0.186   +0.069 [-0.009, +0.191]  no clear difference
+first_stop_within_3  J practice wear + compounds       0.217   +0.100 [+0.014, +0.215]  BETTER
+first_stop_within_3  K era stops + compounds           0.117   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_within_3  L Pirelli compounds               0.231   +0.114 [+0.000, +0.241]  no clear difference
+first_stop_within_3  M wear + wear timing              0.258   +0.140 [+0.040, +0.257]  BETTER
+first_stop_within_3  N wear neighbours' sequence       0.206   +0.096 [+0.011, +0.195]  BETTER
+first_stop_within_3  O expected match                  0.209   +0.091 [+0.004, +0.193]  BETTER
+first_stop_within_3  P0 race chances, M timing         0.277   +0.159 [+0.033, +0.314]  BETTER
+first_stop_within_3  P1 per car: grid                  0.305   +0.188 [+0.067, +0.337]  BETTER
+first_stop_within_3  P2 per car: team                  0.305   +0.188 [+0.063, +0.340]  BETTER
+first_stop_within_3  P3 per car: grid + team           0.306   +0.189 [+0.066, +0.333]  BETTER
+first_stop_within_3  Q1 wear + track votes             0.263   +0.145 [+0.046, +0.262]  BETTER
+first_stop_within_3  Q2 model: wear + track            0.258   +0.140 [+0.040, +0.257]  BETTER
+first_stop_within_3  Q3 model: all signals             0.211   +0.094 [+0.021, +0.203]  BETTER
+first_stop_within_3  W1 robust wear (v2, pooled)       0.114   -0.003 [-0.051, +0.038]  no clear difference
+first_stop_within_3  W2 per-compound wear (v2)         0.114   -0.003 [-0.051, +0.038]  no clear difference
+first_stop_within_3  W3 W2 stop count, M timing        0.161   +0.043 [-0.034, +0.134]  no clear difference
+
+=== vs M, the method production serves (same cars) ===
+sequence_hit         B era mode (real stints)          0.225   -0.012 [-0.069, +0.047]  no clear difference
+sequence_hit         G CEILING (hindsight)             0.462   +0.225 [+0.125, +0.337]  BETTER
+sequence_hit         M wear + wear timing              0.237   
+sequence_hit         N wear neighbours' sequence       0.263   +0.026 [-0.051, +0.116]  no clear difference
+sequence_hit         O expected match                  0.237   -0.000 [-0.052, +0.051]  no clear difference
+sequence_hit         Q1 wear + track votes             0.228   -0.010 [-0.029, +0.000]  no clear difference
+sequence_hit         Q2 model: wear + track            0.237   +0.000 [+0.000, +0.000]  no clear difference
+sequence_hit         Q3 model: all signals             0.197   -0.040 [-0.171, +0.051]  no clear difference
+sequence_hit         W1 robust wear (v2, pooled)       0.258   +0.021 [-0.009, +0.072]  no clear difference
+sequence_hit         W2 per-compound wear (v2)         0.258   +0.021 [-0.009, +0.072]  no clear difference
+sequence_hit         W3 W2 stop count, M timing        0.233   -0.005 [-0.014, +0.000]  no clear difference
+stop_count_hit       B era mode (real stints)          0.339   -0.107 [-0.271, +0.043]  no clear difference
+stop_count_hit       G CEILING (hindsight)             0.695   +0.249 [+0.106, +0.409]  BETTER
+stop_count_hit       M wear + wear timing              0.447   
+stop_count_hit       N wear neighbours' sequence       0.378   -0.069 [-0.242, +0.101]  no clear difference
+stop_count_hit       O expected match                  0.380   -0.067 [-0.219, +0.083]  no clear difference
+stop_count_hit       Q1 wear + track votes             0.432   -0.014 [-0.043, +0.000]  no clear difference
+stop_count_hit       Q2 model: wear + track            0.447   +0.000 [+0.000, +0.000]  no clear difference
+stop_count_hit       Q3 model: all signals             0.424   -0.023 [-0.153, +0.085]  no clear difference
+stop_count_hit       W1 robust wear (v2, pooled)       0.506   +0.059 [-0.090, +0.206]  no clear difference
+stop_count_hit       W2 per-compound wear (v2)         0.506   +0.059 [-0.090, +0.206]  no clear difference
+stop_count_hit       W3 W2 stop count, M timing        0.463   +0.016 [-0.090, +0.139]  no clear difference
+first_stop_error     B era mode (real stints)         10.144   +0.618 [+0.026, +1.378]  WORSE
+first_stop_error     G CEILING (hindsight)             5.646   -3.789 [-6.356, -1.543]  BETTER
+first_stop_error     M wear + wear timing              9.526   
+first_stop_error     N wear neighbours' sequence       9.748   +0.039 [-1.331, +1.290]  no clear difference
+first_stop_error     O expected match                  9.802   +0.276 [-1.211, +1.644]  no clear difference
+first_stop_error     Q1 wear + track votes             9.578   +0.052 [+0.000, +0.156]  no clear difference
+first_stop_error     Q2 model: wear + track            9.526   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_error     Q3 model: all signals             9.461   -0.065 [-0.231, +0.037]  no clear difference
+first_stop_error     W1 robust wear (v2, pooled)      10.612   +1.086 [+0.019, +2.370]  WORSE
+first_stop_error     W2 per-compound wear (v2)        10.612   +1.086 [+0.019, +2.370]  WORSE
+first_stop_error     W3 W2 stop count, M timing       10.593   +1.067 [+0.000, +2.351]  no clear difference
+first_stop_within_3  B era mode (real stints)          0.117   -0.140 [-0.257, -0.040]  WORSE
+first_stop_within_3  G CEILING (hindsight)             0.642   +0.397 [+0.234, +0.567]  BETTER
+first_stop_within_3  M wear + wear timing              0.258   
+first_stop_within_3  N wear neighbours' sequence       0.206   -0.045 [-0.199, +0.110]  no clear difference
+first_stop_within_3  O expected match                  0.209   -0.049 [-0.204, +0.107]  no clear difference
+first_stop_within_3  Q1 wear + track votes             0.263   +0.005 [+0.000, +0.016]  no clear difference
+first_stop_within_3  Q2 model: wear + track            0.258   +0.000 [+0.000, +0.000]  no clear difference
+first_stop_within_3  Q3 model: all signals             0.211   -0.046 [-0.139, +0.000]  no clear difference
+first_stop_within_3  W1 robust wear (v2, pooled)       0.114   -0.143 [-0.274, -0.033]  WORSE
+first_stop_within_3  W2 per-compound wear (v2)         0.114   -0.143 [-0.274, -0.033]  WORSE
+first_stop_within_3  W3 W2 stop count, M timing        0.161   -0.097 [-0.225, +0.000]  no clear difference
+
+=== race stop count (13 races; truth = the race's most common stop count, 1-3) ===
+method                           races right   share   when real = 1 / 2 / 3
+M wear + wear timing                8/12     0.667   5/6 / 3/5 / 0/1
+Q1 wear + track votes               7/12     0.583   4/6 / 3/5 / 0/1
+Q2 model: wear + track              8/12     0.667   5/6 / 3/5 / 0/1
+Q3 model: all signals               8/12     0.667   5/6 / 3/5 / 0/1
+W1 robust wear (v2, pooled)         9/12     0.750   6/6 / 3/5 / 0/1
+W2 per-compound wear (v2)           9/12     0.750   6/6 / 3/5 / 0/1
+W3 W2 stop count, M timing          8/12     0.667   5/6 / 3/5 / 0/1
+
+signal medians by the race's most common stop count (scored races):
+stops  races   wear %/lap   track history   era average   pit loss s   track temp C
+    1      7      0.062 (n=6)      1.642 (n=7)      1.625 (n=7)     21.870 (n=5)     33.300 (n=5)
+    2      5      0.195 (n=5)      1.554 (n=5)      1.629 (n=5)     22.236 (n=5)     46.050 (n=4)
+    3      1      -      1.496 (n=1)      1.618 (n=1)     21.643 (n=1)     30.300 (n=1)
+
+=== tyre wear measures: median by the race's most common stop count (scored races) ===
+  M  run_wear (current)    measured 11/13 scored races; 1 stop(s): 0.080 (n=6), 2 stop(s): 0.195 (n=5)
+  W1 robust, pooled        measured 10/13 scored races; 1 stop(s): 0.057 (n=5), 2 stop(s): 0.248 (n=5)
+  W2 per-compound ratio    measured 10/13 scored races; 1 stop(s): 0.407 (n=5), 2 stop(s): 2.514 (n=5)
+
+practice wear measured for 145 of 183 races
+  median practice wear by the race's most common stop count: 1 stop(s): +0.080%/lap (n=6), 2 stop(s): +0.195%/lap (n=5)
+Pirelli compound set known for 13 of 13 scored races
