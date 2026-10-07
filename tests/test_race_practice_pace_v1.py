@@ -92,3 +92,39 @@ def test_weekend_wear_can_ignore_the_rain_flag(synthetic_db):
             assert load_weekend_wear(db, 5, use_rain_flag=False) is None     # wet tyres: still skipped
         finally:
             tx.rollback()
+
+
+def test_theil_sen_ignores_one_outlier():
+    from race_practice_pace_v1 import theil_sen
+
+    xs = [1, 2, 3, 4, 5, 6, 7]
+    ys = [90.0 + 0.1 * x for x in xs]
+    ys[3] += 2.0                                     # traffic lap
+    assert theil_sen(xs, ys) == pytest.approx(0.1)
+    assert theil_sen([1, 1], [90.0, 91.0]) is None
+
+
+def test_run_wear_v2_drops_warm_up_and_adds_back_fuel():
+    from race_practice_pace_v1 import FUEL_SECONDS_PER_LAP, run_wear, run_wear_v2
+
+    # true tyre wear 0.08 s/lap, hidden by fuel burn; first lap 1.5 s slow (tyres warming)
+    run = [(n, 90.0 + (0.08 - FUEL_SECONDS_PER_LAP) * n + (1.5 if n == 1 else 0.0)) for n in range(1, 11)]
+    v2 = run_wear_v2("SOFT", run)
+    assert v2 == pytest.approx(0.08 / 90.3, rel=0.01)
+    assert run_wear(run) < v2                        # least squares: warm-up lap and fuel pull it down
+    assert run_wear_v2("MEDIUM", run[:6]) is None     # 2 warm-up laps dropped -> 4 left, too short
+
+
+def test_per_compound_wear_compares_like_with_like():
+    from race_practice_pace_v1 import compound_baselines, weekend_wear_per_compound, weekend_wear_robust
+
+    history = {r: [("SOFT", 0.002)] * 3 + [("HARD", 0.0005)] * 3 for r in range(1, 9)}
+    baselines = compound_baselines(history, range(1, 9))
+    assert baselines == {"SOFT": pytest.approx(0.002), "HARD": pytest.approx(0.0005)}
+    assert compound_baselines(history, [1]) == {}                       # too few runs for a baseline
+    soft_weekend = [("SOFT", 0.002)] * 5                                 # a normal weekend, on softs
+    hard_weekend = [("HARD", 0.001)] * 5                                 # hards wearing twice as fast as usual
+    assert weekend_wear_robust(soft_weekend) > weekend_wear_robust(hard_weekend)
+    assert weekend_wear_per_compound(soft_weekend, baselines) == pytest.approx(1.0)
+    assert weekend_wear_per_compound(hard_weekend, baselines) == pytest.approx(2.0)
+    assert weekend_wear_per_compound([("SOFT", 0.002)] * 2, baselines) is None

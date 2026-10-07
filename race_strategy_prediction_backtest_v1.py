@@ -64,6 +64,10 @@ Methods (history strictly before the race date):
      tyre order 0.201 vs M0 0.223 (WORSE), others n.s. -> REJECTED, history keeps the rain flag.
      Practice wear judged by tyres instead of the rain flag (+~16 FP2 sessions): tyre order
      +0.012, stop count +0.021, within 3 laps +0.014, all n.s. -> NOT PROMOTED (no clear gain).
+  W1/W2 tyre wear v2  : M with a better practice wear number (race_practice_pace_v1, the method of
+                        f1-race-replay's tyre model): warm-up laps dropped, fuel burn added back,
+                        Theil-Sen slope; W1 pools compounds, W2 divides each run by its compound's
+                        median over earlier weekends. Compared with M; wear medians by stop count.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -144,7 +148,10 @@ LAST_CARS: list[CarStrategy] = []
 ALLOCATION_COVERAGE: list[int] = [0, 0]
 RACE_STOPS: list[tuple[int, int, dict[str, int | None]]] = []   # (race_id, real race stop count, predicted)
 STOP_SIGNALS: list = [{}, {}]                                    # last run's signals and labels
-STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals")
+W1, W2 = "W1 robust wear (v2, pooled)", "W2 per-compound wear (v2)"
+STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals",
+                W1, W2)
+WEAR_V2: dict[str, dict] = {"robust": {}, "per_compound": {}}   # last run, per target race (report)
 
 
 def wear_report(cars: Sequence[CarStrategy], start_year: int, end_year: int) -> None:
@@ -190,6 +197,12 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     precedent_cache: dict = {}
     from race_practice_pace_v1 import load_weekend_wear
     wear_by_race = {race_id: load_weekend_wear(db, race_id) for race_id in {c.race_id for c in cars}}
+    from race_practice_pace_v1 import (compound_baselines, load_weekend_runs, run_wears_v2,
+                                       weekend_wear_per_compound, weekend_wear_robust)
+    wears_v2 = {race_id: run_wears_v2(load_weekend_runs(db, race_id)) for race_id in wear_by_race}
+    robust_wear = {race_id: weekend_wear_robust(w) for race_id, w in wears_v2.items()}
+    race_date_of = {c.race_id: c.race_date for c in cars}
+    WEAR_V2["robust"], WEAR_V2["per_compound"] = dict(robust_wear), {}
     LAST_CARS[:] = cars
     from race_practice_pace_v1 import load_weekend_compounds
     allocations = load_allocations(db)
@@ -247,6 +260,13 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                                       regulation_era=era, total_laps=total_laps,
                                                       stops=stops).strategy
                         for name, stops in stop_counts.items()}
+        # tyre wear v2 (race_practice_pace_v1): per-compound baselines from earlier weekends only
+        baselines = compound_baselines(wears_v2, [r for r, d in race_date_of.items() if d < race_date])
+        pc_wear = {r: weekend_wear_per_compound(w, baselines) for r, w in wears_v2.items()}
+        WEAR_V2["per_compound"][race_id] = pc_wear.get(race_id)
+        for name, wears in ((W1, robust_wear), (W2, pc_wear)):
+            stop_methods[name] = predict_from_wear_timed(history, wear=wears.get(race_id), wear_by_race=wears,
+                                                         regulation_era=era, total_laps=total_laps).strategy
         if race_id in labels:
             RACE_STOPS.append((race_id, labels[race_id].stops, {
                 name: (len(strategy.sequence) - 1 if strategy else None)
@@ -327,6 +347,24 @@ def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple
     return rows
 
 
+def wear_v2_report() -> None:
+    """Coverage and separation of the wear measures: median by the race's real stop count."""
+    from race_strategy_timing_v1 import race_modes
+
+    modes = race_modes(LAST_CARS)
+    print("\n=== tyre wear measures: median by the race's most common stop count (scored races) ===")
+    for label, values, scale in (("M  run_wear (current)", WEAR, 100), ("W1 robust, pooled", WEAR_V2["robust"], 100),
+                                 ("W2 per-compound ratio", WEAR_V2["per_compound"], 1)):
+        by_stops = defaultdict(list)
+        targets = WEAR_V2["per_compound"].keys()
+        for r in targets:
+            if r in modes and values.get(r) is not None:
+                by_stops[modes[r][2]].append(values[r] * scale)
+        cells = ", ".join(f"{n} stop(s): {sorted(v)[len(v) // 2]:.3f} (n={len(v)})" for n, v in sorted(by_stops.items()))
+        known = sum(values.get(r) is not None for r in targets)
+        print(f"  {label:24} measured {known}/{len(targets)} scored races; {cells}")
+
+
 def stop_count_report() -> None:
     """Race-level stop count: how often each method names the race's most common stop count."""
     if not RACE_STOPS:
@@ -368,12 +406,13 @@ def main() -> int:
     for metric, method, value, cmp in summarise([s for s in scores if s.method in
                                                  (SERVED, "N wear neighbours' sequence", "O expected match",
                                                   "Q1 wear + track votes", "Q2 model: wear + track",
-                                                  "Q3 model: all signals",
+                                                  "Q3 model: all signals", W1, W2,
                                                   "B era mode (real stints)", "G CEILING (hindsight)")],
                                                 baseline=SERVED):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
     stop_count_report()
+    wear_v2_report()
     wear_report(LAST_CARS, args.start_year, args.end_year)
     print(f"Pirelli compound set known for {ALLOCATION_COVERAGE[0]} of {ALLOCATION_COVERAGE[1]} scored races")
     return 0

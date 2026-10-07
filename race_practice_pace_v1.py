@@ -218,11 +218,10 @@ def run_wear(run: list[tuple[int, float]]) -> float | None:
     return (sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den) / median(ys) if den else None
 
 
-def load_weekend_wear(db: Any, race_id: int, *, use_rain_flag: bool = True) -> float | None:
-    """Median long-run wear over all drivers' runs in FP2 (else FP1); None if too few runs
-    or the session was wet. use_rain_flag=False judges wet by the tyres alone (research: the
-    rainfall flag is set by any rain sample, and 13 FP2 sessions flagged as rained-on had no
-    lap on a wet tyre)."""
+def load_weekend_runs(db: Any, race_id: int, *, use_rain_flag: bool = True
+                      ) -> list[tuple[str, list[tuple[int, float]]]] | None:
+    """Every driver's long runs [(compound, [(lap_number, lap_time), ...])] in FP2 (else FP1);
+    None when the session is missing or wet. use_rain_flag=False judges wet by the tyres alone."""
     for session_type in ("FP2", "FP1"):
         session = db.execute(text("""
             SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
@@ -240,9 +239,88 @@ def load_weekend_wear(db: Any, race_id: int, *, use_rain_flag: bool = True) -> f
             WHERE l.session_id = :s AND COALESCE(l.is_deleted, FALSE) = FALSE
         """), {"s": session["id"]}):
             laps[int(driver)].append((int(n), float(t) if t is not None else None, c))
-        wear = [w for rows in laps.values() for _, run in long_runs(rows) if (w := run_wear(run)) is not None]
-        return median(wear) if len(wear) >= MIN_WEAR_RUNS else None
+        return [run for rows in laps.values() for run in long_runs(rows)]
     return None
+
+
+def load_weekend_wear(db: Any, race_id: int, *, use_rain_flag: bool = True) -> float | None:
+    """Median long-run wear over all drivers' runs in FP2 (else FP1); None if too few runs
+    or the session was wet. use_rain_flag=False judges wet by the tyres alone (research: the
+    rainfall flag is set by any rain sample, and 13 FP2 sessions flagged as rained-on had no
+    lap on a wet tyre)."""
+    runs = load_weekend_runs(db, race_id, use_rain_flag=use_rain_flag)
+    if runs is None:
+        return None
+    wear = [w for _, run in runs if (w := run_wear(run)) is not None]
+    return median(wear) if len(wear) >= MIN_WEAR_RUNS else None
+
+
+# --- tyre wear v2 (research): the method of f1-race-replay's tyre model, tested here -------
+# Three changes to run_wear, each a known source of noise:
+#   warm-up    the first lap(s) of a run are not wear (tyres coming in): dropped
+#   fuel       the car gets ~FUEL_SECONDS_PER_LAP faster every lap as fuel burns, hiding
+#              wear: added back (0.032 s/kg x 1.6 kg/lap, the same prior f1-race-replay uses)
+#   outliers   Theil-Sen slope (median of pairwise slopes) instead of least squares
+# and, separately, per-compound normalisation: a weekend where teams long-ran softs looks
+# "high wear" only because softs wear faster. Each run's wear is divided by its compound's
+# median wear over EARLIER weekends, so the weekend number compares like with like.
+
+FUEL_SECONDS_PER_LAP = 0.032 * 1.6
+WARMUP_LAPS = {"SOFT": 1, "MEDIUM": 2, "HARD": 2}
+MIN_V2_RUN_LAPS = 5          # laps left after the warm-up
+MIN_BASELINE_RUNS = 20       # earlier runs of a compound needed for its baseline
+
+
+def theil_sen(xs: list[float], ys: list[float]) -> float | None:
+    slopes = [(ys[j] - ys[i]) / (xs[j] - xs[i]) for i in range(len(xs)) for j in range(i + 1, len(xs))
+              if xs[j] != xs[i]]
+    return median(slopes) if slopes else None
+
+
+def run_wear_v2(compound: str, run: list[tuple[int, float]]) -> float | None:
+    """Fuel-corrected Theil-Sen lap-time slope per lap / median lap time, warm-up laps dropped;
+    None for short runs."""
+    kept = sorted(run)[WARMUP_LAPS.get(compound, 1):]
+    if len(kept) < MIN_V2_RUN_LAPS:
+        return None
+    start = kept[0][0]
+    xs = [float(n) for n, _ in kept]
+    ys = [t + FUEL_SECONDS_PER_LAP * (n - start) for n, t in kept]
+    slope = theil_sen(xs, ys)
+    return slope / median(t for _, t in kept) if slope is not None else None
+
+
+def run_wears_v2(runs: Iterable[tuple[str, list[tuple[int, float]]]] | None) -> list[tuple[str, float]] | None:
+    """[(compound, v2 run wear)] for a weekend's long runs (computed once, reused below)."""
+    if runs is None:
+        return None
+    return [(c, w) for c, run in runs if (w := run_wear_v2(c, run)) is not None]
+
+
+def weekend_wear_robust(wears: list[tuple[str, float]] | None) -> float | None:
+    """v2 run wear, compounds pooled (median over runs)."""
+    if wears is None or len(wears) < MIN_WEAR_RUNS:
+        return None
+    return median(w for _, w in wears)
+
+
+def compound_baselines(wears_by_race: dict[int, list | None], races: Iterable[int]) -> dict[str, float]:
+    """compound -> median v2 run wear over the given (earlier) races; compounds with fewer
+    than MIN_BASELINE_RUNS runs, or a non-positive median, are left out."""
+    by_compound: dict[str, list[float]] = defaultdict(list)
+    for r in races:
+        for c, w in wears_by_race.get(r) or ():
+            by_compound[c].append(w)
+    return {c: m for c, ws in by_compound.items() if len(ws) >= MIN_BASELINE_RUNS and (m := median(ws)) > 0}
+
+
+def weekend_wear_per_compound(wears: list[tuple[str, float]] | None, baselines: dict[str, float]) -> float | None:
+    """Median over runs of v2 run wear / its compound's baseline: 1.0 = a typical weekend for
+    whatever compounds were run, above 1 = the tyres fade faster than usual."""
+    if wears is None:
+        return None
+    ratios = [w / baselines[c] for c, w in wears if c in baselines]
+    return median(ratios) if len(ratios) >= MIN_WEAR_RUNS else None
 
 
 # --- which tyres teams practised the race on ------------------------------------------
