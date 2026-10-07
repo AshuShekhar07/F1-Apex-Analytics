@@ -88,6 +88,12 @@ Methods (history strictly before the race date):
                         averaged) -- picked by how well it ranks REAL race wear, then tested here once.
                         Pre-registered bar: better somewhere and worse nowhere in 2022-25, and worse
                         nowhere in 2026.
+     W4 REJECTED 2026-10-07 (tyre_wear_w4.txt). 2022-25 vs M: stop count 0.424 vs 0.470, tyre order
+     0.227 vs 0.234, first stop 8.61 vs 8.20 laps -- all n.s. but all lower; 2026: tyre order 0.148
+     vs 0.237 and first stop 11.05 vs 9.53 laps (both WORSE), stop count 0.302 vs 0.447 (n.s.).
+     The measure that ranks REAL race wear best (tyre_wear_lab_v1) does not pick stop counts
+     better: how hard a race is on tyres is not what decides how often teams stop. Tyre-wear work
+     CLOSED; production keeps run_wear.
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
