@@ -1,0 +1,66 @@
+
+=== TYRE WEAR LAB: dry races 2022-2025 (146 race-compound pairs, 67 races) ===
+real wear (s/lap of tyre age), median by compound: SOFT +0.0270 (n=17), MEDIUM +0.0288 (n=67), HARD +0.0225 (n=62)
+
+candidate          pairs  rank corr with real wear [90% CI]   calibrated error s/lap [90% CI]
+practice_current      85  +0.391 [+0.182, +0.566]            0.0167 [0.0138, 0.0200] (n=85)
+practice_v2           77  +0.404 [+0.196, +0.581]            0.0170 [0.0138, 0.0204] (n=77)
+practice_pooled       94  +0.463 [+0.274, +0.615]            0.0171 [0.0140, 0.0201] (n=94)
+era_compound         143  +0.023 [-0.120, +0.172]            0.0174 [0.0147, 0.0202] (n=143)
+track_history        138  +0.368 [+0.208, +0.505]            0.0175 [0.0149, 0.0204] (n=138)
+c_compound           120  -0.075 [-0.233, +0.098]            0.0158 [0.0131, 0.0192] (n=120)
+stacked              146  +0.323 [+0.166, +0.457]            0.0165 [0.0140, 0.0194] (n=146)
+
+error vs practice_current, same pairs (negative = closer to the real wear):
+  practice_v2        +0.0011 [-0.0001, +0.0022]  n=  77  no clear difference
+  practice_pooled    +0.0013 [+0.0000, +0.0025]  n=  79  WORSE
+  era_compound       +0.0012 [-0.0014, +0.0038]  n=  83  no clear difference
+  track_history      +0.0005 [-0.0018, +0.0027]  n=  81  no clear difference
+  c_compound         +0.0018 [-0.0005, +0.0041]  n=  70  no clear difference
+  stacked            -0.0008 [-0.0029, +0.0011]  n=  85  no clear difference
+
+error vs era_compound, same pairs (negative = closer to the real wear):
+  practice_current   -0.0012 [-0.0038, +0.0014]  n=  83  no clear difference
+  practice_v2        -0.0018 [-0.0044, +0.0007]  n=  75  no clear difference
+  practice_pooled    -0.0018 [-0.0044, +0.0008]  n=  92  no clear difference
+  track_history      -0.0007 [-0.0026, +0.0011]  n= 135  no clear difference
+  c_compound         -0.0001 [-0.0004, +0.0001]  n= 120  no clear difference
+  stacked            -0.0017 [-0.0030, -0.0003]  n= 143  BETTER
+
+by compound, rank corr with real wear:
+  SOFT   practice_current -0.11 (n=12), practice_v2 -0.08 (n=12), practice_pooled +0.18 (n=15), era_compound +0.07 (n=16), track_history +0.06 (n=16), c_compound +0.09 (n=15), stacked +0.01 (n=17)
+  MEDIUM practice_current +0.46 (n=52), practice_v2 +0.50 (n=47), practice_pooled +0.57 (n=52), era_compound +0.08 (n=66), track_history +0.37 (n=64), c_compound -0.07 (n=54), stacked +0.41 (n=67)
+  HARD   practice_current +0.33 (n=21), practice_v2 +0.53 (n=18), practice_pooled +0.48 (n=27), era_compound -0.09 (n=61), track_history +0.40 (n=58), c_compound -0.14 (n=51), stacked +0.28 (n=62)
+
+=== TYRE WEAR LAB: dry races 2026-2026 (32 race-compound pairs, 13 races) ===
+real wear (s/lap of tyre age), median by compound: SOFT +0.0213 (n=8), MEDIUM +0.0233 (n=13), HARD +0.0230 (n=11)
+
+candidate          pairs  rank corr with real wear [90% CI]   calibrated error s/lap [90% CI]
+practice_current      21  +0.535 [+0.086, +0.753]            0.0217 [0.0152, 0.0284] (n=21)
+practice_v2           19  +0.521 [+0.065, +0.800]            0.0197 [0.0139, 0.0262] (n=19)
+practice_pooled       20  +0.735 [+0.426, +0.864]            0.0189 [0.0152, 0.0231] (n=20)
+era_compound          29  -0.229 [-0.489, +0.116]            0.0226 [0.0189, 0.0275] (n=29)
+track_history         29  +0.139 [-0.286, +0.494]            0.0245 [0.0199, 0.0292] (n=29)
+c_compound            18  +0.133 [-0.252, +0.508]            0.0223 [0.0165, 0.0291] (n=18)
+stacked               32  +0.337 [+0.059, +0.540]            0.0212 [0.0179, 0.0253] (n=32)
+
+error vs practice_current, same pairs (negative = closer to the real wear):
+  practice_v2        +0.0003 [-0.0027, +0.0028]  n=  19  no clear difference
+  practice_pooled    -0.0019 [-0.0049, +0.0013]  n=  19  no clear difference
+  era_compound       +0.0040 [-0.0011, +0.0084]  n=  19  no clear difference
+  track_history      +0.0069 [+0.0023, +0.0123]  n=  20  WORSE
+  c_compound         +0.0047 [-0.0036, +0.0104]  n=  15  no clear difference
+  stacked            +0.0028 [-0.0030, +0.0084]  n=  21  no clear difference
+
+error vs era_compound, same pairs (negative = closer to the real wear):
+  practice_current   -0.0040 [-0.0084, +0.0011]  n=  19  no clear difference
+  practice_v2        -0.0043 [-0.0094, +0.0035]  n=  17  no clear difference
+  practice_pooled    -0.0096 [-0.0127, -0.0069]  n=  17  BETTER
+  track_history      +0.0019 [-0.0016, +0.0057]  n=  26  no clear difference
+  c_compound         -0.0001 [-0.0005, +0.0003]  n=  18  no clear difference
+  stacked            -0.0014 [-0.0027, -0.0001]  n=  29  BETTER
+
+by compound, rank corr with real wear:
+  SOFT   practice_current +0.90 (n=5), practice_v2 +0.50 (n=5), practice_pooled +0.43 (n=6), era_compound -0.71 (n=7), track_history +0.29 (n=7), c_compound -0.90 (n=5), stacked +0.19 (n=8)
+  MEDIUM practice_current +0.32 (n=10), practice_v2 +0.24 (n=8), practice_pooled +0.95 (n=8), era_compound -0.36 (n=12), track_history +0.37 (n=12), c_compound +0.07 (n=8), stacked +0.52 (n=13)
+  HARD   practice_current +0.60 (n=6), practice_v2 +0.71 (n=6), practice_pooled +0.77 (n=6), era_compound -0.19 (n=10), track_history -0.19 (n=10), c_compound +0.00 (n=5), stacked +0.21 (n=11)
