@@ -1,0 +1,11 @@
+=== tyres.csv vs base.csv, model blend, 181 races scored by both ===
+metric               base      new       new - base [90% CI]
+winner_hit             0.5746    0.5470  -0.0276 [-0.0608, +0.0055]  no clear difference
+podium_overlap         0.6906    0.6980  +0.0074 [-0.0055, +0.0203]  no clear difference
+top10_overlap          0.7762    0.7702  -0.0061 [-0.0116, -0.0006]  WORSE
+rank_corr              0.6616    0.6605  -0.0011 [-0.0046, +0.0020]  no clear difference
+mae                    3.3153    3.3125  -0.0029 [-0.0282, +0.0232]  no clear difference
+mae_finishers          2.7205    2.7179  -0.0026 [-0.0285, +0.0242]  no clear difference
+bad_miss_finishers     0.0191    0.0200  +0.0009 [-0.0021, +0.0039]  no clear difference
+brier_win              0.0329    0.0329  +0.0000 [+0.0000, +0.0000]  no clear difference
+brier_podium           0.0695    0.0695  +0.0000 [+0.0000, +0.0000]  no clear difference

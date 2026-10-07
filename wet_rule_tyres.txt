@@ -1,0 +1,136 @@
+PREDICTION SCOREBOARD 2018-2026
+
+=== HEADLINE (race-weighted, 90% CI over races) ===
+metric                                    grid                     blend        blend_practice_all   better
+winner_hit                 53.0% [47.0%,59.0%]       54.6% [48.6%,60.7%]       57.9% [51.9%,63.9%]   higher
+podium_overlap             68.3% [65.4%,71.2%]       69.6% [66.7%,72.5%]       69.8% [66.8%,72.7%]   higher
+top10_overlap              76.2% [74.8%,77.7%]       76.9% [75.5%,78.4%]       76.9% [75.4%,78.4%]   higher
+rank_corr                  0.624 [0.599,0.649]       0.659 [0.634,0.683]       0.659 [0.634,0.683]   higher
+mae                        3.502 [3.363,3.646]       3.325 [3.186,3.467]       3.317 [3.177,3.457]   lower
+mae_finishers              2.928 [2.807,3.053]       2.727 [2.615,2.847]       2.714 [2.603,2.831]   lower
+bad_miss_finishers            3.7% [3.0%,4.3%]          2.0% [1.6%,2.5%]          2.1% [1.7%,2.5%]   lower
+brier_win                  0.033 [0.031,0.035]       0.033 [0.031,0.035]       0.033 [0.031,0.035]   lower
+brier_podium               0.070 [0.065,0.075]       0.070 [0.065,0.075]       0.070 [0.065,0.075]   lower
+races / drivers                   183 / 3684                183 / 3684                183 / 3684  
+
+=== vs GRID BASELINE (same races; CI excluding 0 = a real difference) ===
+blend    winner_hit           +0.0164 [-0.0383, +0.0656]  no clear difference
+blend    podium_overlap       +0.0128 [-0.0091, +0.0328]  no clear difference
+blend    top10_overlap        +0.0071 [-0.0027, +0.0169]  no clear difference
+blend    rank_corr            +0.0348 [+0.0244, +0.0455]  BETTER
+blend    mae                  -0.1774 [-0.2467, -0.1060]  BETTER
+blend    mae_finishers        -0.2003 [-0.2703, -0.1278]  BETTER
+blend    bad_miss_finishers   -0.0164 [-0.0209, -0.0120]  BETTER
+blend    brier_win            +0.0000 [+0.0000, +0.0000]  no clear difference
+blend    brier_podium         +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_practice_all winner_hit           +0.0492 [+0.0000, +0.0984]  no clear difference
+blend_practice_all podium_overlap       +0.0146 [-0.0055, +0.0346]  no clear difference
+blend_practice_all top10_overlap        +0.0066 [-0.0027, +0.0158]  no clear difference
+blend_practice_all rank_corr            +0.0347 [+0.0256, +0.0442]  BETTER
+blend_practice_all mae                  -0.1855 [-0.2486, -0.1201]  BETTER
+blend_practice_all mae_finishers        -0.2135 [-0.2780, -0.1476]  BETTER
+blend_practice_all bad_miss_finishers   -0.0159 [-0.0207, -0.0113]  BETTER
+blend_practice_all brier_win            +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_practice_all brier_podium         +0.0000 [+0.0000, +0.0000]  no clear difference
+
+=== CANDIDATES vs PRODUCTION BLEND (promote only if BETTER somewhere and WORSE nowhere) ===
+blend_practice_all winner_hit           +0.0328 [+0.0109, +0.0546]  BETTER
+blend_practice_all podium_overlap       +0.0018 [-0.0055, +0.0091]  no clear difference
+blend_practice_all top10_overlap        -0.0005 [-0.0055, +0.0044]  no clear difference
+blend_practice_all rank_corr            -0.0001 [-0.0036, +0.0034]  no clear difference
+blend_practice_all mae                  -0.0080 [-0.0312, +0.0141]  no clear difference
+blend_practice_all mae_finishers        -0.0132 [-0.0376, +0.0105]  no clear difference
+blend_practice_all bad_miss_finishers   +0.0005 [-0.0018, +0.0026]  no clear difference
+blend_practice_all brier_win            +0.0000 [+0.0000, +0.0000]  no clear difference
+blend_practice_all brier_podium         +0.0000 [+0.0000, +0.0000]  no clear difference
+  finishers started P1-3   blend 1.39   blend_practice_all 1.37
+  finishers started P4-10  blend 2.15   blend_practice_all 2.13
+  finishers started P11+   blend 3.47   blend_practice_all 3.47
+
+=== BREAKDOWN (blend): mae_finishers / podium_overlap / races ===
+  dry                              2.64 places   70%   166
+  era era1_13inch                  2.78 places   72%   79
+  era era2_18inch_groundeffect     2.70 places   69%   90
+  era era3_2026regs                2.60 places   60%   14
+  season 2018                      2.79 places   74%   19
+  season 2019                      2.56 places   76%   21
+  season 2020                      3.18 places   69%   17
+  season 2021                      2.66 places   70%   22
+  season 2022                      2.92 places   67%   20
+  season 2023                      2.79 places   65%   22
+  season 2024                      2.35 places   69%   24
+  season 2025                      2.80 places   74%   24
+  season 2026                      2.60 places   60%   14
+  wet                              3.56 places   69%   17
+  started P1-3                     1.39 places   (finishers, n=501)
+  started P4-10                    2.15 places   (finishers, n=1107)
+  started P11+                     3.47 places   (finishers, n=1519)
+  retirements                      6.99 places   (n=557, 15% of drivers)
+
+=== CALIBRATION p_win (blend): when we said X, it happened Y ===
+       0%-2%  n= 2768  said   0.6%  happened   0.5%
+       2%-5%  n=  330  said   3.0%  happened   2.4%
+      5%-10%  n=   63  said   7.4%  happened   7.9%
+     10%-20%  n=  192  said  13.8%  happened  12.5%
+     20%-35%  n=  139  said  25.3%  happened  23.0%
+     35%-50%  n=  111  said  44.2%  happened  47.7%
+     50%-70%  n=   81  said  53.9%  happened  56.8%
+
+=== CALIBRATION p_podium (blend): when we said X, it happened Y ===
+       0%-2%  n= 1459  said   1.5%  happened   1.6%
+       2%-5%  n=  915  said   2.9%  happened   2.0%
+      5%-10%  n=  179  said   6.9%  happened   6.1%
+     10%-20%  n=  330  said  14.1%  happened  14.2%
+     20%-35%  n=  172  said  27.4%  happened  28.5%
+     35%-50%  n=  140  said  41.8%  happened  40.7%
+     50%-70%  n=  245  said  64.9%  happened  65.7%
+    70%-100%  n=  244  said  77.3%  happened  75.0%
+
+=== WORST MISSES (blend, classified finishers) ===
+  2024 Spielberg              Lando Norris           grid  2  predicted P2  finished P20
+  2019 São Paulo              Carlos Sainz           grid 20  predicted P19 finished P3
+  2025 Silverstone            Nico Hulkenberg        grid 19  predicted P18 finished P3
+  2022 Montréal               Charles Leclerc        grid 19  predicted P19 finished P5
+  2022 Marina Bay             Daniel Ricciardo       grid 16  predicted P19 finished P5
+  2023 Las Vegas              Esteban Ocon           grid 16  predicted P18 finished P4
+  2025 Spa-Francorchamps      Isack Hadjar           grid  8  predicted P6  finished P20
+  2025 Zandvoort              Oliver Bearman         grid 20  predicted P20 finished P6
+  2026 Silverstone            Kimi Antonelli         grid  1  predicted P1  finished P15
+  2021 Baku                   Lewis Hamilton         grid  2  predicted P2  finished P15
+  2021 Sochi                  Max Verstappen         grid 20  predicted P15 finished P2
+  2021 Mexico City            Valtteri Bottas        grid  1  predicted P2  finished P15
+
+=== CAR PACE RULE: replaced the driver's own lap for 230 of 3684 drivers (6.2%); it should be rare ===
+  in wet qualifying: 63 of 360 drivers (17.5%) across 18 races
+
+=== CONFIDENCE LABEL (walk-forward; ranges should contain 80% of drivers) ===
+  all races                    n= 3304  inside range  81.4%  said 3.46 places  actual 3.30  ok
+  dry qualifying               n= 2862  inside range  81.7%  said 3.38 places  actual 3.22  ok
+  wet qualifying               n=  280  inside range  79.6%  said 4.00 places  actual 4.01  ok
+  rain forecast for the race   n=  162  inside range  79.6%  said 4.01 places  actual 3.37  OFF
+  (rain forecast rows use the actual race weather as a perfect forecast)
+
+=== WHERE THE ERROR COMES FROM (production blend; each driver in one group) ===
+  retired (not classified)                               557 drivers   31.8% of all error  avg 6.99 places
+  grid penalty / pit-lane start (>= 3 places back)       176 drivers    5.3% of all error  avg 3.70 places
+  lap 1 changed position by >= 5                         185 drivers    6.5% of all error  avg 4.27 places
+  wet race                                               237 drivers    6.1% of all error  avg 3.14 places
+  everything else                                       2529 drivers   50.4% of all error  avg 2.44 places
+  hindsight: finishers' error if we knew the order after lap 1 = 2.61 places (production before the start: 2.67)
+  recovery weight for out-of-position drivers (own / everyone else) per season: 2018: -/0.5, 2019: 1.0/0.5, 2020: 1.0/0.5, 2021: 0.8/0.5, 2022: 0.5/0.5, 2023: 0.6/0.5, 2024: 0.6/0.5, 2025: 0.8/0.5, 2026: 0.9/0.2
+  out-of-position finishers: 3.70 places (n=176)
+
+=== NEW SIGNALS (correlation with the race-vs-qualifying residual, 90% CI over races) ===
+  team form (production)                       r=+0.330 [+0.286, +0.378] n= 3129  REAL signal
+  team form from car-pace residuals            r=+0.335 [+0.288, +0.386] n= 3129  REAL signal
+  driver form vs teammate                      r=+0.073 [+0.054, +0.094] n= 3129  REAL signal
+  sprint-race pace vs qualifying pace          r=+0.395 [+0.256, +0.555] n=  386  REAL signal
+  sprint pace: 471 drivers in 24 sprint weekends; beta per season: 2018: 0.00, 2019: 0.00, 2020: 0.00, 2021: 0.00, 2022: 0.23, 2023: 0.31, 2024: 0.32, 2025: 0.41, 2026: 0.42
+
+=== PRACTICE PACE: long-run data for 2294 of 3684 drivers (62%); FP1+FP2 combined: 2548 (69%) ===
+  signal: corr(long-run pace vs quali-implied pace, race pace vs quali-implied pace) = +0.367 [+0.268, +0.462] n=1966  REAL extra information
+  practice laps in the database (races with FP1/FP2 laps / raced, share of laps with a compound): 2018: 21/21 100%, 2019: 21/21 100%, 2020: 16/16 100%, 2021: 22/22 100%, 2022: 22/22 100%, 2023: 22/22 100%, 2024: 24/24 100%, 2025: 24/24 100%, 2026: 16/16 100%
+  production practice beta per season (fitted on earlier seasons): 2018: 0.00, 2019: 0.30, 2020: 0.31, 2021: 0.29, 2022: 0.26, 2023: 0.28, 2024: 0.25, 2025: 0.26, 2026: 0.25
+  coverage by season: 2018: 76%, 2019: 74%, 2020: 65%, 2021: 65%, 2022: 58%, 2023: 56%, 2024: 62%, 2025: 54%, 2026: 51%
+
+wrote driver scores to tyres.csv
