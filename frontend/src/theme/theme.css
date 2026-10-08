@@ -46,18 +46,6 @@ body { background: var(--bg); color: var(--text); overflow-x: hidden; }
     radial-gradient(45% 40% at 88% 80%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
   filter: blur(10px);
 }
-.backdrop .streaks {
-  position: absolute; inset: -50%;
-  background: repeating-linear-gradient(
-    115deg,
-    transparent 0 140px,
-    color-mix(in srgb, var(--accent) 22%, transparent) 140px 142px,
-    transparent 142px 300px,
-    rgba(255, 255, 255, 0.05) 300px 301px,
-    transparent 301px 420px);
-  animation: streak 7s linear infinite;
-  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
-}
 .backdrop .floor {
   position: absolute; left: -25%; right: -25%; bottom: -10%; height: 55%;
   background:
@@ -69,7 +57,6 @@ body { background: var(--bg); color: var(--text); overflow-x: hidden; }
   mask-image: linear-gradient(180deg, transparent, #000 60%);
   opacity: 0.55;
 }
-@keyframes streak { from { transform: translateX(0); } to { transform: translateX(420px); } }
 @keyframes floor { from { background-position: 0 0, 0 0; } to { background-position: 0 60px, 0 0; } }
 
 /* --- top bar ------------------------------------------------------------------------------ */
@@ -140,63 +127,7 @@ body { background: var(--bg); color: var(--text); overflow-x: hidden; }
 .page h1.display em { font-style: italic; color: var(--accent); }
 .lead { color: var(--muted); max-width: 640px; font-size: 1.05rem; }
 
-/* --- landing ------------------------------------------------------------------------------ */
-.hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 32px; align-items: center; min-height: calc(100vh - 220px); }
-.hero h1 {
-  margin: 14px 0 16px; font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 0.9;
-  font-size: clamp(2.8rem, 8vw, 6.4rem); letter-spacing: -0.02em;
-}
-.hero h1 .line { display: block; overflow: hidden; }
-.hero h1 .accent { color: var(--accent); text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 55%, transparent); }
-.hero .ctas { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 26px; }
-.hero-track { position: relative; aspect-ratio: 1; width: 100%; max-width: 520px; justify-self: center; }
-.hero-track svg { width: 100%; height: 100%; overflow: visible; }
-.hero-track .caption {
-  position: absolute; left: 0; bottom: 4%; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
-}
-.hero-track .caption strong { display: block; color: var(--text); font-size: 1.1rem; letter-spacing: 0.06em; }
-
-.stat-strip {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin: 28px 0 56px;
-  background: var(--border);
-}
-.stat-strip > div { background: rgba(10, 10, 14, 0.85); padding: 18px 20px; }
-.stat-strip .num { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 900; font-style: italic; color: var(--text); }
-.stat-strip .num small { font-size: 0.5em; color: var(--accent); margin-left: 2px; }
-.stat-strip .what { color: var(--muted); font-size: 0.85rem; }
-.stat-strip-note { margin: -46px 0 56px; color: var(--muted); font-size: 0.78rem; }
-
-.section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-.section-title h2 { margin: 0; font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 900; font-style: italic; text-transform: uppercase; }
-
-.feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
-.feature-card {
-  --c: var(--accent);
-  position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 230px;
-  padding: 26px 28px; text-decoration: none; color: var(--text); overflow: hidden; isolation: isolate;
-  background: linear-gradient(135deg, rgba(24, 24, 32, 0.92), rgba(10, 10, 14, 0.92));
-  clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 34px, 100% 100%, 34px 100%, 0 calc(100% - 34px));
-}
-.feature-card::before {
-  content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 0.35s;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 70%, transparent), color-mix(in srgb, var(--c) 10%, transparent) 70%);
-}
-.feature-card:hover::before, .feature-card:focus-visible::before { opacity: 1; }
-.feature-card .index {
-  position: absolute; top: 18px; right: 46px; font-size: 4.5rem; font-weight: 900; font-style: italic;
-  color: transparent; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.18); line-height: 1;
-}
-.feature-card .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; color: var(--c); }
-.feature-card:hover .tag { color: #fff; }
-.feature-card h3 { margin: 6px 0 6px; font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 1; }
-.feature-card p { margin: 0; color: rgba(255, 255, 255, 0.72); max-width: 420px; }
-.feature-card .go {
-  position: absolute; right: 26px; bottom: 24px; width: 44px; height: 44px; display: grid; place-items: center;
-  background: var(--c); color: #fff; font-weight: 900; transform: rotate(45deg); transition: transform 0.3s;
-}
-.feature-card .go span { transform: rotate(-45deg); }
-.feature-card:hover .go { transform: rotate(45deg) scale(1.15); background: #fff; color: #000; }
-.feature-card .bar { position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: var(--c); }
+/* --- landing: see motion.css ----------------------------------------------------------- */
 .more-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
 
 /* --- games -------------------------------------------------------------------------------- */
@@ -204,7 +135,7 @@ body { background: var(--bg); color: var(--text); overflow-x: hidden; }
 .step { display: inline-flex; align-items: center; gap: 12px; margin: 26px 0 14px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.82rem; }
 .step .diamond { width: 30px; height: 30px; font-size: 0.85rem; }
 
-.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 12px; }
 .pick-tile {
   --c: #e10600;
   position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 22px; cursor: pointer;
@@ -367,11 +298,6 @@ section { background: var(--panel); border: 1px solid var(--border); border-radi
 
 /* --- responsive --------------------------------------------------------------------------- */
 @media (max-width: 980px) {
-  .hero { grid-template-columns: 1fr; min-height: 0; }
-  .hero-track { max-width: 380px; }
-  .stat-strip { grid-template-columns: repeat(2, 1fr); }
-  .stat-strip-note { margin-top: -46px; }
-  .feature-grid { grid-template-columns: 1fr; }
   .tracks-layout { grid-template-columns: 1fr; height: auto; }
   .track-list { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
   .track-list button { flex: 0 0 auto; max-width: 220px; }
@@ -396,6 +322,6 @@ section { background: var(--panel); border: 1px solid var(--border); border-radi
 
 @media (prefers-reduced-motion: reduce) {
   :root { transition: none; }
-  .backdrop .streaks, .backdrop .floor { animation: none; }
-  .btn-sharp, .driver-card img, .feature-card .go { transition: none; }
+  .backdrop .floor { animation: none; }
+  .btn-sharp, .driver-card img, .feature-panel .go { transition: none; }
 }

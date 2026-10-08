@@ -3,7 +3,10 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
 import { CIRCUITS } from '../circuits'
+import { CountNum } from '../fx/CountNum'
 import { useAsync } from '../hooks'
+import { Chars } from '../motion/Chars'
+import { gsap, reducedMotion, useGSAP } from '../motion/gsap'
 import { usePageAccent } from '../theme/accent'
 import { normaliseHex } from '../theme/color'
 import { matchTrack } from '../trackMatch'
@@ -33,6 +36,17 @@ export function TracksPage() {
   usePageAccent(fastest?.hex ?? null)
 
   const list = useRef<HTMLElement>(null)
+  const panel = useRef<HTMLElement>(null)
+  // the stats panel re-deals its rows for every circuit
+  useGSAP(
+    () => {
+      if (reducedMotion() || !panel.current) return
+      gsap.fromTo(panel.current.querySelectorAll('.kv > div, .sector, h3, .winner-row'),
+        { opacity: 0, x: 24 },
+        { opacity: 1, x: 0, duration: 0.6, ease: 'expo.out', stagger: 0.035 })
+    },
+    { scope: panel, dependencies: [id, stats.data] },
+  )
   useEffect(() => {
     list.current?.querySelector('button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [id])
@@ -44,7 +58,7 @@ export function TracksPage() {
     <div className="page" style={{ paddingBottom: 30 }}>
       <span className="eyebrow">Circuits · 3D</span>
       <div className="tracks-layout" style={{ marginTop: 12 }}>
-        <nav className="track-list" aria-label="Circuits" ref={list}>
+        <nav className="track-list" aria-label="Circuits" ref={list} data-lenis-prevent>
           {LIST.map((c) => (
             <button key={c.id} className={c.id === id ? 'on' : ''} onClick={() => setId(c.id)} title={c.name}>
               <span className="cc">{c.id.slice(0, 2)}</span>
@@ -56,7 +70,7 @@ export function TracksPage() {
           ))}
         </nav>
 
-        <div className="track-stage chamfer">
+        <div className="track-stage chamfer" data-cursor="Drag">
           <Suspense fallback={<div className="hint">Loading 3D…</div>}>
             <TrackScene key={circuit.id} circuit={circuit} />
           </Suspense>
@@ -64,19 +78,19 @@ export function TracksPage() {
             <AnimatePresence mode="wait">
               <motion.div key={circuit.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <span className="eyebrow">{circuit.location}</span>
-                <h2>{circuit.name}</h2>
+                <h2><Chars text={circuit.name} at={-0.25} /></h2>
               </motion.div>
             </AnimatePresence>
           </div>
           <div className="hint">Drag to rotate · move the mouse to tilt</div>
         </div>
 
-        <aside className="track-panel chamfer">
+        <aside className="track-panel chamfer" ref={panel} data-lenis-prevent>
           <div className="kv">
-            <div><div className="v">{circuit.lengthM ? (circuit.lengthM / 1000).toFixed(3) : '–'}</div><div className="k">Length km</div></div>
+            <div><div className="v"><CountNum value={circuit.lengthM ? (circuit.lengthM / 1000).toFixed(3) : null} /></div><div className="k">Length km</div></div>
             <div><div className="v">{circuit.firstGp ?? '–'}</div><div className="k">First GP</div></div>
-            <div><div className="v">{circuit.altitudeM ?? '–'}</div><div className="k">Altitude m</div></div>
-            <div><div className="v">{stats.data?.total_races_recorded ?? '–'}</div><div className="k">Races in our data</div></div>
+            <div><div className="v"><CountNum value={circuit.altitudeM} /></div><div className="k">Altitude m</div></div>
+            <div><div className="v"><CountNum value={stats.data?.total_races_recorded} /></div><div className="k">Races in our data</div></div>
           </div>
 
           <h3>Sectors</h3>
@@ -87,7 +101,7 @@ export function TracksPage() {
                 Sector {i + 1} <span className="muted">· {ROLE_LABEL[s.role] ?? s.role}</span>
                 <div className="muted small">{(s.lengthM / 1000).toFixed(2)} km · {Math.round((s.lengthM / total) * 100)}% of the lap</div>
               </span>
-              <strong>{s.avgSpeedKmh.toFixed(0)}<span className="muted small"> km/h</span></strong>
+              <strong><CountNum value={s.avgSpeedKmh.toFixed(0)} delay={0.1 + i * 0.08} /><span className="muted small"> km/h</span></strong>
             </div>
           ))}
 

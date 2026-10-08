@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom'
 
 import { api } from '../api'
 import { ErrorBox, Loading } from '../components/Status'
+import { LightsOut } from '../fx/LightsOut'
 import { OddsBars, ordinal } from '../fx/OddsBars'
 import { useAsync } from '../hooks'
+import { Chars } from '../motion/Chars'
 import { splitName } from '../names'
 import { readPick, writePick } from '../storage'
 import { useAccent, usePageAccent } from '../theme/accent'
@@ -22,6 +24,7 @@ export function PickWinnerPage() {
   const roster = useAsync(() => (p ? api.roster(p.season) : Promise.resolve(null)), [p?.season])
   const key = p ? `winner:${p.race_id}` : null
   const [saved, setSaved] = useState<SavedPick | null>(null)
+  const [countdown, setCountdown] = useState(false)
   const pick = saved ?? (key ? readPick<SavedPick>(key) : null)
   const { preview } = useAccent()
 
@@ -39,6 +42,7 @@ export function PickWinnerPage() {
   }
   const lock = () => {
     if (!pick || !key) return
+    setCountdown(false)
     const next = { ...pick, locked: true }
     setSaved(next)
     writePick(key, next)
@@ -62,7 +66,9 @@ export function PickWinnerPage() {
       <div className="game-head">
         <div>
           <span className="eyebrow">Game · Round {p.round} · {p.season}</span>
-          <h1 className="display">Who wins <em>{p.track}</em>?</h1>
+          <h1 className="display">
+            <Chars text="Who wins" /> <em><Chars text={p.track} at={0.18} /></em><Chars text="?" at={0.45} />
+          </h1>
           <p className="lead">
             Pick your winner and lock it in. Then see the odds Apex21 gives your driver
             ({p.stage === 'post_qualifying' ? 'after qualifying, from the starting grid' : 'before qualifying'}).
@@ -79,9 +85,11 @@ export function PickWinnerPage() {
           return (
             <motion.button
               key={d.driver_id}
+              data-scramble
               className={`pick-tile ${d.driver_id === pick?.driverId ? 'picked' : ''}`}
               style={{ ['--c' as string]: normaliseHex(d.color_hex, '#888888') }}
               onClick={() => choose(d.driver_id)}
+              data-cursor={pick?.locked ? undefined : 'Pick'}
               onMouseEnter={() => !pick?.locked && preview(d.color_hex)}
               onMouseLeave={() => preview(null)}
               disabled={pick?.locked && d.driver_id !== pick.driverId}
@@ -103,8 +111,10 @@ export function PickWinnerPage() {
       </div>
 
       <div className="lock-row">
-        {!pick?.locked ? (
-          <button className="btn-sharp" disabled={!pick} onClick={lock}>
+        {countdown ? (
+          <LightsOut onDone={lock} />
+        ) : !pick?.locked ? (
+          <button className="btn-sharp" disabled={!pick} onClick={() => setCountdown(true)} data-sound-click="lock" data-cursor="Lock">
             {picked ? `Lock in ${picked.driver_name}` : 'Pick a driver'}
           </button>
         ) : (

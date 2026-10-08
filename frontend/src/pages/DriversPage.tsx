@@ -4,7 +4,11 @@ import { createPortal } from 'react-dom'
 
 import { api } from '../api'
 import { ErrorBox, Loading } from '../components/Status'
+import { CountNum } from '../fx/CountNum'
 import { useAsync } from '../hooks'
+import { Chars } from '../motion/Chars'
+import { useTilt } from '../motion/reveal'
+import { lockScroll } from '../motion/SmoothScroll'
 import { splitName } from '../names'
 import type { DriverStats, RosterDriver } from '../types'
 import { useAccent, usePageAccent } from '../theme/accent'
@@ -34,7 +38,7 @@ export function DriversPage() {
   return (
     <div className="page">
       <span className="eyebrow">The grid · {SEASON}</span>
-      <h1 className="display">Drivers <em>{SEASON}</em></h1>
+      <h1 className="display"><Chars text="Drivers" /> <em><Chars text={String(SEASON)} at={0.2} /></em></h1>
       <p className="lead">Every race driver this season, ordered by points. Hover for team colours, click for the full file.</p>
 
       <div className="team-filter">
@@ -69,24 +73,7 @@ export function DriversPage() {
                 transition={{ delay: Math.min(i, 12) * 0.03 }}
                 whileHover={{ y: -8, rotate: -0.6 }}
               >
-                <button
-                  className="driver-card"
-                  style={{ ['--c' as string]: normaliseHex(d.team.color_hex, '#666666') }}
-                  onClick={() => setOpen(d)}
-                  onMouseEnter={() => preview(d.team.color_hex)}
-                  onMouseLeave={() => preview(null)}
-                  aria-label={`${d.name}, ${d.team.name}`}
-                >
-                  <span className="stripe" />
-                  <span className="num">{d.number ?? ''}</span>
-                  {d.photo_url ? <img src={d.photo_url} alt="" loading="lazy" /> : <span className="no-photo">{last[0]}</span>}
-                  <span className="info">
-                    <span className="first">{first}</span>
-                    <span className="last">{last}</span>
-                    <span className="team">{d.team.name}</span>
-                  </span>
-                  <span className="pts">{d.season.points}<small>PTS</small></span>
-                </button>
+                <DriverCard driver={d} first={first} last={last} onOpen={() => setOpen(d)} onHover={preview} />
               </motion.div>
             )
           })}
@@ -103,6 +90,40 @@ export function DriversPage() {
   )
 }
 
+/** One card: tilts toward the pointer in 3D and re-types its text on hover. */
+function DriverCard({ driver: d, first, last, onOpen, onHover }: {
+  driver: RosterDriver
+  first: string
+  last: string
+  onOpen: () => void
+  onHover: (hex: string | null) => void
+}) {
+  const tilt = useTilt<HTMLButtonElement>(9)
+  return (
+    <button
+      ref={tilt}
+      className="driver-card"
+      style={{ ['--c' as string]: normaliseHex(d.team.color_hex, '#666666') }}
+      onClick={onOpen}
+      onMouseEnter={() => onHover(d.team.color_hex)}
+      onMouseLeave={() => onHover(null)}
+      aria-label={`${d.name}, ${d.team.name}`}
+      data-cursor="Open"
+      data-scramble
+    >
+      <span className="stripe" />
+      <span className="num">{d.number ?? ''}</span>
+      {d.photo_url ? <img src={d.photo_url} alt="" loading="lazy" /> : <span className="no-photo">{last[0]}</span>}
+      <span className="info">
+        <span className="first">{first}</span>
+        <span className="last">{last}</span>
+        <span className="team">{d.team.name}</span>
+      </span>
+      <span className="pts">{d.season.points}<small>PTS</small></span>
+    </button>
+  )
+}
+
 function StatGrid({ stats }: { stats: DriverStats }) {
   const cells: [string, string | number][] = [
     ['Points', stats.points], ['Wins', stats.wins], ['Podiums', stats.podiums],
@@ -114,7 +135,7 @@ function StatGrid({ stats }: { stats: DriverStats }) {
     <div className="stat-cards">
       {cells.map(([k, v], i) => (
         <motion.div key={k} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.03 }}>
-          <div className="v">{v}</div>
+          <div className="v"><CountNum value={v} delay={0.2 + i * 0.04} /></div>
           <div className="k">{k}</div>
         </motion.div>
       ))}
@@ -126,6 +147,10 @@ function DriverDrawer({ driver, onClose }: { driver: RosterDriver; onClose: () =
   const profile = useAsync(() => api.driverProfile(driver.id), [driver.id])
   const [first, last] = splitName(driver.name)
   useEffect(() => {
+    lockScroll(true)
+    return () => lockScroll(false)
+  }, [])
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -135,6 +160,7 @@ function DriverDrawer({ driver, onClose }: { driver: RosterDriver; onClose: () =
     <>
       <motion.div className="drawer-scrim" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
       <motion.aside
+        data-lenis-prevent
         className="drawer"
         role="dialog"
         aria-label={driver.name}

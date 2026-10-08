@@ -1,7 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 
+import { scrambleElement } from '../motion/scramble'
+import { setIntroActive } from '../motion/stage'
 import { sessionFlag, setSessionFlag } from '../storage'
+import { play } from './sound'
 
 const LIGHT_MS = 330
 const ON_AT = 1150           // first red light
@@ -23,11 +26,27 @@ export function Intro({ onDone }: { onDone: () => void }) {
       const t = window.setTimeout(finish, 900)
       return () => window.clearTimeout(t)
     }
-    const timers = [1, 2, 3, 4, 5].map((n) => window.setTimeout(() => setLights(n), ON_AT + (n - 1) * LIGHT_MS))
-    timers.push(window.setTimeout(() => setLights(0), OUT_AT - 250))
+    const timers = [1, 2, 3, 4, 5].map((n) =>
+      window.setTimeout(() => {
+        setLights(n)
+        play('beep')
+      }, ON_AT + (n - 1) * LIGHT_MS),
+    )
+    timers.push(
+      window.setTimeout(() => {
+        setLights(0)
+        play('go')
+      }, OUT_AT - 250),
+    )
     timers.push(window.setTimeout(finish, OUT_AT))
     return () => timers.forEach((t) => window.clearTimeout(t))
   }, [reduced])
+
+  useEffect(() => {
+    const tagline = document.querySelector('.intro .tagline')
+    const t = window.setTimeout(() => tagline && scrambleElement(tagline, 0.9), 1100)
+    return () => window.clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     const skip = () => setLeaving(true)
@@ -97,10 +116,15 @@ export function Intro({ onDone }: { onDone: () => void }) {
 
 /** True on the first visit of this browser session (then remembered). */
 export function useIntroOnce(): [boolean, () => void] {
-  const [show, setShow] = useState(() => !sessionFlag('intro-seen'))
+  const [show, setShow] = useState(() => {
+    const first = !sessionFlag('intro-seen')
+    setIntroActive(first) // page entrances wait for the intro to finish
+    return first
+  })
   const done = () => {
     setSessionFlag('intro-seen')
     setShow(false)
+    setIntroActive(false)
   }
   return [show, done]
 }

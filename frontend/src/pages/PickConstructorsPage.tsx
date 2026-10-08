@@ -5,7 +5,9 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { ErrorBox, Loading } from '../components/Status'
 import { OddsBars, ordinal } from '../fx/OddsBars'
+import { LightsOut } from '../fx/LightsOut'
 import { useAsync } from '../hooks'
+import { Chars } from '../motion/Chars'
 import { assetUrl, readPick, writePick } from '../storage'
 import { useAccent, usePageAccent } from '../theme/accent'
 import { normaliseHex } from '../theme/color'
@@ -22,6 +24,7 @@ export function PickConstructorsPage() {
   const roster = useAsync(() => api.roster(SEASON), [])
   const key = `constructors:${SEASON}`
   const [saved, setSaved] = useState<SavedPick | null>(null)
+  const [countdown, setCountdown] = useState(false)
   const pick = saved ?? readPick<SavedPick>(key)
   const { preview } = useAccent()
 
@@ -65,7 +68,9 @@ export function PickConstructorsPage() {
       <div className="game-head">
         <div>
           <span className="eyebrow">Game · {SEASON} season · after round {c.after_round}</span>
-          <h1 className="display">Who takes the <em>constructors'</em> title?</h1>
+          <h1 className="display">
+            <Chars text="Who takes the" /> <em><Chars text="constructors'" at={0.25} /></em> <Chars text="title?" at={0.5} />
+          </h1>
           <p className="lead">
             Back a team. Apex21 simulates the {c.weekends_left} remaining weekends thousands of times from each
             team's form and gives every team its chance of the title.
@@ -79,9 +84,11 @@ export function PickConstructorsPage() {
         {teams.map((t, i) => (
           <motion.button
             key={t.id}
-            className={`pick-tile ${t.id === pick?.teamId ? 'picked' : ''}`}
+            data-scramble
+              className={`pick-tile ${t.id === pick?.teamId ? 'picked' : ''}`}
             style={{ ['--c' as string]: normaliseHex(t.colour, '#888888'), minHeight: 72 }}
             onClick={() => !pick?.locked && save({ teamId: t.id, locked: false })}
+            data-cursor={pick?.locked ? undefined : 'Back'}
             onMouseEnter={() => !pick?.locked && preview(t.colour)}
             onMouseLeave={() => preview(null)}
             disabled={pick?.locked && t.id !== pick.teamId}
@@ -101,8 +108,15 @@ export function PickConstructorsPage() {
       </div>
 
       <div className="lock-row">
-        {!pick?.locked ? (
-          <button className="btn-sharp" disabled={!pick} onClick={() => pick && save({ ...pick, locked: true })}>
+        {countdown ? (
+          <LightsOut
+            onDone={() => {
+              setCountdown(false)
+              if (pick) save({ ...pick, locked: true })
+            }}
+          />
+        ) : !pick?.locked ? (
+          <button className="btn-sharp" disabled={!pick} onClick={() => setCountdown(true)} data-sound-click="lock" data-cursor="Lock">
             {picked ? `Back ${picked.name}` : 'Pick a team'}
           </button>
         ) : (

@@ -1,11 +1,12 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 
 import { lapPoints, type Circuit } from '../circuitTypes'
 
 /** The circuit drawn as a glowing racing line, with a car lapping it. */
-export function CircuitOutline({ circuit }: { circuit: Circuit }) {
+export function CircuitOutline({ circuit, colour = 'var(--accent)' }: { circuit: Circuit; colour?: string }) {
   const reduced = useReducedMotion()
+  const glow = `glow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const d = useMemo(() => {
     const pts = lapPoints(circuit)
     const xs = pts.map((p) => p[0])
@@ -21,7 +22,7 @@ export function CircuitOutline({ circuit }: { circuit: Circuit }) {
   return (
     <svg viewBox="0 0 1000 1000" role="img" aria-label={`${circuit.name} layout`}>
       <defs>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id={glow} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="8" result="b" />
           <feMerge>
             <feMergeNode in="b" />
@@ -33,17 +34,17 @@ export function CircuitOutline({ circuit }: { circuit: Circuit }) {
       <motion.path
         d={d}
         fill="none"
-        stroke="var(--accent)"
+        stroke={colour}
         strokeWidth="9"
         strokeLinejoin="round"
         strokeLinecap="round"
-        filter="url(#glow)"
+        filter={`url(#${glow})`}
         initial={reduced ? false : { pathLength: 0 }}
         animate={{ pathLength: 1 }}
         transition={{ duration: 2.2, ease: [0.4, 0, 0.2, 1] }}
       />
       {!reduced && (
-        <circle r="13" fill="#fff" filter="url(#glow)" opacity="0">
+        <circle r="13" fill="#fff" filter={`url(#${glow})`} opacity="0">
           <set attributeName="opacity" to="1" begin="2.2s" fill="freeze" />
           <animateMotion dur="6s" repeatCount="indefinite" path={d} begin="2.2s" />
         </circle>

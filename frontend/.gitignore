@@ -2,3 +2,6 @@ node_modules
 dist
 *.local
 *.tsbuildinfo
+
+# background music slot: only commit a track you have the rights to publish
+public/audio/
