@@ -2,6 +2,10 @@ import type {
   ActualDriverStrategy,
   Championship,
   ChampionshipHistory,
+  DriverProfile,
+  Roster,
+  TrackListItem,
+  TrackStats,
   Forecast,
   RaceDetail,
   RaceListItem,
@@ -62,6 +66,10 @@ export const api = {
   championship: (season: number) => optional(request<Championship>(`/championship/${season}`)),
   championshipHistory: (season: number) =>
     optional(request<ChampionshipHistory>(`/championship/${season}/history`)),
+  roster: (season: number) => optional(request<Roster>(`/drivers/roster/${season}`)),
+  driverProfile: (id: number) => optional(request<DriverProfile>(`/drivers/${id}/profile`)),
+  tracks: () => request<TrackListItem[]>('/tracks'),
+  trackStats: (id: number) => optional(request<TrackStats>(`/tracks/${id}/stats`)),
   whatIf: (id: number, body: WhatIfRequest) =>
     request<WhatIfResponse>(`/races/${id}/what-if`, { method: 'POST', body: JSON.stringify(body) }),
 }

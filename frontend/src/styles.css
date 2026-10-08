@@ -10,23 +10,8 @@
   --bad: #ff6b6b;
   --warn: #f5c400;
   color-scheme: dark;
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f5f6f8;
-    --panel: #ffffff;
-    --panel-2: #f0f2f5;
-    --border: #dde1e8;
-    --text: #15181e;
-    --muted: #5d6675;
-    --good: #138a55;
-    --bad: #c62828;
-    --warn: #9a7a00;
-    color-scheme: light;
-  }
-}
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.45; }
@@ -146,10 +131,6 @@ button.link { background: none; color: var(--muted); padding: 0 4px; font-weight
 /* Chart series: categorical slots 1-4 of the validated reference palette (dark default,
    light steps under the light scheme), assigned in fixed order. */
 :root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; }
-@media (prefers-color-scheme: light) {
-  :root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; }
-}
-.top-bar nav { display: flex; gap: 16px; }
 
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .section-head h2 { margin: 0; }

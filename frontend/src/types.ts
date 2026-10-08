@@ -254,3 +254,71 @@ export interface ChampionshipHistory {
   drivers: TitleSeries[]
   constructors: TitleSeries[]
 }
+
+// --- new frontend: roster, tracks, driver profile -------------------------------------
+
+export interface DriverStats {
+  races: number
+  wins: number
+  podiums: number
+  points: number
+  poles: number
+  best_finish: number | null
+  average_finish: number | null
+  average_qualifying: number | null
+  dnfs: number
+}
+
+export interface RosterDriver {
+  id: number
+  name: string
+  number: number | null
+  nationality: string | null
+  country_code: string | null
+  photo_url: string | null
+  world_championships: number
+  team: { id: number; name: string; color_hex: string | null; logo_url: string | null }
+  season: DriverStats
+  career_since_2018: DriverStats
+}
+
+export interface Roster {
+  season: number
+  drivers: RosterDriver[]
+  note: string
+}
+
+export interface DriverProfile {
+  id: number
+  name: string
+  nationality: string | null
+  photo_url: string | null
+  total_world_championships: number | null
+  current_team: { id: number; name: string; color_hex: string | null; logo_url: string | null } | null
+  team_history: { team_name: string; logo_url: string | null; start_year: number; end_year: number }[]
+  track_records_held: { track_name: string; lap_time: number; season_year: number }[]
+  track_records_note: string
+  last_gp_win: { track_name: string; season_year: number; round_number: number; race_date: string } | null
+}
+
+export interface TrackListItem {
+  id: number
+  name: string
+  country: string | null
+  length_km: number | string | null
+  lap_record: string | null
+  races: number
+  first_season: number | null
+  last_season: number | null
+}
+
+export interface TrackStats {
+  id: number
+  name: string
+  country: string | null
+  length_km: number | string | null
+  lap_record: string | null
+  first_year_raced: number | null
+  total_races_recorded: number
+  historical_winners: { season_year: number; driver_name: string; team_name: string; color_hex: string | null }[]
+}
