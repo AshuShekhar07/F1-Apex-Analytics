@@ -7,6 +7,11 @@ earlier races:
   M  production       : today's one-plan-for-every-car method (practice wear)
   H  hybrid           : M's stop count (practice wear); tyre order and pit windows from W's
                         front-grid cars with that stop count; windows capped at 10 laps
+  PS1/PS2 pre-start   : H once each car's starting tyre is declared: history cut to front-grid
+                        cars that started on it; PS1 keeps H's stop count, PS2 takes the stop
+                        count of those cars (race_winning_strategy_v1.predict_pre_start).
+                        after_start_hit scores the plan after the first tyre, which pre-start
+                        methods are given.
 
 Metrics (per front-grid car, then averaged per race; 90% intervals resample races):
   stop_count_hit / sequence_hit          : every front-grid car
@@ -64,14 +69,17 @@ from race_winning_strategy_v1 import (
     track_record,
     load_neutralised_laps,
     predict_hybrid,
+    predict_pre_start,
     predict_winning_strategy,
     stop_in_laps,
 )
 
 W, E, M = "W winning strategy (track)", "E era front grid", "M production (all cars)"
 H = "H hybrid (wear stops, track plan)"
+PS1 = "PS1 pre-start: hybrid stops"
+PS2 = "PS2 pre-start: start-tyre stops"
 METRICS = (("stop_count_hit", False), ("stop_count_hit_green", False), ("sequence_hit", False),
-           ("sequence_hit_green", False), ("first_window_hit", False), ("second_window_hit", False),
+           ("sequence_hit_green", False), ("after_start_hit", False), ("first_window_hit", False), ("second_window_hit", False),
            ("first_stop_within_3", False), ("first_window_width", True), ("winner_sequence_hit", False))
 
 
@@ -99,6 +107,9 @@ def score_car(race_id: int, method: str, car: CarStrategy, *, sequence: tuple[st
         "sequence_hit": hit_sequence,
         "stop_count_hit_green": hit_stops if clean_car else None,
         "sequence_hit_green": hit_sequence if clean_car else None,
+        # the plan after the starting tyre: a pre-start method knows the first tyre, so its
+        # tyre-order gain is partly given; this part it has to predict
+        "after_start_hit": int(sequence is not None and tuple(sequence[1:]) == tuple(car.sequence[1:])),
         "first_window_hit": None, "second_window_hit": None, "first_window_width": None,
         "first_stop_within_3": None,
         "winner_sequence_hit": hit_sequence if car.finish == 1 else None,
@@ -153,8 +164,24 @@ def run(db: Any, *, start_year: int, end_year: int) -> list[Row]:
         m_plan = (m.sequence, None, m.stop_laps[0] if m.stop_laps else None) if m else (None, None, None)
         h = predict_hybrid(history, [c for c in cars if c.race_date < race_date], wear=wear_by_race.get(race_id),
                            wear_by_race=wear_by_race, track_id=first.track_id, **kwargs)
+        all_before = [c for c in cars if c.race_date < race_date]
+        pre_start: dict = {}
+
+        def plan_for_start(rule: str, compound: str):
+            if (rule, compound) not in pre_start:
+                pre_start[(rule, compound)] = predict_pre_start(
+                    history, all_before, start_compound=compound, wear=wear_by_race.get(race_id),
+                    wear_by_race=wear_by_race, track_id=first.track_id, stop_rule=rule, **kwargs)
+            return pre_start[(rule, compound)]
+
         for car in front:
-            for name, (sequence, windows, first_stop) in ((W, _plan(w)), (E, _plan(e)), (M, m_plan), (H, _plan(h))):
+            plans = [(W, _plan(w)), (E, _plan(e)), (M, m_plan), (H, _plan(h))]
+            if car.sequence:          # the starting tyre is declared before the start
+                plans += [(PS1, _plan(plan_for_start("hybrid", car.sequence[0]))),
+                          (PS2, _plan(plan_for_start("start", car.sequence[0])))]
+            else:
+                plans += [(PS1, _plan(h)), (PS2, _plan(h))]
+            for name, (sequence, windows, first_stop) in plans:
                 rows.append(score_car(race_id, name, car, sequence=sequence, windows=windows,
                                       first_stop=first_stop, neutralised=neutralised.get(race_id)))
         laps = neutralised.get(race_id)
@@ -251,6 +278,8 @@ def main() -> int:
     print_table(rows, M)
     print("\n--- vs E, the era's front-grid plan (what the track history adds) ---")
     print_table([r for r in rows if r.method in (W, E)], E)
+    print("\n--- pre-start (starting tyre known) vs H, same cars ---")
+    print_table([r for r in rows if r.method in (H, PS1, PS2)], H)
     print("\n--- H vs W, the track-only front-grid plan ---")
     print_table([r for r in rows if r.method in (W, H)], W)
     level_report(H)

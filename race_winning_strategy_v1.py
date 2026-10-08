@@ -261,6 +261,36 @@ def predict_hybrid(front_history: Sequence[CarStrategy], all_history: Sequence[C
                            f"{why}; no front-grid car ran {stops} stop(s): production's plan", None, "low")
 
 
+# --- pre-start stage: the starting tyre is declared ------------------------------------------
+# Teams fit the starting tyres before the formation lap. Knowing a front-runner's starting
+# compound narrows the plan: history is cut to front-grid cars that STARTED on it. The race
+# strategy backtest found this the one clear strategy gain (method D: tyre order 0.255 -> 0.287
+# in 2022-25). Two stop-count rules are compared in winning_strategy_backtest_v1:
+#   "hybrid"  keep the practice-wear stop count (predict_hybrid) and pick that count's plan among
+#             cars on this starting tyre (if none ran it: their most common count)
+#   "start"   the stop count of the front-grid cars that started on this tyre
+
+def predict_pre_start(front_history: Sequence[CarStrategy], all_history: Sequence[CarStrategy], *,
+                      start_compound: str, wear: float | None, wear_by_race: dict[int, float | None],
+                      track_id: int, regulation_era: str, total_laps: int,
+                      stop_rule: str = "hybrid") -> WinningStrategy | None:
+    """The plan for front-grid cars that start on start_compound; predict_hybrid when no
+    front-grid car in the history started on it."""
+    kwargs = dict(track_id=track_id, regulation_era=regulation_era, total_laps=total_laps)
+    hybrid = predict_hybrid(front_history, all_history, wear=wear, wear_by_race=wear_by_race, **kwargs)
+    same_start = [c for c in front_history if c.sequence and c.sequence[0] == start_compound.upper()]
+    if not same_start:
+        return hybrid
+    p = None
+    if stop_rule == "hybrid" and hybrid is not None:
+        p = predict_winning_strategy(same_start, stops=hybrid.stops, max_window=MAX_WINDOW, **kwargs)
+    if p is None:
+        p = predict_winning_strategy(same_start, max_window=MAX_WINDOW, **kwargs)
+    if p is None:
+        return hybrid
+    return replace(p, source=f"starting on {start_compound.upper()}: {p.source}")
+
+
 def load_neutralised_laps(db: Any, race_ids: Iterable[int]) -> dict[int, frozenset[int] | None]:
     """race_id -> SC/VSC/red-flag leader laps; None when the windows are unknown."""
     from race_neutralisations_v1 import load_race_neutralisations

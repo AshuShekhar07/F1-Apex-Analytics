@@ -85,7 +85,8 @@ def test_window_scoring_ignores_safety_car_stops():
 def test_backtest_end_to_end(synthetic_db):
     with synthetic_db.connect() as db:
         rows = run(db, start_year=2024, end_year=2024)
-    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M, "H hybrid (wear stops, track plan)"}
+    assert rows and {r.method for r in rows} == {"W winning strategy (track)", "E era front grid", M, "H hybrid (wear stops, track plan)",
+                                                    "PS1 pre-start: hybrid stops", "PS2 pre-start: start-tyre stops"}
     table = summarise(rows, M)
     assert {t[0] for t in table} >= {"stop_count_hit", "first_window_hit", "winner_sequence_hit"}
 
@@ -213,3 +214,35 @@ def test_predict_for_race_hybrid(synthetic_db):
         race_id = db.execute(sql("SELECT MAX(id) FROM races")).scalar()
         prediction, _, _, _ = predict_for_race(db, race_id, "hybrid")
     assert prediction is not None and "stop count" in prediction.source
+
+
+def test_pre_start_plan_follows_the_declared_starting_tyre():
+    from race_winning_strategy_v1 import predict_pre_start
+
+    cars = _history()
+    # at track 1 some front-runners started on HARD and one-stopped late
+    for race in (1, 2, 3):
+        cars.append(_car(race, 1, 5, ("HARD", "MEDIUM"), [36]))
+        cars.append(_car(race, 1, 4, ("HARD", "MEDIUM"), [38]))
+    front = clean_front_cars(cars, {})
+    kwargs = dict(wear=None, wear_by_race={}, track_id=1, regulation_era="e", total_laps=60)
+    hard = predict_pre_start(front, cars, start_compound="hard", stop_rule="start", **kwargs)
+    assert hard.sequence == ("HARD", "MEDIUM") and hard.windows[0].first_lap >= 30
+    assert hard.source.startswith("starting on HARD")
+    medium = predict_pre_start(front, cars, start_compound="MEDIUM", stop_rule="start", **kwargs)
+    assert medium.sequence[0] == "MEDIUM"
+    # PS1 keeps the hybrid's stop count when cars on that tyre ran it
+    from race_winning_strategy_v1 import predict_hybrid
+    hybrid = predict_hybrid(front, cars, **kwargs)
+    ps1 = predict_pre_start(front, cars, start_compound="MEDIUM", stop_rule="hybrid", **kwargs)
+    assert ps1.stops == hybrid.stops and ps1.sequence[0] == "MEDIUM"
+    # nobody at the front ever started on SOFT: the hybrid itself
+    soft = predict_pre_start(front, cars, start_compound="SOFT", **kwargs)
+    assert soft == hybrid
+
+
+def test_after_start_hit_scores_the_plan_after_the_first_tyre():
+    car = _car(50, 1, 1, TWO, [20, 45])
+    v = score_car(50, "X", car, sequence=("SOFT", "HARD", "HARD"), windows=None, first_stop=None,
+                  neutralised=frozenset()).values
+    assert v["sequence_hit"] == 0 and v["after_start_hit"] == 1
