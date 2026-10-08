@@ -114,3 +114,98 @@ def test_winning_strategy_and_live_strategy_endpoints(strategy_client):
     assert strategy_client.get("/strategy/winning", params={"race_id": 12345}).status_code == 404
     live = strategy_client.get("/records/live-strategy").json()
     assert live["model_version"] == MODEL_VERSION
+
+
+def _front_grid_with_start_tyres(db, race_id, tyres):
+    """Provisional grid P1.. for the race's entries (car order) and their starting tyres."""
+    from start_tyres_v1 import store
+
+    entries = [e for (e,) in db.execute(text("SELECT id FROM race_entries WHERE race_id = :r ORDER BY car_number"),
+                                        {"r": race_id})]
+    for slot, entry in enumerate(entries, start=1):
+        db.execute(text("INSERT INTO race_provisional_grid (race_id, race_entry_id, grid_position) VALUES (:r, :e, :p)"),
+                   {"r": race_id, "e": entry, "p": slot})
+    store(db, race_id, {e: t for e, t in zip(entries, tyres)}, "manual")
+    return entries
+
+
+def test_pre_start_stage_is_frozen_once_starting_tyres_are_stored(synthetic_db):
+    from race_winning_strategy_v1 import format_pre_start, predict_pre_start_for_race
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            _new_race(db)
+            _add_fp2(db, 99)
+            assert freeze(db, 99) == ["post_practice"]                    # no starting tyres yet
+            _front_grid_with_start_tyres(db, 99, ["MEDIUM", "MEDIUM", "HARD"])
+            result = predict_pre_start_for_race(db, 99)
+            assert [c["start"] for c in result["cars"]] == ["MEDIUM", "MEDIUM", "HARD"]
+            assert result["plans"]["MEDIUM"].sequence[0] == "MEDIUM"
+            assert "starts on HARD" in format_pre_start(result)
+            assert freeze(db, 99) == ["post_practice", "pre_start"]
+            stored = db.execute(text("""SELECT prediction, frozen_at_utc FROM winning_strategy_live
+                                        WHERE race_id = 99 AND stage = 'pre_start'""")).one()
+            assert set(stored[0]["plans"]) == {"MEDIUM", "HARD"} and len(stored[0]["cars"]) == 3
+            assert stored[1] is not None
+        finally:
+            tx.rollback()
+
+
+def test_pre_start_scoring_uses_each_cars_starting_tyre_and_skips_late_freezes(synthetic_db):
+    from race_winning_strategy_v1 import PitWindow, WinningStrategy, strategy_to_json
+    from strategy_live_record_v1 import ensure_table
+
+    plan = WinningStrategy(("MEDIUM", "HARD"), (PitWindow(1, 12, 16, 14),), {1: 1.0}, 10.0, 2, "track", "test")
+    body = json.dumps({"cars": [], "plans": {"MEDIUM": strategy_to_json(plan)}})
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            ensure_table(db)
+            for race_id, frozen in ((6, "2000-01-01"), (5, "2100-01-01")):
+                db.execute(text("""INSERT INTO winning_strategy_live
+                                   (race_id, stage, model_version, prediction, confidence_level, frozen_at_utc)
+                                   VALUES (:r, 'pre_start', :v, CAST(:p AS JSONB), 'medium', :f)"""),
+                           {"r": race_id, "v": MODEL_VERSION, "p": body, "f": frozen})
+            record = score(db)
+        finally:
+            tx.rollback()
+    by_race = {c["race_id"]: c for c in record["calls"]}
+    assert by_race[6]["scored"] and by_race[6]["predicted"] == ["MEDIUM start: MEDIUM -> HARD"]
+    assert by_race[6]["winner_ran_plan"] is True
+    assert not by_race[5]["scored"] and "after the race start" in by_race[5]["why_not_scored"]
+    assert record["summary"]["pre_start"]["weekends"] == 1
+
+
+def test_pipeline_fetches_starting_tyres_only_when_due(synthetic_db, monkeypatch):
+    import start_tyres_v1
+    from update_latest_races import fetch_start_tyres_if_due
+
+    calls = []
+
+    def fake_fetch(race_date, entries):
+        calls.append(race_date)
+        return {e: "MEDIUM" for e in entries.values()}, []
+    monkeypatch.setattr(start_tyres_v1, "fetch_start_tyres", fake_fetch)
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            fetch_start_tyres_if_due(db, 6)                               # already raced
+            _new_race(db)
+            _add_fp2(db, 99)
+            fetch_start_tyres_if_due(db, 99)                              # no qualifying yet
+            assert calls == []
+            q = db.execute(text("INSERT INTO sessions (race_id, session_type, start_time) VALUES (99, 'Q', now()) RETURNING id")).scalar()
+            entry = db.execute(text("SELECT id FROM race_entries WHERE race_id = 99 LIMIT 1")).scalar()
+            db.execute(text("INSERT INTO qualifying_results (session_id, race_entry_id, final_position) VALUES (:s, :e, 1)"),
+                       {"s": q, "e": entry})
+            fetch_start_tyres_if_due(db, 99)
+            assert len(calls) == 1
+            from start_tyres_v1 import load_start_tyres
+            assert len(load_start_tyres(db, 99)) == 6
+        finally:
+            tx.rollback()
+
+
+def test_pre_start_endpoint_404_without_starting_tyres(strategy_client):
+    assert strategy_client.get("/strategy/winning/pre-start", params={"race_id": 6}).status_code == 404

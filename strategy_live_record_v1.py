@@ -5,7 +5,11 @@ wear, so it is frozen at two stages:
 
   pre_practice   frozen while the practice tyre wear is not measured yet; rewritten until it is
   post_practice  frozen once the wear is measured (FP2, else FP1); rewritten until the race
-  Neither stage is touched once the race has results.
+  pre_start      once front-grid starting tyres are stored (start_tyres_v1): one plan per starting
+                 tyre (race_winning_strategy_v1.predict_pre_start, PS1 rule); rewritten until the
+                 race. Its UTC freeze time is kept: a pre_start plan frozen after the race's start
+                 time (sessions.start_time, FastF1's UTC session date) is shown but NOT counted.
+  No stage is touched once the race has results.
 
 Scored per raced weekend and stage (front grid P1-P5, the race's real stints):
   stop count right / tyre order right    : front-grid cars with no stop under SC/VSC/red flag
@@ -30,7 +34,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 MODEL_VERSION = "winning_strategy_h1"
-STAGES = ("pre_practice", "post_practice")
+STAGES = ("pre_practice", "post_practice", "pre_start")
 
 
 def ensure_table(db: Any) -> None:
@@ -66,18 +70,69 @@ def freeze(db: Any, race_id: int) -> list[str]:
                       frozen_at = now()"""),
         {"r": race_id, "s": stage, "v": MODEL_VERSION, "p": json.dumps(strategy_to_json(prediction)),
          "c": prediction.confidence})
-    return [stage]
+    return [stage] + freeze_pre_start(db, race_id)
+
+
+def freeze_pre_start(db: Any, race_id: int) -> list[str]:
+    """Freeze the per-starting-tyre plans once front-grid starting tyres are stored."""
+    from race_winning_strategy_v1 import pre_start_to_json, predict_pre_start_for_race
+
+    result = predict_pre_start_for_race(db, race_id)
+    if result is None or not any(result["plans"].values()):
+        return []
+    pole = result["plans"].get(result["cars"][0]["start"])
+    db.execute(text("""
+        INSERT INTO winning_strategy_live (race_id, stage, model_version, prediction, confidence_level, frozen_at_utc)
+        VALUES (:r, 'pre_start', :v, CAST(:p AS JSONB), :c, (now() AT TIME ZONE 'UTC'))
+        ON CONFLICT (race_id, stage, model_version)
+        DO UPDATE SET prediction = EXCLUDED.prediction, confidence_level = EXCLUDED.confidence_level,
+                      frozen_at = now(), frozen_at_utc = EXCLUDED.frozen_at_utc"""),
+        {"r": race_id, "v": MODEL_VERSION, "p": json.dumps(pre_start_to_json(result)),
+         "c": pole.confidence if pole else "low"})
+    return ["pre_start"]
+
+
+def score_plans(plans: dict, race_cars, laps) -> dict:
+    """Score front-grid cars against plans keyed by starting tyre (key None: one plan for every
+    car). laps: the race's SC/VSC/red-flag laps, None when unknown."""
+    from race_winning_strategy_v1 import is_front, review_race, review_to_json, stop_in_laps
+
+    out = {"green_front_cars": 0, "stop_count_right": 0, "tyre_order_right": 0, "stops_in_window": 0,
+           "stops_with_window": 0, "reviews": {}}
+    for start, plan in plans.items():
+        if plan is None:
+            continue
+        cars = [c for c in race_cars if start is None or (c.sequence and c.sequence[0] == start)]
+        review = review_race(plan, cars, laps)
+        green = [c for c in cars if is_front(c) and laps is not None
+                 and not any(lap in laps for lap in stop_in_laps(c))]
+        # as in the backtest: window hits only where the SC/VSC windows are known
+        hits, chances = review.window_hits if laps is not None else (0, 0)
+        out["green_front_cars"] += len(green)
+        out["stop_count_right"] += sum(len(c.stints) - 1 == plan.stops for c in green)
+        out["tyre_order_right"] += sum(c.sequence == plan.sequence for c in green)
+        out["stops_in_window"] += hits
+        out["stops_with_window"] += chances
+        out["reviews"][start or "all"] = review_to_json(review)
+    winner = next((c for c in race_cars if c.finish == 1), None)
+    plan = None if winner is None else plans.get(None, plans.get(winner.sequence[0] if winner.sequence else None))
+    out["winner_ran_plan"] = (winner.sequence == plan.sequence) if winner is not None and plan is not None else None
+    return out
+
+
+def _race_start_utc(db: Any, race_id: int):
+    return db.execute(text("SELECT start_time FROM sessions WHERE race_id = :r AND session_type = 'R'"),
+                      {"r": race_id}).scalar()
 
 
 def score(db: Any) -> dict:
     """Every raced weekend with a frozen winning strategy, per stage, and the totals."""
     from race_strategy_timing_v1 import load_car_strategies
-    from race_winning_strategy_v1 import (is_front, load_neutralised_laps, review_race, review_to_json,
-                                          stop_in_laps, strategy_from_json)
+    from race_winning_strategy_v1 import load_neutralised_laps, strategy_from_json
 
     ensure_table(db)
     frozen = db.execute(text("""
-        SELECT l.race_id, l.stage, l.prediction, l.confidence_level, l.frozen_at,
+        SELECT l.race_id, l.stage, l.prediction, l.confidence_level, l.frozen_at, l.frozen_at_utc,
                r.season_year, r.round_number, t.name AS track
         FROM winning_strategy_live l
         JOIN races r ON r.id = l.race_id JOIN tracks t ON t.id = r.track_id
@@ -89,29 +144,27 @@ def score(db: Any) -> dict:
     if frozen:
         years = [f["season_year"] for f in frozen]
         cars = load_car_strategies(db, start_year=min(years), end_year=max(years), wet_rule="tyres")
-        race_ids = {f["race_id"] for f in frozen}
-        neutralised = load_neutralised_laps(db, race_ids)
+        neutralised = load_neutralised_laps(db, {f["race_id"] for f in frozen})
         for f in frozen:
-            race_cars = [c for c in cars if c.race_id == f["race_id"]]
-            p = strategy_from_json(f["prediction"] if isinstance(f["prediction"], dict) else json.loads(f["prediction"]))
+            data = f["prediction"] if isinstance(f["prediction"], dict) else json.loads(f["prediction"])
+            if f["stage"] == "pre_start":
+                plans = {c: strategy_from_json(p) for c, p in data["plans"].items()}
+                predicted = [f"{c} start: " + " -> ".join(p.sequence) for c, p in plans.items()]
+            else:
+                plan = strategy_from_json(data)
+                plans, predicted = {None: plan}, list(plan.sequence)
             call = {"race_id": f["race_id"], "season": f["season_year"], "round": f["round_number"],
                     "track": f["track"], "stage": f["stage"], "frozen_at": f["frozen_at"],
-                    "confidence": f["confidence_level"], "predicted": list(p.sequence), "scored": False}
-            if race_cars and not race_cars[0].wet:
-                laps = neutralised.get(f["race_id"])
-                review = review_race(p, race_cars, laps)
-                green = [c for c in race_cars if is_front(c) and laps is not None
-                         and not any(lap in laps for lap in stop_in_laps(c))]
-                # as in the backtest: window hits only where the SC/VSC windows are known
-                hits, chances = review.window_hits if laps is not None else (0, 0)
-                call.update({
-                    "scored": True, "review": review_to_json(review),
-                    "green_front_cars": len(green),
-                    "stop_count_right": sum(len(c.stints) - 1 == p.stops for c in green),
-                    "tyre_order_right": sum(c.sequence == p.sequence for c in green),
-                    "stops_in_window": hits, "stops_with_window": chances,
-                    "winner_ran_plan": review.winner.plan_match if review.winner else None,
-                })
+                    "confidence": f["confidence_level"], "predicted": predicted, "scored": False}
+            race_cars = [c for c in cars if c.race_id == f["race_id"]]
+            start_utc = _race_start_utc(db, f["race_id"]) if f["stage"] == "pre_start" else None
+            if f["stage"] == "pre_start" and start_utc is not None and f["frozen_at_utc"] is not None \
+                    and f["frozen_at_utc"] >= start_utc:
+                call["why_not_scored"] = f"frozen at {f['frozen_at_utc']} UTC, after the race start ({start_utc} UTC)"
+            elif race_cars and not race_cars[0].wet:
+                result = score_plans(plans, race_cars, neutralised.get(f["race_id"]))
+                reviews = result.pop("reviews")
+                call.update(result, scored=True, review=reviews.get("all", reviews))
             else:
                 call["why_not_scored"] = "wet race" if race_cars else "no lap data for the race"
             calls.append(call)
@@ -133,7 +186,7 @@ def print_scorecard(record: dict) -> None:
         print("  no frozen winning strategy has been scored yet (the first one is scored after its race)")
         return
     for c in record["calls"]:
-        plan = " -> ".join(c["predicted"])
+        plan = "; ".join(c["predicted"]) if c["stage"] == "pre_start" else " -> ".join(c["predicted"])
         if not c["scored"]:
             print(f"  {c['season']} R{c['round']:<2} {c['track'][:20]:20} {c['stage']:13} {plan}: "
                   f"not scored ({c['why_not_scored']})")

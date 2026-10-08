@@ -94,6 +94,31 @@ def fill_regulation_era(db, season: int) -> list[int]:
     """), {"e": eras[0], "s": season}).scalars().all()
 
 
+def fetch_start_tyres_if_due(db, race_id: int) -> None:
+    """Before the race: try OpenF1 for the starting tyres (stored only with enough coverage;
+    hand-entered tyres are never overwritten). OpenF1 may publish them only after the start --
+    then the pre_start stage it allows is flagged late in the live record and not counted."""
+    from live_record_v1 import qualifying_loaded, race_has_results
+    from start_tyres_v1 import MIN_COVERAGE, fetch_start_tyres, load_start_tyres, race_entries_by_number, store
+
+    if race_has_results(db, race_id) or not qualifying_loaded(db, race_id):
+        return
+    if load_start_tyres(db, race_id):
+        return
+    race_date = db.execute(text("SELECT race_date FROM races WHERE id = :r"), {"r": race_id}).scalar()
+    entries = race_entries_by_number(db, race_id)
+    try:
+        tyres, problems = fetch_start_tyres(race_date, entries)
+    except Exception as exc:          # network trouble must not stop the pipeline
+        print(f"  starting tyres: OpenF1 not reachable ({exc})")
+        return
+    if entries and len(tyres) >= MIN_COVERAGE * len(entries):
+        store(db, race_id, tyres, "openf1")
+        print(f"  starting tyres: stored {len(tyres)} from OpenF1")
+    else:
+        print(f"  starting tyres: not available yet ({'; '.join(problems) or f'{len(tyres)} cars'})")
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -180,6 +205,7 @@ def main() -> int:
     with engine.begin() as db:
         try:
             race_id = next_race_id(db)
+            fetch_start_tyres_if_due(db, race_id)
             stages = freeze_strategy(db, race_id)
             print(f"  next race (id {race_id}) winning strategy: froze {', '.join(stages)}" if stages
                   else f"  next race (id {race_id}) winning strategy: nothing to freeze yet")

@@ -10,3 +10,10 @@ CREATE TABLE IF NOT EXISTS winning_strategy_live (
     frozen_at TIMESTAMP NOT NULL DEFAULT now(),
     PRIMARY KEY (race_id, stage, model_version)
 );
+
+-- pre_start (2026-10-08): the plan per declared starting tyre, frozen before lights out.
+-- frozen_at_utc is written in UTC so it can be checked against the race start time.
+ALTER TABLE winning_strategy_live DROP CONSTRAINT IF EXISTS winning_strategy_live_stage_check;
+ALTER TABLE winning_strategy_live ADD CONSTRAINT winning_strategy_live_stage_check
+    CHECK (stage IN ('pre_practice', 'post_practice', 'pre_start'));
+ALTER TABLE winning_strategy_live ADD COLUMN IF NOT EXISTS frozen_at_utc TIMESTAMP;

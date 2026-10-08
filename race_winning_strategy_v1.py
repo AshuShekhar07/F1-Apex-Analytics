@@ -521,10 +521,8 @@ def load_race_context(db: Any, race_id: int) -> dict | None:
     """), {"r": race_id}).mappings().first()
 
 
-def predict_for_race(db: Any, race_id: int, method: str = "track"
-                     ) -> tuple[WinningStrategy | None, list[TrackRaceRecord], RaceReview | None, dict]:
-    """Prediction from races strictly before this one, the track record and, when the race has
-    been run, its review. method: "track" (front-grid history) or "hybrid" (predict_hybrid)."""
+def _race_inputs(db: Any, race_id: int) -> dict:
+    """Everything a prediction for this race needs, from races strictly before it."""
     from dataclasses import replace
 
     from race_strategy_timing_v1 import load_car_strategies, race_wet_flags
@@ -541,29 +539,111 @@ def predict_for_race(db: Any, race_id: int, method: str = "track"
     race_cars = [c for c in cars if c.race_id == race_id]
     total_laps = (race_cars[0].race_laps if race_cars else race["total_race_laps"]
                   or max((c.race_laps for c in history if c.track_id == race["track_id"]), default=None))
+    out = {"race": dict(race), "fact_cars": fact_cars, "history": history, "race_cars": race_cars,
+           "total_laps": int(total_laps) if total_laps else None}
     if not total_laps or not race["regulation_era"]:
-        return None, [], None, dict(race)
-    neutralised = load_neutralised_laps(db, {c.race_id for c in cars if c.track_id == race["track_id"]
-                                             or c.race_date < race["race_date"]})
-    front = clean_front_cars(history, neutralised)
-    if method == "hybrid":
-        from race_practice_pace_v1 import load_weekend_wear
+        return out
+    out["neutralised"] = load_neutralised_laps(db, {c.race_id for c in cars if c.track_id == race["track_id"]
+                                                    or c.race_date < race["race_date"]})
+    out["front"] = clean_front_cars(history, out["neutralised"])
+    out["record"] = track_record([c for c in fact_cars if c.race_date < race["race_date"]], out["neutralised"],
+                                 track_id=race["track_id"])
+    return out
 
-        wear_by_race = {r: load_weekend_wear(db, r) for r in {c.race_id for c in history} | {race_id}}
+
+def _wear_by_race(db: Any, history: Sequence[CarStrategy], race_id: int) -> dict[int, float | None]:
+    from race_practice_pace_v1 import load_weekend_wear
+
+    return {r: load_weekend_wear(db, r) for r in {c.race_id for c in history} | {race_id}}
+
+
+def predict_for_race(db: Any, race_id: int, method: str = "track"
+                     ) -> tuple[WinningStrategy | None, list[TrackRaceRecord], RaceReview | None, dict]:
+    """Prediction from races strictly before this one, the track record and, when the race has
+    been run, its review. method: "track" (front-grid history) or "hybrid" (predict_hybrid)."""
+    inputs = _race_inputs(db, race_id)
+    race = inputs["race"]
+    if "front" not in inputs:
+        return None, [], None, race
+    front, history = inputs["front"], inputs["history"]
+    kwargs = dict(track_id=race["track_id"], regulation_era=race["regulation_era"], total_laps=inputs["total_laps"])
+    if method == "hybrid":
+        wear_by_race = _wear_by_race(db, history, race_id)
         prediction = predict_hybrid(front, history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
-                                    track_id=race["track_id"], regulation_era=race["regulation_era"],
-                                    total_laps=int(total_laps))
+                                    **kwargs)
         race = {**race, "practice_wear": wear_by_race.get(race_id)}
     else:
-        prediction = predict_winning_strategy(front, track_id=race["track_id"],
-                                              regulation_era=race["regulation_era"], total_laps=int(total_laps))
-    record = track_record([c for c in fact_cars if c.race_date < race["race_date"]], neutralised,
-                          track_id=race["track_id"])
+        prediction = predict_winning_strategy(front, **kwargs)
     review = None
-    fact_race = [c for c in fact_cars if c.race_id == race_id]
+    fact_race = [c for c in inputs["fact_cars"] if c.race_id == race_id]
     if prediction is not None and fact_race and not fact_race[0].wet:
-        review = review_race(prediction, race_cars, neutralised.get(race_id))
-    return prediction, record, review, dict(race)
+        review = review_race(prediction, inputs["race_cars"], inputs["neutralised"].get(race_id))
+    return prediction, inputs["record"], review, race
+
+
+# --- pre-start stage for one race (starting tyres stored by start_tyres_v1) --------------------
+
+def front_grid_order(db: Any, race_id: int) -> dict[int, int]:
+    """race_entry_id -> grid slot for the front grid: the provisional grid (penalties applied)
+    when stored, else the qualifying order."""
+    from sqlalchemy import text
+
+    rows = db.execute(text("""
+        SELECT race_entry_id, grid_position FROM race_provisional_grid WHERE race_id = :r"""), {"r": race_id}).all()
+    if not rows:
+        rows = db.execute(text("""
+            SELECT q.race_entry_id, q.final_position FROM qualifying_results q
+            JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+            WHERE s.race_id = :r AND q.final_position IS NOT NULL"""), {"r": race_id}).all()
+    return {int(e): int(g) for e, g in rows if g is not None and 1 <= int(g) <= FRONT_GRID}
+
+
+def predict_pre_start_for_race(db: Any, race_id: int) -> dict | None:
+    """Per front-grid car: its declared starting tyre and the plan for it (predict_pre_start,
+    PS1 rule). None when no front-grid car has a stored starting tyre."""
+    from sqlalchemy import text
+
+    from start_tyres_v1 import load_start_tyres
+
+    starts = load_start_tyres(db, race_id)
+    grid = front_grid_order(db, race_id)
+    declared = {e: starts[e] for e in grid if e in starts}
+    if not declared:
+        return None
+    inputs = _race_inputs(db, race_id)
+    race = inputs["race"]
+    if "front" not in inputs:
+        return None
+    history = inputs["history"]
+    wear_by_race = _wear_by_race(db, history, race_id)
+    plans = {c: predict_pre_start(inputs["front"], history, start_compound=c, wear=wear_by_race.get(race_id),
+                                  wear_by_race=wear_by_race, track_id=race["track_id"],
+                                  regulation_era=race["regulation_era"], total_laps=inputs["total_laps"])
+             for c in sorted(set(declared.values()))}
+    names = dict(db.execute(text("""
+        SELECT re.id, d.name FROM race_entries re JOIN drivers d ON d.id = re.driver_id
+        WHERE re.race_id = :r"""), {"r": race_id}).all())
+    cars = [{"grid": grid[e], "race_entry_id": e, "driver": names.get(e), "start": declared[e]}
+            for e in sorted(declared, key=grid.get)]
+    return {"race": {**race, "practice_wear": wear_by_race.get(race_id)}, "cars": cars, "plans": plans,
+            "record": inputs["record"]}
+
+
+def pre_start_to_json(result: dict) -> dict:
+    return {"cars": result["cars"],
+            "plans": {c: strategy_to_json(p) for c, p in result["plans"].items() if p is not None}}
+
+
+def format_pre_start(result: dict) -> str:
+    lines = ["Pre-start winning strategy (starting tyres declared):"]
+    for car in result["cars"]:
+        lines.append(f"  P{car['grid']} {car['driver'] or car['race_entry_id']}: starts on {car['start']}")
+    for compound, plan in result["plans"].items():
+        if plan is None:
+            continue
+        lines.append(f"\nFront-runners starting on {compound}:")
+        lines += ["  " + line for line in format_strategy(plan).splitlines()]
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -576,8 +656,16 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--race-id", type=int, required=True)
-    parser.add_argument("--method", choices=("track", "hybrid"), default="track")
+    parser.add_argument("--method", choices=("track", "hybrid", "pre_start"), default="track")
     args = parser.parse_args()
+    if args.method == "pre_start":
+        with create_engine(os.environ["DATABASE_URL"]).connect() as db:
+            result = predict_pre_start_for_race(db, args.race_id)
+        if result is None:
+            print("No starting tyres stored for the front grid yet: run start_tyres_v1.py --race-id first.")
+            return 1
+        print(format_pre_start(result))
+        return 0
     with create_engine(os.environ["DATABASE_URL"]).connect() as db:
         prediction, record, review, race = predict_for_race(db, args.race_id, args.method)
     print(f"{race['track_name']} {race['season_year']} (race {args.race_id}, {race['race_date']})")

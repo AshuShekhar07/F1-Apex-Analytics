@@ -226,6 +226,33 @@ def winning_strategy(
     return body
 
 
+@router.get("/winning/pre-start")
+def winning_strategy_pre_start(
+    race_id: int = Query(..., ge=1, description="Database race ID"),
+    db: Session = Depends(get_db),
+):
+    """The winning strategy once the front grid's starting tyres are declared: one plan per
+    starting tyre, from front-grid cars that started on it (stop count still from practice tyre
+    wear). Walk-forward 2022-25: first pit window 5.8 laps wide instead of 6.1 at the same hit
+    rate; tyre order (no safety-car stop) 41% vs 38%, mostly from knowing the first tyre.
+    Starting tyres come from start_tyres_v1 (OpenF1 or entered by hand); 404 until stored.
+    """
+    from race_winning_strategy_v1 import pre_start_to_json, predict_pre_start_for_race, record_to_json
+
+    try:
+        result = predict_pre_start_for_race(db, race_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="no starting tyres stored for the front grid yet")
+    race = result["race"]
+    return {"race_id": race_id, "track": race["track_name"], "season": race["season_year"],
+            "race_date": str(race["race_date"]), **pre_start_to_json(result),
+            "track_record": record_to_json(result["record"]),
+            "note": "Green-flag plans for the front of the grid (P1-P5): a Safety Car or VSC can open an "
+                    "earlier, cheaper stop."}
+
+
 @router.get("/predict-v6", response_model=StrategyPrediction, deprecated=True)
 def predict_strategy_v6(
     track_id: int = Query(
