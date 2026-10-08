@@ -8,6 +8,18 @@ from race_status import CLASSIFIED_STATUSES
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
 
+@router.get("")
+def list_tracks(db: Session = Depends(get_db)):
+    """Every circuit with its races in the database (for the track explorer)."""
+    rows = db.execute(text("""
+        SELECT t.id, t.name, t.country, t.length_km, t.lap_record,
+               COUNT(r.id) AS races, MIN(r.season_year) AS first_season, MAX(r.season_year) AS last_season
+        FROM tracks t LEFT JOIN races r ON r.track_id = t.id
+        GROUP BY t.id ORDER BY t.name
+    """)).mappings().all()
+    return [dict(r) for r in rows]
+
+
 @router.get("/{track_id}/stats")
 def get_track_stats(track_id: int, db: Session = Depends(get_db)):
     track = db.execute(text("""

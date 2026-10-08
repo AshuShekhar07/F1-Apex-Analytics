@@ -365,3 +365,74 @@ def get_driver_profile(driver_id: int, db: Session = Depends(get_db)):
         ),
         "last_gp_win": dict(last_win) if last_win else None,
     }
+
+
+@router.get("/roster/{season}")
+def get_season_roster(season: int = Path(..., ge=2018, le=2100), db: Session = Depends(get_db)):
+    """Every race driver of a season with their latest team, photo and stats: this season's
+    and their career since 2018 (the seasons in the database). Points include sprints; poles
+    are qualifying P1; DNFs count retirements (race_status.DNF_STATUSES)."""
+    roster = db.execute(text("""
+        SELECT DISTINCT ON (re.driver_id)
+               re.driver_id, re.car_number, d.name, d.nationality, d.photo_url, d.country_code,
+               d.total_world_championships, tm.id AS team_id, tm.name AS team_name, tm.color_hex, tm.logo_url
+        FROM race_entries re
+        JOIN races r ON r.id = re.race_id
+        JOIN drivers d ON d.id = re.driver_id
+        JOIN teams tm ON tm.id = re.team_id
+        WHERE r.season_year = :s AND re.role = 'race_driver'
+        ORDER BY re.driver_id, r.round_number DESC
+    """), {"s": season}).mappings().all()
+    if not roster:
+        raise HTTPException(status_code=404, detail=f"No drivers found for {season}")
+    ids = [int(r["driver_id"]) for r in roster]
+    results = db.execute(text("""
+        SELECT re.driver_id, r.season_year, s.session_type, rr.finishing_position, rr.points, rr.status
+        FROM race_results rr
+        JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
+        JOIN race_entries re ON re.id = rr.race_entry_id
+        JOIN races r ON r.id = s.race_id
+        WHERE re.driver_id = ANY(:ids) AND re.role = 'race_driver'
+    """), {"ids": ids}).mappings().all()
+    qualifying = db.execute(text("""
+        SELECT re.driver_id, r.season_year, q.final_position
+        FROM qualifying_results q
+        JOIN sessions s ON s.id = q.session_id AND s.session_type = 'Q'
+        JOIN race_entries re ON re.id = q.race_entry_id
+        JOIN races r ON r.id = s.race_id
+        WHERE re.driver_id = ANY(:ids) AND re.role = 'race_driver' AND q.final_position IS NOT NULL
+    """), {"ids": ids}).mappings().all()
+
+    def stats(driver_id: int, only_season: int | None) -> dict:
+        def keep(row) -> bool:
+            return row["driver_id"] == driver_id and (only_season is None or row["season_year"] == only_season)
+        races = [r for r in results if keep(r) and r["session_type"] == "R"]
+        finishes = [int(r["finishing_position"]) for r in races if r["finishing_position"] is not None]
+        quali = [int(q["final_position"]) for q in qualifying if keep(q)]
+        return {
+            "races": len(races),
+            "wins": sum(f == 1 for f in finishes),
+            "podiums": sum(f <= 3 for f in finishes),
+            "points": round(sum(float(r["points"] or 0) for r in results if keep(r)), 1),
+            "poles": sum(p == 1 for p in quali),
+            "best_finish": min(finishes) if finishes else None,
+            "average_finish": round(sum(finishes) / len(finishes), 2) if finishes else None,
+            "average_qualifying": round(sum(quali) / len(quali), 2) if quali else None,
+            "dnfs": sum(r["status"] in DNF_STATUSES for r in races),
+        }
+
+    out = []
+    for r in roster:
+        driver_id = int(r["driver_id"])
+        out.append({
+            "id": driver_id, "name": r["name"], "number": r["car_number"], "nationality": r["nationality"],
+            "country_code": r["country_code"], "photo_url": r["photo_url"],
+            "world_championships": int(r["total_world_championships"] or 0),
+            "team": {"id": r["team_id"], "name": r["team_name"], "color_hex": r["color_hex"],
+                     "logo_url": r["logo_url"]},
+            "season": stats(driver_id, season),
+            "career_since_2018": stats(driver_id, None),
+        })
+    out.sort(key=lambda d: (-d["season"]["points"], d["name"]))
+    return {"season": season, "drivers": out,
+            "note": "career figures cover the seasons in the database (2018 onwards)"}
