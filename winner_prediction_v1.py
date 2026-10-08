@@ -274,7 +274,10 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
     grid, grid_source = known_grid(db, race_id)
     quali = quali_positions(db, race_id)
     driver_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM drivers"))} if names else {})
-    team_names = ({int(i): n for i, n in db.execute(text("SELECT id, name FROM teams"))} if names else {})
+    team_names, team_colors = {}, {}
+    if names:
+        for i, n, c in db.execute(text("SELECT id, name, color_hex FROM teams")):
+            team_names[int(i)], team_colors[int(i)] = n, c
     table = load_confidence()
     evidence = data_stage(weekends, race["race_date"], race["season_year"], race["regulation_era"])
     stages = {}
@@ -289,10 +292,12 @@ def predict(db: Any, race_id: int, *, names: bool = True) -> dict:
         fav = ranked[0]
         stages[stage] = {
             "favourite": {"driver_id": fav, "driver_name": driver_names.get(fav), "team_name": team_names.get(lineup[fav]),
+                          "color_hex": team_colors.get(lineup[fav]),
                           "p_win": round(probs.p_win[fav], 4), "p_podium": round(probs.p_podium[fav], 4)},
             "confidence": confidence(stage, probs.p_win[fav], table, evidence),
             "win_calibration_power": win_power(stage, table),
             "drivers": [{"driver_id": d, "driver_name": driver_names.get(d), "team_name": team_names.get(lineup[d]),
+                         "color_hex": team_colors.get(lineup[d]),
                          "grid": (grid or {}).get(d) if stage == "post_qualifying" else None,
                          "p_win": round(probs.p_win[d], 4), "p_podium": round(probs.p_podium[d], 4)}
                         for d in ranked],
