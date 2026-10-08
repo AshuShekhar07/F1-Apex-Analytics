@@ -32,6 +32,15 @@ RESULT 2026-10-06 (2022-25, 70 races, 328 front-grid cars). W NOT PROMOTED over 
   Confidence levels are ordered: stop count right medium 0.552 (119 cars), low 0.328 (104);
   main or alternative right medium 0.902, low 0.797; high had 1 race (too few to judge).
   2026 (13 races): no clear difference vs M anywhere.
+PRE-START 2026-10-08 (pre_start.txt, vs H, same front-grid cars). PS1 PASSES the rule, PS2 REJECTED.
+  PS1 2022-25: tyre order (no SC stop) 0.414 vs 0.382 BETTER [+0.007, +0.067]; first window 5.76 vs
+  6.09 laps wide BETTER with the same hit rate (0.392 vs 0.386); plan after the first tyre 0.314
+  vs 0.311 (n.s.: the tyre-order gain is mostly the given first tyre); at the edge of worse but
+  not worse: stop count 0.458 vs 0.478 [-0.043, +0.000], second window 0.380 vs 0.504 [-0.144,
+  +0.000]. 2026 (13 races): no clear difference anywhere (stop count 0.567 vs 0.528).
+  PS2 (stop count from cars on the same starting tyre): lower on most metrics, first stop within
+  3 laps 0.409 vs 0.463 (n.s.) -- the practice-wear stop count stays.
+  Source: OpenF1 first stint = lap-1 tyre for 461/461 cars (2025) and 339/339 (2026, 6 missing).
 HYBRID H 2026-10-06 (same cars). 2022-25 (70 races, 328 front-grid cars), H vs M: stop count
   0.478 = 0.478 (same by construction), green 0.573 = 0.573; tyre order 0.308 vs 0.324
   (-0.016 [-0.047, +0.013], n.s.), green 0.382 vs 0.402 (n.s.); first stop within 3 laps 0.463
