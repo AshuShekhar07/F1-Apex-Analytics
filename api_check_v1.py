@@ -7,6 +7,8 @@ Checks, in order, and ends with a PROBLEMS list:
   3. server     whether an API answers on :8000, whether it is this folder's code (the
                 website needs routes that only feature/frontend has), and whether the
                 website's dev server (:5173) reaches it
+  3b. data     how much of the extra data (speed traps, tyre age, telemetry summaries,
+                race control, weather samples, corners) each season has
   4. endpoints  every API call the website makes, run inside this script against the real
                 database, with the time each took and the full error when one fails
   5. FastF1     for the next race's sessions that have run but have no data here: has F1
@@ -185,6 +187,66 @@ def database(url: str) -> dict | None:
             problem("a connection has held a transaction open for over 5 minutes (listed above)")
     engine.dispose()
     return race
+
+
+def fan_data(url: str) -> None:
+    """Read-only coverage of the data beyond results and lap times, per season."""
+    section("3b. extra data in the database, per season")
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(url, connect_args={"options": "-c statement_timeout=180000"})
+    per_lap = {
+        "laps": "COUNT(*)",
+        "speed_trap": "COUNT(l.speed_st_kmh)",
+        "tyre_age": "COUNT(l.tyre_life_laps)",
+        "position": "COUNT(l.position)",
+        "pit_in": "COUNT(l.pit_in_time_seconds)",
+        "deleted": "COUNT(*) FILTER (WHERE l.is_deleted)",
+    }
+    per_session = {
+        "telemetry": "lap_telemetry_summary",
+        "race_ctrl": "session_race_control_messages",
+        "weather_s": "session_weather_samples",
+    }
+    with engine.connect() as db:
+        exists = {t: db.execute(text("SELECT to_regclass(:t) IS NOT NULL"), {"t": t}).scalar()
+                  for t in [*per_session.values(), "track_corners", "race_strategy_pit_stops"]}
+        cols = [c for c in ("speed_st_kmh", "tyre_life_laps", "pit_in_time_seconds", "is_deleted")
+                if db.execute(text("SELECT 1 FROM information_schema.columns WHERE table_name = 'laps' "
+                                   "AND column_name = :c"), {"c": c}).scalar()]
+        lap_exprs = {k: v for k, v in per_lap.items()
+                     if not any(c in v for c in ("speed_st_kmh", "tyre_life_laps", "pit_in_time_seconds", "is_deleted"))
+                     or any(c in v for c in cols)}
+        try:
+            rows = db.execute(text(f"""
+                SELECT r.season_year, {', '.join(f'{v} AS {k}' for k, v in lap_exprs.items())}
+                FROM laps l JOIN sessions s ON s.id = l.session_id JOIN races r ON r.id = s.race_id
+                GROUP BY r.season_year ORDER BY r.season_year""")).mappings().all()
+        except Exception as exc:
+            print(f"  laps: {type(exc).__name__}: {str(exc).splitlines()[0]}")
+            rows = []
+        extra = {}
+        for key, table in per_session.items():
+            if not exists[table]:
+                continue
+            for season, n in db.execute(text(f"""
+                SELECT r.season_year, COUNT(*) FROM {table} x JOIN sessions s ON s.id = x.session_id
+                JOIN races r ON r.id = s.race_id GROUP BY r.season_year""")):
+                extra.setdefault(season, {})[key] = n
+        if exists["race_strategy_pit_stops"]:
+            for season, n in db.execute(text("""
+                SELECT r.season_year, COUNT(*) FROM race_strategy_pit_stops p JOIN races r ON r.id = p.race_id
+                GROUP BY r.season_year""")):
+                extra.setdefault(season, {})["pit_stops"] = n
+        keys = [*lap_exprs, *[k for k in per_session if exists[per_session[k]]], "pit_stops"]
+        print("  season " + " ".join(f"{k:>10}" for k in keys))
+        for r in rows:
+            values = [r[k] for k in lap_exprs] + [extra.get(r["season_year"], {}).get(k, 0) for k in keys[len(lap_exprs):]]
+            print(f"  {r['season_year']:>6} " + " ".join(f"{v:>10}" for v in values))
+        if exists["track_corners"]:
+            n = db.execute(text("SELECT COUNT(DISTINCT track_id), COUNT(*) FROM track_corners")).one()
+            print(f"  corner maps: {n[0]} tracks, {n[1]} corners")
+    engine.dispose()
 
 
 def fetch(url: str, timeout: float = 30) -> tuple[int | str, float, bytes]:
@@ -451,6 +513,10 @@ def main() -> int:
         race = database(url)
     server()
     if url:
+        try:
+            fan_data(url)
+        except Exception:
+            print(f"  (could not count: {traceback.format_exc().strip().splitlines()[-1]})")
         endpoints(url, race)
     if not args.skip_fastf1:
         try:
