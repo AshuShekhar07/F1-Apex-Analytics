@@ -51,8 +51,10 @@ python audit_schema_drift_v1.py
 ## Run
 
 ```bash
-uvicorn app.main:app --reload          # API on :8000, docs at /docs (run from repo root)
-cd circuit-viz-app && npm install && npm run dev   # 3D circuit visualizer on :5173
+./run_site.sh                          # API on :8000 + website on :5173; Ctrl+C stops both
+uvicorn app.main:app --reload          # or the API alone: :8000, docs at /docs (run from repo root)
+python api_check_v1.py > api_check.txt 2>&1   # site or API not working: one report saying why
+cd circuit-viz-app && npm install && npm run dev   # 3D circuit visualizer (also :5173, run it alone)
 ```
 
 ## Strategy data layer (Phase 2, read-only audits)
