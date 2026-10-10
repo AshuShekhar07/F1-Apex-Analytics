@@ -322,3 +322,142 @@ export interface TrackStats {
   total_races_recorded: number
   historical_winners: { season_year: number; driver_name: string; team_name: string; color_hex: string | null }[]
 }
+
+// --- pit wall redesign: season matrix, weekend sessions, live record, strategy, laps ----------
+
+export interface MatrixResult {
+  position: number | null
+  grid: number | null
+  points: number
+  status: string | null
+  classified: boolean
+  dnf: boolean
+}
+
+export interface MatrixCell {
+  round: number
+  team_id: number | null
+  race: MatrixResult | null
+  sprint: MatrixResult | null
+}
+
+export interface MatrixTeam {
+  id: number
+  name: string | null
+  color_hex: string | null
+  logo_url: string | null
+}
+
+export interface SeasonResults {
+  season: number
+  latest_round: number | null
+  rounds: { race_id: number; round: number; race_date: string; track_name: string; country: string | null;
+    weekend_format: string | null; sprint: boolean; raced: boolean }[]
+  drivers: { id: number; name: string; number: number | null; team: MatrixTeam | null; points: number; wins: number;
+    podiums: number; results: MatrixCell[] }[]
+  teams: (MatrixTeam & { points: number; wins: number; by_round: { round: number; points: number }[] })[]
+  note: string
+}
+
+export interface WeekendSession {
+  type: string
+  name: string
+  loaded: boolean
+  start_time_utc: string | null
+  has_laps: boolean
+  has_results: boolean
+}
+
+export interface RaceSessions {
+  race_id: number
+  season: number
+  round: number
+  race_date: string
+  track_name: string
+  weekend_format: string
+  sessions: WeekendSession[]
+}
+
+export interface Health {
+  status: string
+  problems: string[]
+  latest_forecast: { race_id: number; grid_source: string; computed_at: string } | null
+  last_pipeline_run: { job: string; started_at: string; finished_at: string | null; status: string } | null
+  last_pipeline_run_minutes_ago: number | null
+}
+
+export interface LiveCall {
+  race_id: number
+  season: number
+  round: number
+  track: string
+  stage: string
+  confidence: string
+  favourite: string
+  favourite_p_win: number
+  winner: string | null
+  winner_rank: number | null
+  winner_p_win: number
+  favourite_won: boolean
+  winner_in_top3: boolean
+}
+
+export interface LiveRecord {
+  model_version: string
+  summary: Record<string, { calls: number; favourite_won: number; winner_in_top3: number; mean_favourite_p_win: number }>
+  calls: LiveCall[]
+}
+
+export interface PitWindow {
+  stop: number
+  first_lap: number
+  last_lap: number
+  typical_lap: number
+}
+
+export interface WinningPlan {
+  sequence: string[]
+  stops: number
+  pit_windows: PitWindow[]
+  confidence: string
+  front_grid_share: number | null
+  stop_chances: Record<string, number>
+  alternative: { sequence: string[]; stops: number; pit_windows: PitWindow[]; front_grid_share: number } | null
+  track_cars: number
+  track_races: number
+  note: string
+}
+
+export interface WinningStrategy {
+  race_id: number
+  track: string
+  season: number
+  race_date: string
+  total_laps: number | null
+  practice_wear_measured: boolean
+  prediction: WinningPlan
+  track_record: { race_id: number; season: number; winner_grid: number | null; winner_sequence: string[] | null;
+    winner_stop_laps: number[] }[]
+}
+
+export interface PositionBattle {
+  race_id: number
+  track_name: string
+  results: { driver_id: number; driver_name: string; team_name: string; color_hex: string | null;
+    starting_grid_position: number | null; finishing_position: number | null; status: string | null;
+    positions: { lap: number; position: number | null }[] }[]
+}
+
+export interface QualifyingRow {
+  driver_id: number
+  driver_name: string
+  car_number: number | null
+  team_name: string
+  color_hex: string | null
+  final_position: number | null
+  q1_time: number | null
+  q2_time: number | null
+  q3_time: number | null
+  gap_to_pole: number | null
+  eliminated_in: string | null
+}

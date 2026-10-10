@@ -8,7 +8,7 @@ import { lapPoints, type Circuit, type Pt } from '../circuitTypes'
 import { centre, radius, ribbonArrays } from './ribbon'
 
 const SAMPLE_EVERY_M = 5
-const BACKGROUND = '#06060a'
+const BACKGROUND = '#050506'
 const ELEVATION = THREE.MathUtils.degToRad(55)   // camera angle above the ground
 
 /** Road width in metres. A real circuit is 12-15 m, which is a hairline at full-circuit zoom,
@@ -37,7 +37,7 @@ function Ribbon({ points, colour, width, thickness }: { points: Pt[]; colour: st
   }, [points, width, thickness])
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={0.9} roughness={0.35} metalness={0.2}
+      <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={0.45} roughness={0.35} metalness={0.2}
         side={THREE.DoubleSide} />
     </mesh>
   )
@@ -115,7 +115,7 @@ export default function TrackScene({ circuit }: { circuit: Circuit }) {
       <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.7}
         minPolarAngle={0.25} maxPolarAngle={Math.PI / 2.3} />
       <EffectComposer>
-        <Bloom intensity={0.85} luminanceThreshold={0.2} luminanceSmoothing={0.3} mipmapBlur />
+        <Bloom intensity={0.35} luminanceThreshold={0.35} luminanceSmoothing={0.3} mipmapBlur />
       </EffectComposer>
     </Canvas>
   )

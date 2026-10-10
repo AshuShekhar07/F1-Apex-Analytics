@@ -1,108 +1,215 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api'
-import { ConfidenceBadge, ConfidenceBasis } from '../components/Confidence'
-import { DriverName } from '../components/DriverName'
-import { ErrorBox, Loading } from '../components/Status'
-import { TitleChart } from '../components/TitleChart'
-import { pct, roundLabel, topTitleSeries } from '../format'
+import { LineChart, type Series } from '../charts/LineChart'
+import { ErrorBox } from '../components/Status'
+import { pct } from '../format'
 import { useAsync } from '../hooks'
-import type { Championship, ChampionshipHistory, TitleEntry } from '../types'
-import { SEASONS } from './SeasonPage'
+import { driverCode } from '../names'
+import { SEASONS } from '../seasons'
+import { glowColour, normaliseHex } from '../theme/color'
+import type { Championship, ChampionshipHistory, SeasonResults } from '../types'
 
-const KINDS = [
-  { key: 'drivers', title: "Drivers' title" },
-  { key: 'constructors', title: "Constructors' title" },
-] as const
+type Kind = 'drivers' | 'constructors'
 
-function entryName(e: TitleEntry) {
-  return e.driver_name ?? e.team_name ?? 'Unknown'
+interface StandingRow {
+  id: number
+  name: string
+  short: string
+  sub: string | null
+  colour: string | null
+  points: number
+  wins: number
+  podiums: number | null
+  projected: number | null
+  title: number | null
+  dashed: boolean
 }
 
-function TitleSection({ kind, title, champ, history }: {
-  kind: 'drivers' | 'constructors'
-  title: string
-  champ: Championship
-  history: ChampionshipHistory | null | undefined
-}) {
-  const entries = champ[kind].filter((e) => e.p_title >= 0.0005 || e.points_now > 0).slice(0, 8)
-  const conf = champ.confidence[kind]
-  const series = history ? topTitleSeries(history[kind], 4) : []
-  return (
-    <section>
-      <div className="section-head">
-        <h2>{title}</h2>
-        <ConfidenceBadge level={conf.level} />
-      </div>
-      <ConfidenceBasis lines={[conf.basis, conf.chance_basis]} />
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>{kind === 'drivers' ? 'Driver' : 'Team'}</th>
-              <th>Title chance</th>
-              <th>Points now</th>
-              <th>Expected final</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={e.driver_id ?? e.team_id}>
-                <td>
-                  <DriverName name={entryName(e)} color={e.color_hex} team={kind === 'drivers' ? e.team_name : null} />
-                </td>
-                <td>
-                  <div className="prob"><div className="prob-fill" style={{ width: `${e.p_title * 100}%` }} /><span>{pct(e.p_title, 1)}</span></div>
-                </td>
-                <td className="pos">{Math.round(e.points_now)}</td>
-                <td className="muted">{Math.round(e.expected_points)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {series.length > 0 && <TitleChart series={series} kind={kind} title={`${title}: chance after each round`} />}
-    </section>
-  )
+function teamCode(name: string): string {
+  return name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean)[0]?.slice(0, 3).toUpperCase() ?? '???'
+}
+
+function standings(kind: Kind, m: SeasonResults | null | undefined, c: Championship | null | undefined): StandingRow[] {
+  const proj = new Map((c?.[kind] ?? []).map((e) => [(kind === 'drivers' ? e.driver_id : e.team_id) ?? -1, e]))
+  if (m) {
+    if (kind === 'drivers') {
+      const seenTeam = new Set<number>()
+      return m.drivers.map((d) => {
+        const teamId = d.team?.id ?? -1
+        const dashed = seenTeam.has(teamId)
+        seenTeam.add(teamId)
+        const e = proj.get(d.id)
+        return { id: d.id, name: d.name, short: driverCode(d.name), sub: d.team?.name ?? null, colour: d.team?.color_hex ?? null,
+          points: d.points, wins: d.wins, podiums: d.podiums, projected: e?.expected_points ?? null, title: e?.p_title ?? null, dashed }
+      })
+    }
+    return m.teams.map((t) => {
+      const e = proj.get(t.id)
+      return { id: t.id, name: t.name ?? '?', short: teamCode(t.name ?? '?'), sub: null, colour: t.color_hex, points: t.points,
+        wins: t.wins, podiums: null, projected: e?.expected_points ?? null, title: e?.p_title ?? null, dashed: false }
+    })
+  }
+  return (c?.[kind] ?? []).map((e) => ({
+    id: (kind === 'drivers' ? e.driver_id : e.team_id) ?? 0, name: (kind === 'drivers' ? e.driver_name : e.team_name) ?? '?',
+    short: kind === 'drivers' ? driverCode(e.driver_name ?? '???') : teamCode(e.team_name ?? '?'),
+    sub: kind === 'drivers' ? e.team_name ?? null : null, colour: e.color_hex ?? null, points: e.points_now, wins: 0, podiums: null,
+    projected: e.expected_points, title: e.p_title, dashed: false,
+  }))
+}
+
+function progression(kind: Kind, m: SeasonResults, rows: StandingRow[], top: number): Series[] {
+  const raced = m.rounds.filter((r) => r.raced).map((r) => r.round)
+  return rows.slice(0, top).map((row) => {
+    let total = 0
+    const perRound = kind === 'drivers'
+      ? new Map(m.drivers.find((d) => d.id === row.id)!.results.map((c) => [c.round, (c.race?.points ?? 0) + (c.sprint?.points ?? 0)]))
+      : new Map(m.teams.find((t) => t.id === row.id)!.by_round.map((b) => [b.round, b.points]))
+    return { id: row.id, label: row.name, short: row.short, colour: row.colour, dashed: row.dashed,
+      points: raced.map((r) => ({ x: r, y: (total += perRound.get(r) ?? 0) })) }
+  })
+}
+
+function titleSeries(kind: Kind, h: ChampionshipHistory, rows: StandingRow[], top: number): Series[] {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  return [...h[kind]]
+    .sort((a, b) => (b.rounds[b.rounds.length - 1]?.p_title ?? 0) - (a.rounds[a.rounds.length - 1]?.p_title ?? 0))
+    .slice(0, top)
+    .map((s) => {
+      const row = byId.get(s.id)
+      return { id: s.id, label: s.name, short: row?.short ?? s.name.slice(0, 3).toUpperCase(), colour: row?.colour ?? null,
+        dashed: row?.dashed, points: s.rounds.map((r) => ({ x: r.after_round, y: r.p_title })) }
+    })
 }
 
 export function ChampionshipPage() {
   const year = Number(useParams().year ?? SEASONS[0])
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const kind: Kind = params.get('view') === 'constructors' ? 'constructors' : 'drivers'
   const champ = useAsync(() => api.championship(year), [year])
   const history = useAsync(() => api.championshipHistory(year), [year])
+  const matrix = useAsync(() => api.seasonResults(year), [year])
   const c = champ.data
+  const m = matrix.data
+  const rows = useMemo(() => standings(kind, m, c), [kind, m, c])
+  const leader = rows[0]?.points ?? 0
+  const maxTitle = Math.max(...rows.map((r) => r.title ?? 0), 0.0001)
+  const conf = c?.confidence[kind]
 
   return (
-    <main>
-      <div className="page-head">
+    <div className="page">
+      <div className="page-title">
         <div>
-          <h1>{year} championships</h1>
-          {c && (
-            <div className="muted">
-              {roundLabel(c.after_round)} · {c.weekends_left} race weekend{c.weekends_left === 1 ? '' : 's'} left
-            </div>
-          )}
+          <span className="kicker"><b>{year}</b>{c ? ` · after round ${c.after_round} · ${c.weekends_left} race weekend${c.weekends_left === 1 ? '' : 's'} left` : ''}</span>
+          <h1>World Championship</h1>
         </div>
-        <label className="season-select">
-          Season{' '}
-          <select value={year} onChange={(e) => navigate(`/championship/${e.target.value}`)}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="tabs" role="tablist">
+            {(['drivers', 'constructors'] as Kind[]).map((k) => (
+              <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''}
+                      onClick={() => setParams(k === 'constructors' ? { view: k } : {})}>
+                {k === 'drivers' ? 'Drivers' : 'Constructors'}
+              </button>
+            ))}
+          </div>
+          <select className="select" value={year} aria-label="Season"
+                  onChange={(e) => navigate(`/championship/${e.target.value}${kind === 'constructors' ? '?view=constructors' : ''}`)}>
             {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-        </label>
+        </div>
       </div>
-      {champ.loading && <Loading what="title chances" />}
-      {champ.error && <ErrorBox error={champ.error} />}
-      {!champ.loading && !champ.error && !c && <p className="muted">No title projection for {year} yet.</p>}
-      {c && KINDS.map((k) => <TitleSection key={k.key} kind={k.key} title={k.title} champ={c} history={history.data} />)}
-      {c && (
-        <p className="accuracy">
-          <strong>How it works.</strong> Points so far plus every remaining race simulated 20,000 times with the real
-          points system, each car and driver rated from earlier results only. Tested on every round of 2018–2025:
-          when it gave a driver 90%+ for the title, that driver became champion in 80 of 80 cases; for constructors
-          87.7% of 106. Confidence is measured on earlier seasons at the same stage and with a similar chance.
-        </p>
+
+      {(champ.error || matrix.error) && <ErrorBox error={(champ.error ?? matrix.error)!} />}
+      {(champ.loading || matrix.loading) && <div className="skeleton" style={{ height: 300 }} />}
+
+      {!champ.loading && !matrix.loading && rows.length === 0 && <div className="panel empty">No results or title projection for {year} yet.</div>}
+
+      {rows.length > 0 && (
+        <div className="grid-main">
+          <div className="panel">
+            <div className="panel-head">
+              <h3>{kind === 'drivers' ? "Drivers' standings" : "Constructors' standings"}</h3>
+              {conf && <span className={`badge ${conf.level}`}>Projection confidence: {conf.level}</span>}
+            </div>
+            <div className="table-wrap">
+              <table className="timing">
+                <thead>
+                  <tr>
+                    <th>Pos</th>
+                    <th>{kind === 'drivers' ? 'Driver' : 'Team'}</th>
+                    <th className="r">Pts</th>
+                    <th className="r hide-sm">Gap</th>
+                    <th className="r hide-sm">Wins</th>
+                    <th className="r hide-sm" title="Expected final points (simulation)">Proj.</th>
+                    <th>Title</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const colour = glowColour(normaliseHex(r.colour, '#888888'))
+                    return (
+                      <tr key={r.id}>
+                        <td className="pos-cell"><span className={`pos-box ${i < 3 ? `p${i + 1}` : ''}`}>{i + 1}</span></td>
+                        <td>
+                          <div className="driver-cell">
+                            <span className="team-bar" style={{ background: colour }} />
+                            {kind === 'drivers' && <span className="code">{r.short}</span>}
+                            <span className="who"><span className="name">{r.name}</span>{r.sub && <span className="team">{r.sub}</span>}</span>
+                          </div>
+                        </td>
+                        <td className="r num" style={{ fontWeight: 700 }}>{Math.round(r.points)}</td>
+                        <td className="r num dim hide-sm">{i === 0 ? '—' : `-${Math.round(leader - r.points)}`}</td>
+                        <td className="r num hide-sm">{r.wins || ''}</td>
+                        <td className="r num muted hide-sm">{r.projected != null ? Math.round(r.projected) : '–'}</td>
+                        <td>
+                          {r.title != null && r.title >= 0.0005 ? (
+                            <div className="title-cell">
+                              <span className="num">{pct(r.title, r.title < 0.1 ? 1 : 0)}</span>
+                              <span className="meter"><i style={{ width: `${(r.title / maxTitle) * 100}%`, background: colour }} /></span>
+                            </div>
+                          ) : <span className="dim num">{r.title != null ? '<0.1%' : '–'}</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {conf && <div className="panel-foot">{[conf.basis, conf.chance_basis].filter(Boolean).join(' · ')}</div>}
+          </div>
+
+          <div className="stack">
+            {history.data && history.data[kind].length > 0 && (
+              <div className="panel">
+                <div className="panel-head"><h3>Title chance by round</h3><span className="aside">simulated after each round</span></div>
+                <div className="panel-body">
+                  <LineChart series={titleSeries(kind, history.data, rows, 5)} xLabel={(x) => `R${x}`} yFormat={(v) => pct(v, 0)}
+                             yMax={1} height={260} caption="Title chance after each round" />
+                </div>
+              </div>
+            )}
+            {m && m.latest_round && (
+              <div className="panel">
+                <div className="panel-head"><h3>Points progression</h3><span className="aside">incl. sprints</span></div>
+                <div className="panel-body">
+                  <LineChart series={progression(kind, m, rows, kind === 'drivers' ? 6 : 5)} xLabel={(x) => `R${x}`}
+                             yFormat={(v) => `${Math.round(v)}`} height={260} caption="Cumulative points" />
+                </div>
+              </div>
+            )}
+            <div className="panel panel-pad">
+              <p className="small muted" style={{ margin: 0 }}>
+                <b style={{ color: 'var(--text)' }}>How the projection works.</b> Points so far plus every remaining race
+                simulated 20,000 times with the real points system, each car and driver rated from earlier results only.
+                Tested on every round of 2018–2025: when it gave a driver 90%+ for the title, that driver became champion
+                in 80 of 80 cases; for constructors 87.7% of 106.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
-    </main>
+    </div>
   )
 }

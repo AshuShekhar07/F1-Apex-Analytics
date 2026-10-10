@@ -1,130 +1,60 @@
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { scrambleElement } from '../motion/scramble'
-import { setIntroActive } from '../motion/stage'
+import { gsap, reducedMotion } from '../motion/gsap'
 import { sessionFlag, setSessionFlag } from '../storage'
-import { play } from './sound'
-
-const LIGHT_MS = 330
-const ON_AT = 1150           // first red light
-const OUT_AT = ON_AT + 5 * LIGHT_MS + 650
 
 /**
- * The opening: speed streaks, the Apex21 logo wiping in with a light sweep, then the five
- * start lights come on one by one and go out -- lights out, the site opens.
- * Once per browser session; click or any key skips; reduced motion gets a short fade.
+ * The opening, once per browser session: the Apex21 mark wipes in, a red line runs under
+ * it, and the screen lifts away (about 1.6 s). A click or any key skips it.
  */
 export function Intro({ onDone }: { onDone: () => void }) {
-  const reduced = useReducedMotion()
-  const [lights, setLights] = useState(0)
-  const [leaving, setLeaving] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  const done = useRef(onDone)
+  done.current = onDone
 
   useEffect(() => {
-    const finish = () => setLeaving(true)
-    if (reduced) {
-      const t = window.setTimeout(finish, 900)
-      return () => window.clearTimeout(t)
+    const el = root.current
+    if (!el) return
+    const finish = () => done.current()
+    if (reducedMotion()) {
+      const t = gsap.to(el, { opacity: 0, duration: 0.3, delay: 0.5, onComplete: finish })
+      return () => {
+        t.kill()
+      }
     }
-    const timers = [1, 2, 3, 4, 5].map((n) =>
-      window.setTimeout(() => {
-        setLights(n)
-        play('beep')
-      }, ON_AT + (n - 1) * LIGHT_MS),
-    )
-    timers.push(
-      window.setTimeout(() => {
-        setLights(0)
-        play('go')
-      }, OUT_AT - 250),
-    )
-    timers.push(window.setTimeout(finish, OUT_AT))
-    return () => timers.forEach((t) => window.clearTimeout(t))
-  }, [reduced])
-
-  useEffect(() => {
-    const tagline = document.querySelector('.intro .tagline')
-    const t = window.setTimeout(() => tagline && scrambleElement(tagline, 0.9), 1100)
-    return () => window.clearTimeout(t)
-  }, [])
-
-  useEffect(() => {
-    const skip = () => setLeaving(true)
+    const tl = gsap.timeline({ onComplete: finish })
+    tl.fromTo(el.querySelector('.mark img'), { clipPath: 'inset(0 100% 0 0)', x: -16 },
+      { clipPath: 'inset(0 0% 0 0)', x: 0, duration: 0.6, ease: 'power3.out' })
+      .fromTo(el.querySelector('.line'), { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: 'power2.inOut' }, 0.3)
+      .fromTo(el.querySelector('.tag'), { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.35 }, 0.55)
+      .to(el, { yPercent: -100, duration: 0.55, ease: 'power3.inOut' }, '+=0.35')
+    const skip = () => tl.progress(1)
     window.addEventListener('keydown', skip)
-    return () => window.removeEventListener('keydown', skip)
+    el.addEventListener('click', skip)
+    return () => {
+      tl.kill()
+      window.removeEventListener('keydown', skip)
+      el.removeEventListener('click', skip)
+    }
   }, [])
 
   return (
-    <AnimatePresence onExitComplete={onDone}>
-      {!leaving && (
-        <motion.div
-          className="intro"
-          onClick={() => setLeaving(true)}
-          initial={{ opacity: 1 }}
-          exit={reduced ? { opacity: 0 } : { clipPath: 'polygon(0 0, 0 0, -20% 100%, -20% 100%)' }}
-          style={{ clipPath: 'polygon(0 0, 120% 0, 100% 100%, -20% 100%)' }}
-          transition={{ duration: 0.75, ease: [0.7, 0, 0.2, 1] }}
-          role="presentation"
-        >
-          {!reduced &&
-            [22, 38, 61, 77].map((top, i) => (
-              <motion.div
-                key={top}
-                className="speed"
-                style={{ top: `${top}%` }}
-                initial={{ x: '-110%', opacity: 0 }}
-                animate={{ x: '110%', opacity: [0, 1, 0] }}
-                transition={{ duration: 0.9, delay: 0.05 + i * 0.12, ease: 'easeIn' }}
-              />
-            ))}
-          <div className="center">
-            <motion.div
-              className="logo-wrap"
-              initial={reduced ? { opacity: 0 } : { clipPath: 'inset(0 100% 0 0)', filter: 'blur(8px)', x: -40 }}
-              animate={reduced ? { opacity: 1 } : { clipPath: 'inset(0 0% 0 0)', filter: 'blur(0px)', x: 0 }}
-              transition={{ duration: 0.7, delay: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
-            >
-              <img src="/apex21-logo.png" alt="Apex21" />
-              {!reduced && (
-                <motion.div
-                  className="sweep"
-                  initial={{ backgroundPosition: '110% 0' }}
-                  animate={{ backgroundPosition: '-10% 0' }}
-                  transition={{ duration: 0.9, delay: 0.95, ease: 'easeInOut' }}
-                />
-              )}
-            </motion.div>
-            {!reduced && (
-              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-                <div className="lights" aria-hidden="true">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <span key={n} className={lights >= n ? 'on' : ''} />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-            <motion.div className="tagline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
-              F1 predictions · tested before lights out
-            </motion.div>
-          </div>
-          <div className="skip">Click or press any key to skip</div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="intro" ref={root} role="presentation">
+      <div className="mark">
+        <img src="/apex21-logo.png" alt="Apex21" />
+        <div className="line" />
+        <div className="tag">Formula 1 race prediction</div>
+      </div>
+    </div>
   )
 }
 
 /** True on the first visit of this browser session (then remembered). */
 export function useIntroOnce(): [boolean, () => void] {
-  const [show, setShow] = useState(() => {
-    const first = !sessionFlag('intro-seen')
-    setIntroActive(first) // page entrances wait for the intro to finish
-    return first
-  })
+  const [show, setShow] = useState(() => !sessionFlag('intro-seen'))
   const done = () => {
     setSessionFlag('intro-seen')
     setShow(false)
-    setIntroActive(false)
   }
   return [show, done]
 }

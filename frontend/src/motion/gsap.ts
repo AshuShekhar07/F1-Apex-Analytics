@@ -2,12 +2,11 @@
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { SplitText } from 'gsap/SplitText'
 
-gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP)
+gsap.registerPlugin(ScrollTrigger, useGSAP)
 gsap.defaults({ ease: 'power3.out' })
 
-export { gsap, ScrollTrigger, SplitText, useGSAP }
+export { gsap, ScrollTrigger, useGSAP }
 
 /** True when the visitor asked the OS for less motion: effects then show their end state. */
 export function reducedMotion(): boolean {
