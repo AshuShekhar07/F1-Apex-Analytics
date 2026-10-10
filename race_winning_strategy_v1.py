@@ -562,7 +562,7 @@ def predict_for_race(db: Any, race_id: int, method: str = "track"
     """Prediction from races strictly before this one, the track record and, when the race has
     been run, its review. method: "track" (front-grid history) or "hybrid" (predict_hybrid)."""
     inputs = _race_inputs(db, race_id)
-    race = inputs["race"]
+    race = {**inputs["race"], "total_laps": inputs["total_laps"]}
     if "front" not in inputs:
         return None, [], None, race
     front, history = inputs["front"], inputs["history"]
@@ -611,7 +611,7 @@ def predict_pre_start_for_race(db: Any, race_id: int) -> dict | None:
     if not declared:
         return None
     inputs = _race_inputs(db, race_id)
-    race = inputs["race"]
+    race = {**inputs["race"], "total_laps": inputs["total_laps"]}
     if "front" not in inputs:
         return None
     history = inputs["history"]

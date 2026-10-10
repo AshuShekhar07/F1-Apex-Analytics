@@ -218,7 +218,8 @@ def winning_strategy(
         raise HTTPException(status_code=404, detail="no prediction: race distance, era or history unknown")
     body = {
         "race_id": race_id, "track": race["track_name"], "season": race["season_year"],
-        "race_date": str(race["race_date"]), "practice_wear_measured": race.get("practice_wear") is not None,
+        "race_date": str(race["race_date"]), "total_laps": race.get("total_laps"),
+        "practice_wear_measured": race.get("practice_wear") is not None,
         "prediction": strategy_to_json(prediction), "track_record": record_to_json(record),
         "review": review_to_json(review) if review is not None else None,
     }
