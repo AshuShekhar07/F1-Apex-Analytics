@@ -6,6 +6,7 @@ import { LineChart, type Series } from '../charts/LineChart'
 import { ErrorBox } from '../components/Status'
 import { pct } from '../format'
 import { useAsync } from '../hooks'
+import { TitleMaths } from '../race/TitleMaths'
 import { driverCode } from '../names'
 import { SEASONS } from '../seasons'
 import { glowColour, normaliseHex } from '../theme/color'
@@ -199,6 +200,7 @@ export function ChampionshipPage() {
                 </div>
               </div>
             )}
+            {m && <TitleMaths kind={kind} matrix={m} standings={rows.map((r) => ({ id: r.id, name: r.name, points: r.points }))} />}
             <div className="panel panel-pad">
               <p className="small muted" style={{ margin: 0 }}>
                 <b style={{ color: 'var(--text)' }}>How the projection works.</b> Points so far plus every remaining race

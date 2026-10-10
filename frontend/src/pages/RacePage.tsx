@@ -7,7 +7,9 @@ import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
 import { useAsync } from '../hooks'
 import { driverCode } from '../names'
+import { LongRuns } from '../race/LongRuns'
 import { PredictionTower } from '../race/PredictionTower'
+import { QualifyingTable } from '../race/QualifyingTable'
 import { StrategyLane } from '../race/StrategyLane'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { ActualDriverStrategy, Forecast, RaceResult, WinnerPrediction } from '../types'
@@ -22,6 +24,8 @@ export function RacePage() {
   const battle = useAsync(() => (finished ? api.positionBattle(raceId) : Promise.resolve(null)), [raceId, finished])
   const actual = useAsync(() => (finished ? api.actualStrategy(raceId) : Promise.resolve(null)), [raceId, finished])
   const strategy = useAsync(() => api.winningStrategy(raceId), [raceId])
+  const quali = useAsync(() => api.qualifying(raceId), [raceId])
+  const longRuns = useAsync(() => api.longRuns(raceId), [raceId])
 
   if (race.loading) return <div className="page"><div className="skeleton" style={{ height: 160 }} /></div>
   if (race.error || !r) return <div className="page"><ErrorBox error={race.error ?? new Error('Race not found')} /></div>
@@ -109,6 +113,26 @@ export function RacePage() {
           </div>
         </div>
       )}
+
+      {(quali.data?.results.length || longRuns.data?.drivers.length) ? (
+        <>
+          <div className="section-head" style={{ marginTop: 26 }}><h2>Weekend sessions</h2><span className="aside">qualifying and Friday pace</span></div>
+          <div className="cols-2" style={{ alignItems: 'start' }}>
+            {quali.data?.results.length ? (
+              <div className="panel">
+                <div className="panel-head"><h3>Qualifying</h3><span className="aside">Q1 · Q2 · Q3</span></div>
+                <QualifyingTable rows={quali.data.results} />
+              </div>
+            ) : <div />}
+            {longRuns.data && (
+              <div className="panel">
+                <div className="panel-head"><h3>Practice long runs</h3><span className="aside">race-trim pace</span></div>
+                <div className="panel-body"><LongRuns data={longRuns.data} /></div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
 
       {f && (
         <details className="panel" style={{ marginTop: 26 }}>

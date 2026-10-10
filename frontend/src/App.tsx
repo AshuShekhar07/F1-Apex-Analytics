@@ -12,6 +12,7 @@ import { DriversPage } from './pages/DriversPage'
 import { RaceHubPage } from './pages/RaceHubPage'
 import { RacePage } from './pages/RacePage'
 import { ResultsPage } from './pages/ResultsPage'
+import { TeamPage, TeamsPage } from './pages/TeamsPage'
 import { SiteHeader } from './shell/Header'
 import { AccentProvider } from './theme/accent'
 
@@ -61,6 +62,8 @@ export function App() {
               <Route path="/results/:year?" element={<Page><ResultsPage /></Page>} />
               <Route path="/race/:id" element={<Page><RacePage /></Page>} />
               <Route path="/drivers" element={<Page><DriversPage /></Page>} />
+              <Route path="/teams/:year?" element={<Page><TeamsPage /></Page>} />
+              <Route path="/teams/:year/:id" element={<Page><TeamPage /></Page>} />
               <Route
                 path="/tracks"
                 element={<Page><Suspense fallback={<div className="page muted">Loading circuits…</div>}><TracksPage /></Suspense></Page>}

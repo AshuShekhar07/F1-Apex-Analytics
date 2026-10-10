@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api'
+import { CalibrationChart } from '../charts/CalibrationChart'
 import { ErrorBox } from '../components/Status'
 import { localDay, pct } from '../format'
 import { useAsync } from '../hooks'
@@ -29,6 +30,7 @@ export function ResultsPage() {
   const navigate = useNavigate()
   const matrix = useAsync(() => api.seasonResults(year), [year])
   const record = useAsync(() => api.liveRecord(), [])
+  const calibration = useAsync(() => api.calibration(), [])
   const m = matrix.data
   const raced = m?.rounds.filter((r) => r.raced).length ?? 0
 
@@ -72,6 +74,13 @@ export function ResultsPage() {
       )}
 
       {record.data && <PredictionLog record={record.data} season={year} />}
+
+      {calibration.data && (
+        <>
+          <div className="section-head" style={{ marginTop: 26 }}><h2>Are our chances honest?</h2><span className="aside">tested on past races</span></div>
+          <div className="panel panel-pad"><CalibrationChart data={calibration.data} /></div>
+        </>
+      )}
     </div>
   )
 }

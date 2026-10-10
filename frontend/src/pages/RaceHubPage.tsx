@@ -9,7 +9,10 @@ import { localDay, pct, sessionStates } from '../format'
 import { useAsync, useLive } from '../hooks'
 import { useLiveWeekend } from '../live'
 import { driverCode } from '../names'
+import { LongRuns } from '../race/LongRuns'
+import { PreStartPlans } from '../race/PreStartPlans'
 import { PredictionTower, type TowerRow } from '../race/PredictionTower'
+import { QualifyingTable } from '../race/QualifyingTable'
 import { SlopeChart } from '../race/SlopeChart'
 import { StrategyLane } from '../race/StrategyLane'
 import { WinShare } from '../race/WinShare'
@@ -34,6 +37,9 @@ export function RaceHubPage() {
   const forecast = useLive(() => (raceId ? api.forecast(raceId) : Promise.resolve(null)), [raceId], 120_000)
   const strategy = useLive(() => (raceId ? api.winningStrategy(raceId) : Promise.resolve(null)), [raceId], 300_000)
   const record = useAsync(() => api.liveRecord(), [])
+  const quali = useLive(() => (raceId ? api.qualifying(raceId) : Promise.resolve(null)), [raceId], 120_000)
+  const longRuns = useLive(() => (raceId ? api.longRuns(raceId) : Promise.resolve(null)), [raceId], 300_000)
+  const preStart = useLive(() => (raceId ? api.preStart(raceId) : Promise.resolve(null)), [raceId], 120_000)
   const [circuit, setCircuit] = useState<Circuit | null>(null)
 
   useEffect(() => {
@@ -169,6 +175,13 @@ export function RaceHubPage() {
             </div>
           </div>
 
+          {preStart.data && totalLaps && Object.keys(preStart.data.plans).length > 0 && (
+            <div className="panel">
+              <div className="panel-head"><h3>Race-day tyre plans</h3><span className="aside">starting tyres declared</span></div>
+              <div className="panel-body"><PreStartPlans data={preStart.data} totalLaps={totalLaps} /></div>
+            </div>
+          )}
+
           <div className="panel">
             <div className="panel-head"><h3>Predicted winning strategy</h3><span className="aside">front of the grid</span></div>
             <div className="panel-body">
@@ -187,6 +200,22 @@ export function RaceHubPage() {
           </div>
 
           {record.data && <ModelRecord record={record.data} season={p.season} />}
+        </div>
+      </div>
+
+      <div className="section-head" style={{ marginTop: 28 }}><h2>Weekend so far</h2><span className="aside">updates as sessions load</span></div>
+      <div className="cols-2" style={{ alignItems: 'start' }}>
+        <div className="panel">
+          <div className="panel-head"><h3>Qualifying</h3><span className="aside">Q1 · Q2 · Q3</span></div>
+          {quali.data?.results.length ? <QualifyingTable rows={quali.data.results} /> : (
+            <div className="panel-body"><p className="muted small" style={{ margin: 0 }}>{quali.loading ? 'Loading…' : 'Qualifying results are not in the database yet.'}</p></div>
+          )}
+        </div>
+        <div className="panel">
+          <div className="panel-head"><h3>Practice long runs</h3><span className="aside">race-trim pace</span></div>
+          <div className="panel-body">
+            {longRuns.data ? <LongRuns data={longRuns.data} /> : <p className="muted small" style={{ margin: 0 }}>{longRuns.loading ? 'Loading…' : 'No practice data yet.'}</p>}
+          </div>
         </div>
       </div>
     </div>
@@ -217,6 +246,7 @@ function ModelRecord({ record, season }: { record: LiveRecord; season: number })
         )}
       </div>
       {calls.length > 0 && (
+        <div className="table-wrap">
         <table className="timing">
           <tbody>
             {calls.map((c) => (
@@ -229,6 +259,7 @@ function ModelRecord({ record, season }: { record: LiveRecord; season: number })
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <div className="panel-foot"><Link to="/results">Full prediction log →</Link></div>
     </div>

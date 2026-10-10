@@ -9,8 +9,9 @@ const NAV = [
   { to: '/', label: 'Race', end: true },
   { to: '/championship', label: 'Championship' },
   { to: '/results', label: 'Results' },
-  { to: '/tracks', label: 'Tracks' },
+  { to: '/teams', label: 'Teams' },
   { to: '/drivers', label: 'Drivers' },
+  { to: '/tracks', label: 'Tracks' },
 ]
 
 export function SiteHeader() {

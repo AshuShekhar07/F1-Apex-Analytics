@@ -40,6 +40,7 @@ export function TracksPage() {
     [circuit, dbTracks.data],
   )
   const stats = useAsync(() => (match ? api.trackStats(match.id) : Promise.resolve(null)), [match?.id])
+  const overtaking = useAsync(() => (match ? api.overtaking(match.id) : Promise.resolve(null)), [match?.id])
   const list = useRef<HTMLElement>(null)
   const panel = useRef<HTMLElement>(null)
 
@@ -124,6 +125,25 @@ export function TracksPage() {
                 <span className="num">{s.avgSpeedKmh.toFixed(0)}<span className="dim small"> km/h</span></span>
               </div>
             ))}
+            {overtaking.data && overtaking.data.overtaking.overall.races_counted > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="cap" style={{ marginBottom: 6 }}>Racing here</div>
+                <div className="kv" style={{ border: '1px solid var(--line)' }}>
+                  <div>
+                    <div className="v">{overtaking.data.overtaking.overall.avg_position_change_classified?.toFixed(1) ?? '–'}</div>
+                    <div className="k">Places changed per car</div>
+                  </div>
+                  <div>
+                    <div className="v">{overtaking.data.safety_car_likelihood_pct != null ? `${overtaking.data.safety_car_likelihood_pct}%` : '–'}</div>
+                    <div className="k">Races with a Safety Car</div>
+                  </div>
+                </div>
+                <p className="small dim" style={{ margin: '6px 0 0' }}>
+                  Average grid-to-finish change of classified cars over {overtaking.data.overtaking.overall.races_counted} races
+                  {overtaking.data.safety_car_sample_races ? `; Safety Car share of ${overtaking.data.safety_car_sample_races} races` : ''}. More change usually means easier overtaking.
+                </p>
+              </div>
+            )}
             {stats.data?.lap_record && (
               <div style={{ marginTop: 16 }}>
                 <div className="cap">Lap record</div>

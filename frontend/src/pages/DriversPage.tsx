@@ -7,15 +7,18 @@ import { ErrorBox } from '../components/Status'
 import { CountNum } from '../fx/CountNum'
 import { useAsync } from '../hooks'
 import { lockScroll } from '../motion/SmoothScroll'
-import { splitName } from '../names'
+import { HeadToHead } from '../race/HeadToHead'
+import { driverCode, splitName } from '../names'
 import { useAccent, usePageAccent } from '../theme/accent'
 import { glowColour, normaliseHex } from '../theme/color'
-import type { DriverStats, RosterDriver } from '../types'
+import type { DriverStats, RosterDriver, WetRanking as WetRankingData } from '../types'
 
 const SEASON = 2026
 
 export function DriversPage() {
   const roster = useAsync(() => api.roster(SEASON), [])
+  const mates = useAsync(() => api.teammates(SEASON), [])
+  const wet = useAsync(() => api.wetRanking(), [])
   const [team, setTeam] = useState<number | null>(null)
   const [open, setOpen] = useState<RosterDriver | null>(null)
   const { preview } = useAccent()
@@ -78,6 +81,20 @@ export function DriversPage() {
             </AnimatePresence>
           </motion.div>
           <p className="dim small" style={{ marginTop: 18 }}>Ordered by {SEASON} points. Photos: Wikipedia. {roster.data.note}.</p>
+
+          {mates.data && mates.data.pairs.length > 0 && (
+            <>
+              <div className="section-head" style={{ marginTop: 30 }}><h2>Teammate battles</h2><span className="aside">{SEASON} · same car, who was quicker</span></div>
+              <div className="h2h-grid">
+                {mates.data.pairs.filter((p) => team == null || p.team.id === team).map((p) => <HeadToHead key={`${p.team.id}-${p.drivers[0].id}-${p.drivers[1].id}`} pair={p} />)}
+              </div>
+              <p className="dim small" style={{ marginTop: 10 }}>{mates.data.note}.</p>
+            </>
+          )}
+
+          {wet.data && (
+            <WetRanking data={wet.data} current={new Set(drivers.map((d) => d.id))} colours={new Map(drivers.map((d) => [d.id, d.team.color_hex]))} />
+          )}
         </>
       )}
 
@@ -188,6 +205,45 @@ function DriverDrawer({ driver, onClose }: { driver: RosterDriver; onClose: () =
           )}
         </div>
       </motion.aside>
+    </>
+  )
+}
+
+/** Who gains most on their own teammate when it rains: average places ahead of the teammate
+    in wet races minus the same in dry races (current drivers with enough wet races). */
+function WetRanking({ data, current, colours }: { data: WetRankingData; current: Set<number>; colours: Map<number, string | null> }) {
+  const rows = data.race_rankings.filter((r) => current.has(r.driver_id)).slice(0, 10)
+  if (!rows.length) return null
+  const top = Math.max(...rows.map((r) => Math.abs(r.specialist_score)), 0.1)
+  return (
+    <>
+      <div className="section-head" style={{ marginTop: 30 }}><h2>Wet-weather specialists</h2><span className="aside">races since 2018 · vs own teammate</span></div>
+      <div className="panel">
+        <table className="timing">
+          <thead><tr><th>#</th><th>Driver</th><th>Rain effect</th><th className="r hide-sm">Wet races</th><th className="r hide-sm">Dry races</th></tr></thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const c = glowColour(normaliseHex(colours.get(r.driver_id), '#888'))
+              const up = r.specialist_score >= 0
+              return (
+                <tr key={r.driver_id}>
+                  <td className="num dim">{i + 1}</td>
+                  <td><div className="driver-cell"><span className="team-bar" style={{ background: c }} /><span className="code">{driverCode(r.driver_name ?? '???')}</span><span className="name">{r.driver_name}</span></div></td>
+                  <td>
+                    <div className="prob-cell" style={{ gridTemplateColumns: '64px 1fr' }}>
+                      <span className={`num ${up ? 'hit' : 'miss'}`}>{up ? '+' : ''}{r.specialist_score.toFixed(2)}</span>
+                      <span className="meter"><i style={{ width: `${(Math.abs(r.specialist_score) / top) * 100}%`, background: up ? 'var(--up)' : 'var(--down)' }} /></span>
+                    </div>
+                  </td>
+                  <td className="r num hide-sm">{r.wet_sessions_counted}</td>
+                  <td className="r num hide-sm">{r.dry_sessions_counted}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <div className="panel-foot">Rain effect = places gained on the teammate per wet race, minus the same in dry races. Positive: relatively stronger in the wet.</div>
+      </div>
     </>
   )
 }

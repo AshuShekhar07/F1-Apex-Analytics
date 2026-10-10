@@ -461,3 +461,71 @@ export interface QualifyingRow {
   gap_to_pole: number | null
   eliminated_in: string | null
 }
+
+// --- second wave: long runs, teammates, calibration, overtaking, wet ranking, teams, pre-start
+
+export interface LongRuns {
+  race_id: number
+  session: string | null
+  wet: boolean
+  reference_compound?: string
+  reference_lap?: number
+  drivers: { driver_id: number; driver_name: string | null; team_name: string | null; color_hex: string | null;
+    gap_pct: number; gap_s: number; compounds: Record<string, { laps: number; median: number }> }[]
+  note?: string
+}
+
+export interface TeammatePairs {
+  season: number
+  pairs: { team: { id: number; name: string | null; color_hex: string | null }; rounds: number;
+    drivers: { id: number; name: string; quali_wins: number; race_wins: number; points: number }[] }[]
+  note: string
+}
+
+export interface Calibration {
+  source: string
+  stages: Record<string, { races: number; favourite_won: number; mean_favourite_p: number;
+    bins: { lo: number; hi: number; races: number; mean_p: number; favourite_won: number }[] }>
+}
+
+export interface OvertakingIndex {
+  track_id: number
+  track_name: string
+  overtaking: {
+    overall: { avg_position_change: number | null; avg_position_change_classified: number | null; races_counted: number }
+    by_regulation_era: { regulation_era: string; avg_position_change: number; avg_position_change_classified: number | null; races_counted: number }[]
+  }
+  safety_car_likelihood_pct: number | null
+  safety_car_sample_races: number
+}
+
+export interface WetRanking {
+  note: string
+  race_rankings: { driver_id: number; driver_name: string | null; wet_avg_margin_over_teammate: number;
+    dry_avg_margin_over_teammate: number; specialist_score: number; wet_sessions_counted: number; dry_sessions_counted: number }[]
+}
+
+export interface TeamSeason {
+  team_id: number
+  team_name: string
+  color_hex: string | null
+  logo_url: string | null
+  season: number
+  races: number
+  wins: number
+  podiums: number
+  race_points: number
+  sprint_points: number
+  total_points: number
+  average_finish: number | null
+  average_qualifying: number | null
+  dnfs: number
+  drivers: { driver_id: number; driver_name: string; car_number: number | null; races_entered: number }[]
+}
+
+export interface PreStart {
+  race_id: number
+  cars: { grid: number; driver: string | null; start: string }[]
+  plans: Record<string, WinningPlan>
+  note: string
+}
