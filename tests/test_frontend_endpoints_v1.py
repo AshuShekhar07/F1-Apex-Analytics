@@ -71,3 +71,29 @@ def test_race_sessions_in_running_order(api_client):
     assert [s["type"] for s in sprint["sessions"]] == ["FP1", "Q", "FP2", "S", "R"]
     assert [s["name"] for s in sprint["sessions"]][3] == "Sprint"
     assert api_client.get("/races/999/sessions").status_code == 404
+
+
+def test_teammate_head_to_heads(api_client):
+    body = api_client.get("/seasons/2021/teammates").json()
+    pairs = {p["team"]["name"]: p for p in body["pairs"]}
+    alpha = {d["name"]: d for d in pairs["Team Alpha"]["drivers"]}
+    assert pairs["Team Alpha"]["rounds"] == 2
+    assert alpha["Driver A"]["quali_wins"] == 1 and alpha["Driver B"]["quali_wins"] == 1
+    assert alpha["Driver A"]["race_wins"] == 2 and alpha["Driver B"]["race_wins"] == 0
+    assert alpha["Driver A"]["points"] == 51.0 and alpha["Driver B"]["points"] == 33.0
+    beta = {d["name"]: d for d in pairs["Team Beta"]["drivers"]}
+    # round 1: C retired, so only round 2 counts for the race head-to-head
+    assert beta["Driver C"]["quali_wins"] == 2 and beta["Driver C"]["race_wins"] == 1 and beta["Driver D"]["race_wins"] == 0
+    assert beta["Driver C"]["points"] == 21.0 and beta["Driver D"]["points"] == 29.0
+    assert api_client.get("/seasons/2019/teammates").status_code == 404
+
+
+def test_long_runs_and_calibration(api_client):
+    # the fixture's practice has no 5-lap runs: an empty, well-formed answer
+    body = api_client.get("/races/1/long-runs").json()
+    assert body["session"] == "FP1" and body["drivers"] == []
+    assert api_client.get("/races/999/long-runs").status_code == 404
+    cal = api_client.get("/records/calibration").json()
+    post = cal["stages"]["post_qualifying"]
+    assert post["races"] > 100 and all(0 <= b["favourite_won"] <= 1 for b in post["bins"])
+    assert sum(b["races"] for b in post["bins"]) <= post["races"]

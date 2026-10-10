@@ -111,3 +111,58 @@ def season_results(season: int = Path(..., ge=2018, le=2100), db: Session = Depe
         "teams": team_rows,
         "note": "points include sprints; ties broken by countback on race finishes",
     }
+
+
+@router.get("/{season}/teammates")
+def season_teammates(season: int = Path(..., ge=2018, le=2100), db: Session = Depends(get_db)):
+    """Teammate head-to-heads: for every pair of race drivers who shared a team in a round,
+    who out-qualified whom, who finished ahead when both were classified, and their points
+    (race + sprint) in the rounds they were teammates."""
+    rows = db.execute(text("""
+        SELECT r.round_number, re.team_id, re.driver_id, d.name AS driver_name,
+               q.final_position AS quali,
+               rr.finishing_position AS finish, rr.status, rr.points AS race_points,
+               (SELECT sr.points FROM sessions ss JOIN race_results sr ON sr.session_id = ss.id
+                 WHERE ss.race_id = r.id AND ss.session_type = 'S' AND sr.race_entry_id = re.id) AS sprint_points
+        FROM race_entries re
+        JOIN races r ON r.id = re.race_id
+        JOIN drivers d ON d.id = re.driver_id
+        LEFT JOIN sessions sq ON sq.race_id = r.id AND sq.session_type = 'Q'
+        LEFT JOIN qualifying_results q ON q.session_id = sq.id AND q.race_entry_id = re.id
+        LEFT JOIN sessions sr2 ON sr2.race_id = r.id AND sr2.session_type = 'R'
+        LEFT JOIN race_results rr ON rr.session_id = sr2.id AND rr.race_entry_id = re.id
+        WHERE r.season_year = :s AND re.role = 'race_driver'
+    """), {"s": season}).mappings().all()
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No entries for {season}")
+    by_round_team: dict[tuple[int, int], list] = defaultdict(list)
+    for r in rows:
+        by_round_team[(int(r["round_number"]), int(r["team_id"]))].append(r)
+    pairs: dict[tuple[int, int, int], dict] = {}
+    names = {int(r["driver_id"]): r["driver_name"] for r in rows}
+    for (rnd, team), cars in sorted(by_round_team.items()):
+        if len(cars) != 2:
+            continue
+        a, b = sorted(cars, key=lambda c: int(c["driver_id"]))
+        if a["finish"] is None and b["finish"] is None and a["quali"] is None and b["quali"] is None:
+            continue          # a round not run yet
+        key = (team, int(a["driver_id"]), int(b["driver_id"]))
+        p = pairs.setdefault(key, {"rounds": 0, "quali": [0, 0], "race": [0, 0], "points": [0.0, 0.0]})
+        p["rounds"] += 1
+        if a["quali"] is not None and b["quali"] is not None:
+            p["quali"][0 if a["quali"] < b["quali"] else 1] += 1
+        if is_classified(a["status"]) and is_classified(b["status"]) and a["finish"] and b["finish"]:
+            p["race"][0 if a["finish"] < b["finish"] else 1] += 1
+        for i, c in enumerate((a, b)):
+            p["points"][i] += float(c["race_points"] or 0) + float(c["sprint_points"] or 0)
+    team_ids = sorted({k[0] for k in pairs})
+    teams = {int(t["id"]): dict(t) for t in db.execute(text(
+        "SELECT id, name, color_hex FROM teams WHERE id = ANY(:ids)"), {"ids": team_ids}).mappings().all()} if team_ids else {}
+    out = []
+    for (team, da, db_), p in pairs.items():
+        out.append({"team": teams.get(team, {"id": team, "name": None, "color_hex": None}), "rounds": p["rounds"],
+                    "drivers": [{"id": d, "name": names[d], "quali_wins": p["quali"][i], "race_wins": p["race"][i],
+                                 "points": round(p["points"][i], 1)} for i, d in enumerate((da, db_))]})
+    out.sort(key=lambda x: (-sum(d["points"] for d in x["drivers"]), -x["rounds"]))
+    return {"season": season, "pairs": out,
+            "note": "race head-to-head counts rounds where both cars were classified; points include sprints"}

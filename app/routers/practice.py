@@ -99,3 +99,65 @@ def get_practice_results(race_id: int, session_type: str, db: Session = Depends(
         ),
         "results": [dict(r) for r in rows],
     }
+
+
+@router.get("/{race_id}/long-runs")
+def get_long_runs(race_id: int, db: Session = Depends(get_db)):
+    """Friday long-run pace: each driver's race-trim pace from practice (FP2, else FP1 on a
+    sprint weekend), as the gap to the best driver. Long runs are 5+ consecutive laps within
+    10% of the driver's best lap, trimmed of traffic laps (race_practice_pace_v1). Fuel loads
+    are team choices, so read it as a guide. Empty when practice was wet or has no long runs."""
+    from collections import defaultdict
+    from statistics import median
+
+    from race_practice_pace_v1 import long_run_laps, practice_gaps, session_is_wet
+
+    race = db.execute(text("SELECT id FROM races WHERE id = :r"), {"r": race_id}).scalar()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    for session_type in ("FP2", "FP1"):
+        session = db.execute(text("""
+            SELECT s.id, COALESCE(sw.rainfall, FALSE) AS wet
+            FROM sessions s LEFT JOIN session_weather sw ON sw.session_id = s.id
+            WHERE s.race_id = :r AND s.session_type = :t
+        """), {"r": race_id, "t": session_type}).mappings().first()
+        if session is None:
+            continue
+        if session_is_wet(db, session["id"], session["wet"]):
+            return {"race_id": race_id, "session": session_type, "wet": True, "drivers": []}
+        laps = defaultdict(list)
+        for driver, n, t, c in db.execute(text("""
+            SELECT re.driver_id, l.lap_number, l.lap_time, l.tire_compound
+            FROM laps l JOIN race_entries re ON re.id = l.race_entry_id
+            WHERE l.session_id = :s AND COALESCE(l.is_deleted, FALSE) = FALSE
+        """), {"s": session["id"]}):
+            laps[int(driver)].append((int(n), float(t) if t is not None else None, c))
+        runs = {d: r for d, rows in laps.items() if (r := long_run_laps(rows))}
+        gaps = practice_gaps(runs)
+        if not gaps:
+            return {"race_id": race_id, "session": session_type, "wet": False, "drivers": []}
+        # a gap in seconds: the fraction applied to the quickest median on the most-run compound
+        by_compound = defaultdict(list)
+        for d, comp in runs.items():
+            for c, times in comp.items():
+                by_compound[c].append(median(times))
+        main = max(by_compound, key=lambda c: len(by_compound[c]))
+        reference = min(by_compound[main])
+        info = {int(r["id"]): r for r in db.execute(text("""
+            SELECT d.id, d.name, tm.name AS team_name, tm.color_hex
+            FROM race_entries re JOIN drivers d ON d.id = re.driver_id JOIN teams tm ON tm.id = re.team_id
+            WHERE re.race_id = :r AND re.driver_id = ANY(:ids)
+        """), {"r": race_id, "ids": list(gaps)}).mappings().all()}
+        drivers = []
+        for d, gap in sorted(gaps.items(), key=lambda x: x[1]):
+            row = info.get(d, {})
+            drivers.append({
+                "driver_id": d, "driver_name": row.get("name"), "team_name": row.get("team_name"),
+                "color_hex": row.get("color_hex"), "gap_pct": round(gap * 100, 3),
+                "gap_s": round(gap * reference, 3),
+                "compounds": {c: {"laps": len(t), "median": round(median(t), 3)} for c, t in runs[d].items()},
+            })
+        return {"race_id": race_id, "session": session_type, "wet": False, "reference_compound": main,
+                "reference_lap": round(reference, 3), "drivers": drivers,
+                "note": "Race-trim pace from practice long runs; fuel loads are team choices, so treat as a guide."}
+    return {"race_id": race_id, "session": None, "wet": False, "drivers": []}

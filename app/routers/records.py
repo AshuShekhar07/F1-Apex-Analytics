@@ -360,3 +360,20 @@ def get_live_strategy(db: Session = Depends(get_db)):
     from strategy_live_record_v1 import score
 
     return score(db)
+
+
+@router.get("/calibration")
+def get_calibration():
+    """How honest the race-win chances are: the walk-forward backtest (2019 onwards, each race
+    predicted only from earlier races) grouped by the favourite's chance, against how often
+    the favourite then won. Read from winner_confidence_v1.json (winner_prediction_v1 --backtest)."""
+    import json
+    from pathlib import Path
+
+    data = json.loads((Path(__file__).resolve().parents[2] / "winner_confidence_v1.json").read_text())
+    stages = {}
+    for stage, s in data["stages"].items():
+        stages[stage] = {"races": s["races"], "favourite_won": s["favourite_won"],
+                         "mean_favourite_p": s["mean_favourite_p"],
+                         "bins": [{k: b[k] for k in ("lo", "hi", "races", "mean_p", "favourite_won")} for b in s["bins"]]}
+    return {"source": data["source"], "stages": stages}
