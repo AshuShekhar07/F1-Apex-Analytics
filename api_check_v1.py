@@ -168,8 +168,8 @@ def database(url: str) -> dict | None:
         for b in bad:
             print(f"  points    {season} R{b['round_number']} {b['session_type']}: {b['nan']} NaN, {b['missing']} missing")
         if any(b["nan"] for b in bad):
-            problem("some race/sprint points are NaN (loaded before the official points were out): run "
-                    f"`python repair_missing_points_v1.py --season {season} --apply` in the main folder")
+            problem("some race/sprint points are NaN (loaded before the official points were out): the next "
+                    f"pipeline run repairs them, or now: `python repair_missing_points_v1.py --season {season} --apply`")
         elif bad:
             print("  (missing points are filled by the pipeline once the official results are published)")
 
