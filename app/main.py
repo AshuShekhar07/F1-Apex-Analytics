@@ -1,4 +1,5 @@
 import logging
+import math
 import threading
 import time
 from collections import defaultdict, deque
@@ -16,11 +17,28 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("apex21")
 
 
+def _finite(value):
+    """NaN and infinity (not valid JSON) as null, anywhere in a JSON-like structure."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_finite(v) for v in value]
+    return value
+
+
 class AppJSONResponse(JSONResponse):
-    """Default response: drops logo/photo URLs unless SERVE_BRAND_ASSETS is on."""
+    """Default response: drops logo/photo URLs unless SERVE_BRAND_ASSETS is on. A NaN or
+    infinity in the data is sent as null (and logged) instead of failing the whole response."""
 
     def render(self, content) -> bytes:
-        return super().render(content if settings.serve_brand_assets else scrub_brand_assets(content))
+        content = content if settings.serve_brand_assets else scrub_brand_assets(content)
+        try:
+            return super().render(content)
+        except ValueError:
+            log.warning("response contained NaN or infinity; sent as null")
+            return super().render(_finite(content))
 
 
 app = FastAPI(

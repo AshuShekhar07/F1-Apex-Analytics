@@ -35,7 +35,7 @@ def season_results(season: int = Path(..., ge=2018, le=2100), db: Session = Depe
         raise HTTPException(status_code=404, detail=f"No races found for {season}")
     rows = db.execute(text("""
         SELECT r.round_number, s.session_type, re.driver_id, d.name AS driver_name, re.car_number, re.team_id,
-               rr.finishing_position, rr.starting_grid_position, rr.points, rr.status
+               rr.finishing_position, rr.starting_grid_position, NULLIF(rr.points, 'NaN') AS points, rr.status
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -121,8 +121,8 @@ def season_teammates(season: int = Path(..., ge=2018, le=2100), db: Session = De
     rows = db.execute(text("""
         SELECT r.round_number, re.team_id, re.driver_id, d.name AS driver_name,
                q.final_position AS quali,
-               rr.finishing_position AS finish, rr.status, rr.points AS race_points,
-               (SELECT sr.points FROM sessions ss JOIN race_results sr ON sr.session_id = ss.id
+               rr.finishing_position AS finish, rr.status, NULLIF(rr.points, 'NaN') AS race_points,
+               (SELECT NULLIF(sr.points, 'NaN') FROM sessions ss JOIN race_results sr ON sr.session_id = ss.id
                  WHERE ss.race_id = r.id AND ss.session_type = 'S' AND sr.race_entry_id = re.id) AS sprint_points
         FROM race_entries re
         JOIN races r ON r.id = re.race_id

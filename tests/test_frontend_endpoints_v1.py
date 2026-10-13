@@ -97,3 +97,37 @@ def test_long_runs_and_calibration(api_client):
     post = cal["stages"]["post_qualifying"]
     assert post["races"] > 100 and all(0 <= b["favourite_won"] <= 1 for b in post["bins"])
     assert sum(b["races"] for b in post["bins"]) <= post["races"]
+
+
+def test_nan_points_do_not_break_the_points_tables(api_client, fixture_db_url):
+    """A sprint loaded before the official points were out stored NaN (2026 Marina Bay): the
+    pages must treat it as missing, not crash (ValueError: out of range float values)."""
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(fixture_db_url)
+    where = """id = (SELECT rr.id FROM race_results rr JOIN sessions s ON s.id = rr.session_id
+                     JOIN races r ON r.id = s.race_id JOIN race_entries re ON re.id = rr.race_entry_id
+                     WHERE r.season_year = 2021 AND r.round_number = 2 AND s.session_type = 'S'
+                       AND re.driver_id = 1)"""
+    with engine.begin() as db:
+        db.execute(text(f"UPDATE race_results SET points = 'NaN' WHERE {where}"))      # Driver A's 1 sprint point
+    try:
+        for path in ("/seasons/2021/results", "/seasons/2021/teammates", "/drivers/roster/2021", "/teams/1/season/2021",
+                     "/drivers/1/profile", "/races/2", "/records/all-time"):
+            resp = api_client.get(path)
+            assert resp.status_code == 200, (path, resp.text)
+        a = next(d for d in api_client.get("/seasons/2021/results").json()["drivers"] if d["name"] == "Driver A")
+        assert a["points"] == 50.0                                  # 51 less the missing sprint point
+        roster = api_client.get("/drivers/roster/2021").json()["drivers"]
+        assert next(d for d in roster if d["name"] == "Driver A")["season"]["points"] == 50.0
+        assert api_client.get("/teams/1/season/2021").json()["sprint_points"] == 0.0
+    finally:
+        with engine.begin() as db:
+            db.execute(text(f"UPDATE race_results SET points = 1 WHERE {where}"))
+        engine.dispose()
+
+
+def test_a_nan_anywhere_is_sent_as_null_not_a_crash():
+    from app.main import AppJSONResponse
+
+    assert AppJSONResponse({"a": [1.5, float("nan")], "b": {"c": float("inf")}}).body == b'{"a":[1.5,null],"b":{"c":null}}'

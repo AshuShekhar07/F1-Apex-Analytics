@@ -57,7 +57,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     """, "Most podiums", "podiums")
 
     top_driver("""
-        SELECT d.name AS driver_name, SUM(rr.points) AS value
+        SELECT d.name AS driver_name, SUM(NULLIF(rr.points, 'NaN')) AS value
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -66,7 +66,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     """, "Most career points (Race sessions only)", "points")
 
     top_driver("""
-        SELECT d.name AS driver_name, SUM(rr.points) AS value
+        SELECT d.name AS driver_name, SUM(NULLIF(rr.points, 'NaN')) AS value
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -261,7 +261,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     top_driver("""
         SELECT
             tm.name AS driver_name,
-            SUM(rr.points) AS value,
+            SUM(NULLIF(rr.points, 'NaN')) AS value,
             r.season_year
         FROM race_results rr
         JOIN sessions s

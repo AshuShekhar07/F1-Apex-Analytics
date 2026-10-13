@@ -151,6 +151,22 @@ def database(url: str) -> dict | None:
                       f"race results {r['race_results']:>3}  quali results {r['quali_results']:>3}")
             race["sessions_in_db"] = {r["session_type"]: dict(r) for r in rows}
 
+        season = race["season_year"] if race else db.execute(text("SELECT MAX(season_year) FROM races")).scalar()
+        bad = db.execute(text("""
+            SELECT r.round_number, s.session_type, COUNT(*) FILTER (WHERE rr.points = 'NaN') AS nan,
+                   COUNT(*) FILTER (WHERE rr.points IS NULL) AS missing
+            FROM race_results rr JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
+            JOIN races r ON r.id = s.race_id
+            WHERE r.season_year = :y AND (rr.points IS NULL OR rr.points = 'NaN')
+            GROUP BY 1, 2 ORDER BY 1, 2"""), {"y": season}).mappings().all()
+        for b in bad:
+            print(f"  points    {season} R{b['round_number']} {b['session_type']}: {b['nan']} NaN, {b['missing']} missing")
+        if any(b["nan"] for b in bad):
+            problem("some race/sprint points are NaN (loaded before the official points were out): run "
+                    f"`python repair_missing_points_v1.py --season {season} --apply` in the main folder")
+        elif bad:
+            print("  (missing points are filled by the pipeline once the official results are published)")
+
         if db.execute(text("SELECT to_regclass('pipeline_runs') IS NOT NULL")).scalar():
             runs = db.execute(text("""
                 SELECT id, job, started_at, finished_at, status, LEFT(COALESCE(detail, ''), 300) AS detail
@@ -463,7 +479,7 @@ def fastf1_check(race: dict | None) -> None:
         if not fresh or not fresh[1]:
             if not db_laps:
                 problem(f"{code}: F1 has not published usable data for it yet ({error or 'FastF1 got no laps'})")
-        elif db_laps >= 0.9 * fresh[1] and (db_results or code.startswith("FP")):
+        elif db_laps >= 0.9 * fresh[1] and (db_results or code in ("FP1", "FP2", "FP3", "SQ")):   # no results kept
             continue
         elif saved_dir and saved and saved[1] < 0.9 * fresh[1]:
             problem(f"{code}: FastF1's saved copy ({saved[1]} laps) is older than what F1 has now ({fresh[1]}), "

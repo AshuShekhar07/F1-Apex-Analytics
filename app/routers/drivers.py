@@ -59,7 +59,7 @@ def get_driver_history(
     history_base_query = """
         SELECT r.season_year, r.round_number, t.name AS track_name,
                tm.name AS team_name, tm.color_hex,
-               rr.finishing_position, rr.points, rr.status
+               rr.finishing_position, NULLIF(rr.points, 'NaN') AS points, rr.status
         FROM race_entries re
         JOIN races r ON r.id = re.race_id
         JOIN tracks t ON t.id = r.track_id
@@ -83,7 +83,7 @@ def get_driver_history(
             COUNT(*) FILTER (
                 WHERE rr.finishing_position BETWEEN 1 AND 3
             ) AS podiums,
-            COALESCE(SUM(rr.points), 0) AS race_points
+            COALESCE(SUM(NULLIF(rr.points, 'NaN')), 0) AS race_points
         FROM race_entries re
         JOIN races r
           ON r.id = re.race_id
@@ -110,7 +110,7 @@ def get_driver_history(
     podiums = int(career_stats["podiums"] or 0)
 
     sprint_points_row = db.execute(text("""
-        SELECT SUM(rr.points) AS sprint_points
+        SELECT SUM(NULLIF(rr.points, 'NaN')) AS sprint_points
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'S'
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -157,7 +157,7 @@ def get_driver_season(
             COUNT(*) FILTER (
                 WHERE rr.finishing_position <= 3
             ) AS podiums,
-            COALESCE(SUM(rr.points), 0) AS race_points,
+            COALESCE(SUM(NULLIF(rr.points, 'NaN')), 0) AS race_points,
             AVG(rr.finishing_position) FILTER (
                 WHERE rr.finishing_position IS NOT NULL
             ) AS average_finish,
@@ -215,7 +215,7 @@ def get_driver_season(
     }).scalar()
 
     sprint_points = db.execute(text("""
-        SELECT COALESCE(SUM(rr.points), 0)
+        SELECT COALESCE(SUM(NULLIF(rr.points, 'NaN')), 0)
         FROM race_entries re
         JOIN races r
           ON r.id = re.race_id
@@ -387,7 +387,7 @@ def get_season_roster(season: int = Path(..., ge=2018, le=2100), db: Session = D
         raise HTTPException(status_code=404, detail=f"No drivers found for {season}")
     ids = [int(r["driver_id"]) for r in roster]
     results = db.execute(text("""
-        SELECT re.driver_id, r.season_year, s.session_type, rr.finishing_position, rr.points, rr.status
+        SELECT re.driver_id, r.season_year, s.session_type, rr.finishing_position, NULLIF(rr.points, 'NaN') AS points, rr.status
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
         JOIN race_entries re ON re.id = rr.race_entry_id

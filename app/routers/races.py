@@ -217,7 +217,7 @@ def get_race(
             SELECT d.id AS driver_id, d.name AS driver_name, re.car_number,
                    tm.name AS team_name, tm.color_hex,
                    rr.finishing_position, rr.starting_grid_position,
-                   rr.points, rr.status, rr.gap_to_winner_seconds, rr.gap_to_winner_display,
+                   NULLIF(rr.points, 'NaN') AS points, rr.status, rr.gap_to_winner_seconds, rr.gap_to_winner_display,
                    (SELECT MAX(l.lap_number) FROM laps l WHERE l.race_entry_id = re.id AND l.session_id = rr.session_id) AS laps_completed
             FROM race_results rr
             JOIN race_entries re ON re.id = rr.race_entry_id
