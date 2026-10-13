@@ -4,7 +4,8 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    FASTF1_CACHE_DIR=/data/fastf1_cache
+    FASTF1_CACHE_DIR=/data/fastf1_cache \
+    FASTF1_CACHE=/data/fastf1_cache
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends postgresql-client \

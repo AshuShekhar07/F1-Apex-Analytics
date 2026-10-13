@@ -69,9 +69,13 @@ monitor at it.
 
 ## 5. Day to day
 
-* The scheduler checks every hour and runs the update **every 2 h on race weekends, daily
-  otherwise**. Runs never overlap (database lock). History: `pipeline_runs` table, logs in the
-  `pipelinelogs` volume (`docker compose exec scheduler ls logs`).
+* The scheduler checks every 10 minutes. When a session of the race weekend has finished and its
+  data should be out (FastF1's calendar: start + about 1.5 h, the race 3 h) but the database
+  does not have it complete (laps or results; a race or sprint with every official point; a
+  qualifying with lap times), it runs the update **every 30 minutes**, for up to 12 hours. Otherwise
+  it runs **every 2 h on race weekends, daily otherwise**. Runs never overlap (database lock).
+  History: `pipeline_runs` table, logs in the `pipelinelogs` volume
+  (`docker compose exec scheduler ls logs`).
 * Run an update by hand: `docker compose exec scheduler python run_pipeline.py`
 * Weekly report: `docker compose exec api python apex_report.py --no-wait`
 * Back up: `docker compose exec db pg_dump -Fc -U apex21 apex21 > backup_$(date +%F).dump`
