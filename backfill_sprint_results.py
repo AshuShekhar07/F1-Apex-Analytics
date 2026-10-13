@@ -77,7 +77,8 @@ with engine.connect() as conn:
                 """), {
                     "s": s["session_id"], "e": entry_id,
                     "p": int(row['Position']) if pd.notna(row['Position']) else None,
-                    "pts": float(row['Points']), "st": row['Status'],
+                    # no points yet (results service not published) -> NULL, filled by repair_missing_points_v1
+                    "pts": float(row['Points']) if pd.notna(row['Points']) else None, "st": row['Status'],
                     "gs": gap_seconds, "gd": gap_display
                 })
                 inserted += 1
