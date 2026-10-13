@@ -11,6 +11,10 @@ Checks, in order, and ends with a PROBLEMS list:
                 race control, weather samples, corners) each season has
   4. endpoints  every API call the website makes, run inside this script against the real
                 database, with the time each took and the full error when one fails
+  4b. sweep     with --deep: every API route (not only the website's), called with the
+                database's own ids and with bad ones (api_sweep_v1.py); any 5xx, crash or
+                non-JSON answer is a problem. Latest 8 races plus one per season, or every
+                race with --all-races (slow: a few minutes per season)
   5. FastF1     for the next race's sessions that have run but have no data here: has F1
                 published them, and is FastF1's saved copy older than what F1 has now
 
@@ -18,6 +22,7 @@ Read-only: it changes nothing in the database or in FastF1's saved copies.
 
     python api_check_v1.py > api_check.txt 2>&1
     python api_check_v1.py --skip-fastf1
+    python api_check_v1.py --deep              # before a deployment
 """
 
 from __future__ import annotations
@@ -95,8 +100,9 @@ def setup() -> str | None:
     print(f"  packages  {', '.join(found)}")
 
     env_file = ROOT / ".env"
-    print(f"  .env      {'found' if env_file.exists() else 'MISSING'}")
-    if not env_file.exists():
+    from_environment = bool(os.getenv("DATABASE_URL"))      # e.g. inside the Docker containers
+    print(f"  .env      {'found' if env_file.exists() else 'not used (DATABASE_URL is set)' if from_environment else 'MISSING'}")
+    if not env_file.exists() and not from_environment:
         problem(f"no .env in {ROOT}: copy it from the main folder (cp ../F1-Apex-Analytics/.env .)")
     from dotenv import load_dotenv
     load_dotenv(env_file)
@@ -319,6 +325,7 @@ def endpoints(url: str, race: dict | None) -> None:
         from app.database import get_db
         from app.main import app
         logging.getLogger("httpx").setLevel(logging.WARNING)       # one line per request otherwise
+        logging.getLogger("apex21").setLevel(logging.WARNING)      # same, with APP_ENV=production
     except Exception:
         problem("the API code does not even import (full error below): the server cannot start")
         print(traceback.format_exc())
@@ -375,7 +382,10 @@ def endpoints(url: str, race: dict | None) -> None:
         calls += [("Past race", p) for p in (f"/races/{last}", f"/races/{last}/winner-prediction",
                                              f"/races/{last}/position-battle", f"/races/{last}/strategy",
                                              f"/races/{last}/qualifying", f"/races/{last}/long-runs",
-                                             f"/strategy/winning?race_id={last}")]
+                                             f"/strategy/winning?race_id={last}",
+                                             f"/races/{last}/race-trace", f"/races/{last}/ideal-lap",
+                                             f"/races/{last}/overtakes", f"/races/{last}/undercuts")]
+    calls += [("Records", "/records/history")]
 
     for page, path in calls:
         started = time.perf_counter()
@@ -396,6 +406,58 @@ def endpoints(url: str, race: dict | None) -> None:
         elif seconds > SLOW_SECONDS:
             problem(f"{path} is slow ({seconds:.0f}s); {page} waits for it")
     print("  (404 with a reason is normal: it means 'no data for this yet', and the website shows that)")
+    engine.dispose()
+
+
+def deep_sweep(url: str, all_races: bool) -> None:
+    section("4b. every API route, real and bad ids (api_sweep_v1)")
+    try:
+        from fastapi.testclient import TestClient
+    except Exception as exc:                              # httpx missing
+        print(f"  skipped: {exc}")
+        return
+    import logging
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    import api_sweep_v1
+    from app.database import get_db
+    from app.main import app
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("apex21").setLevel(logging.WARNING)
+    engine = create_engine(url, connect_args={"options": "-c statement_timeout=120000"})
+    Session = sessionmaker(bind=engine, autoflush=False)
+
+    def override_get_db():
+        db = Session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app, raise_server_exceptions=False)
+    print(f"  {'every race' if all_races else 'the latest 8 races and one per season'}; "
+          "progress every 200 calls, failures as they happen", flush=True)
+    calls = {"n": 0}
+
+    class Counting:
+        def request(self, *a, **kw):
+            calls["n"] += 1
+            if calls["n"] % 200 == 0:
+                print(f"  ... {calls['n']} calls", flush=True)
+            return client.request(*a, **kw)
+
+    with engine.connect() as db:
+        report = api_sweep_v1.sweep(Counting(), app, db, all_races=all_races, log=print)
+    api_sweep_v1.print_report(report)
+    for r in report.failures:
+        problem(f"{r.method} {r.url} -> {r.status}: {r.error[:160]}")
+    if report.slow:
+        print(f"  ({len(report.slow)} answer(s) took over {api_sweep_v1.SLOW_SECONDS:.0f}s; listed above)")
+    app.dependency_overrides.pop(get_db, None)
     engine.dispose()
 
 
@@ -521,7 +583,12 @@ def _saved_dir(cache: str, fastf1, season: int, rnd: int, name: str) -> str | No
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skip-fastf1", action="store_true", help="skip section 5 (no internet needed)")
+    parser.add_argument("--deep", action="store_true", help="also call every API route (section 4b)")
+    parser.add_argument("--all-races", action="store_true", help="with --deep: every race, not a sample")
     args = parser.parse_args()
+    # sections 4 and 4b call the API inside this script: no rate limit for them (the running
+    # server keeps its own)
+    os.environ["RATE_LIMIT_PER_MINUTE"] = "0"
     print(f"Apex21 API check, {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC")
     url = setup()
     race = None
@@ -534,6 +601,12 @@ def main() -> int:
         except Exception:
             print(f"  (could not count: {traceback.format_exc().strip().splitlines()[-1]})")
         endpoints(url, race)
+        if args.deep:
+            try:
+                deep_sweep(url, args.all_races)
+            except Exception:
+                problem("the API sweep itself failed (error below)")
+                print(traceback.format_exc())
     if not args.skip_fastf1:
         try:
             fastf1_check(race)

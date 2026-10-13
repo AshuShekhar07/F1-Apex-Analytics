@@ -5,7 +5,8 @@ api_check_v1.py --deep (the real database) and before a deployment.
 Every path and query parameter gets the real values from the database (every race, driver,
 team, circuit, season) plus values that must fail cleanly: an id that does not exist, an
 out-of-range season, an unknown session or a malformed date. A response is a failure when it
-is a 5xx, when the route crashes, or when a 2xx/4xx body is not JSON. Slow responses are listed.
+is a 5xx, when the route crashes, when a 2xx/4xx body is not JSON, or when it is a 429 (the
+rate limit stopped the call, so the route went untested). Slow responses are listed.
 """
 
 from __future__ import annotations
@@ -129,6 +130,8 @@ def sweep(client: Any, app: Any, db: Any, *, all_races: bool = True, what_if: bo
             error = ""
             if resp.status_code >= 500:
                 error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            elif resp.status_code == 429:                 # the route was not tested at all
+                error = "HTTP 429: rate-limited, so not tested (turn RATE_LIMIT_PER_MINUTE off for the sweep)"
             else:
                 try:
                     json.loads(resp.text)
