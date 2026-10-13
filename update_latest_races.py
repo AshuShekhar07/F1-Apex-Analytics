@@ -99,23 +99,25 @@ def fill_regulation_era(db, season: int) -> list[int]:
 
 
 def points_state(db, season: int) -> tuple[int | None, bool]:
-    """(latest raced round if any of its race/sprint points are still missing, whether the
-    stored title chances after that round were computed from missing (NaN) points and must
-    be redone). Title chances wait for complete points: a missing value counts as 0."""
+    """(a round whose race/sprint points are not usable yet -- NaN anywhere in the season, or
+    missing in the latest round -- and whether the stored title chances after the latest round
+    were computed from NaN points and must be redone). Title chances wait for usable points."""
     latest = db.execute(text("""
         SELECT MAX(r.round_number) FROM races r JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         WHERE r.season_year = :y AND EXISTS (SELECT 1 FROM race_results rr WHERE rr.session_id = s.id)
     """), {"y": season}).scalar()
     if latest is None:
         return None, False
+    # a NaN anywhere in the season poisons every sum (COALESCE does not catch it); a missing value
+    # (NULL) only matters for the latest round, whose official points may not be out yet
     missing = db.execute(text("""
-        SELECT EXISTS (SELECT 1 FROM race_results rr JOIN sessions s ON s.id = rr.session_id
-                       JOIN races r ON r.id = s.race_id
-                       WHERE r.season_year = :y AND r.round_number = :n AND s.session_type IN ('R', 'S')
-                         AND (rr.points IS NULL OR rr.points = 'NaN'))
+        SELECT MIN(r.round_number) FROM race_results rr JOIN sessions s ON s.id = rr.session_id
+        JOIN races r ON r.id = s.race_id
+        WHERE r.season_year = :y AND s.session_type IN ('R', 'S')
+          AND (rr.points = 'NaN' OR (rr.points IS NULL AND r.round_number = :n))
     """), {"y": season, "n": latest}).scalar()
-    if missing:
-        return int(latest), False
+    if missing is not None:
+        return int(missing), False
     redo = bool(db.execute(text("SELECT to_regclass('championship_projections') IS NOT NULL")).scalar()) and \
         bool(db.execute(text("""
             SELECT EXISTS (SELECT 1 FROM championship_projections

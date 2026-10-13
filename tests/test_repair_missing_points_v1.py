@@ -78,6 +78,16 @@ def test_title_chances_wait_for_missing_points_and_are_redone_after_nan(fixture_
                     WHERE r.season_year = 2021 AND r.round_number = 2 AND s.session_type = 'R' LIMIT 1)"""))
             assert points_state(db, 2021) == (2, False)                # latest round incomplete: wait
             db.execute(text("UPDATE race_results SET points = 0 WHERE points = 'NaN'"))
+            # a NaN in an earlier round (the round 1 race) also holds the title chances back;
+            # a NULL there (official points never published) does not
+            first = """id = (SELECT rr.id FROM race_results rr JOIN sessions s ON s.id = rr.session_id
+                            JOIN races r ON r.id = s.race_id
+                            WHERE r.season_year = 2021 AND r.round_number = 1 AND s.session_type = 'R'
+                            ORDER BY rr.id LIMIT 1)"""
+            db.execute(text(f"UPDATE race_results SET points = 'NaN' WHERE {first}"))
+            assert points_state(db, 2021) == (1, False)
+            db.execute(text(f"UPDATE race_results SET points = NULL WHERE {first}"))
+            assert points_state(db, 2021) == (None, False)
             db.execute(text((__import__("pathlib").Path(__file__).resolve().parents[1]
                              / "migration_championship_projections_v1.sql").read_text()))
             db.execute(text("""

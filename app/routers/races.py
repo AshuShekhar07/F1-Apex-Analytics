@@ -136,7 +136,7 @@ def build_display_value(row, winner_time_seconds, leader_laps_completed):
 
 @router.get("", response_model=list[RaceListItem])
 def list_races(
-    season: int | None = Query(None, ge=2018, le=2026),
+    season: int | None = Query(None, ge=2018, le=2100),
     db: Session = Depends(get_db)
 ):
     from race_forecast_v1 import MODEL_VERSION

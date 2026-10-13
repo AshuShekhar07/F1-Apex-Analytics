@@ -136,7 +136,7 @@ def get_driver_history(
 @router.get("/{driver_id}/season/{season}", response_model=DriverSeasonResponse)
 def get_driver_season(
     driver_id: int = Path(..., ge=1),
-    season: int = Path(..., ge=2018, le=2026),
+    season: int = Path(..., ge=2018, le=2100),
     db: Session = Depends(get_db),
 ):
     driver = db.execute(text("""

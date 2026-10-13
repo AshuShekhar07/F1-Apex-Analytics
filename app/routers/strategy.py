@@ -271,12 +271,9 @@ def predict_strategy_v6(
     )
 
     if result.get("status") != "ok":
-        if result.get("weather_status") == "unavailable":
-            status_code = 503
-        elif result.get("status") == "not_found":
-            status_code = 404
-        else:
-            status_code = 500
+        # the weather service being down is a 503; anything else (unknown track, no race data
+        # for that track or date) is about the request, not a server failure
+        status_code = 503 if result.get("weather_status") == "unavailable" else 404
 
         raise HTTPException(
             status_code=status_code,

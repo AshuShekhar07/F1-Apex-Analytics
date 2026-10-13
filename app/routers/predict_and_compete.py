@@ -9,7 +9,7 @@ router = APIRouter(prefix="/predict-and-compete", tags=["predict-and-compete"])
 
 @router.get("/{season_year}/{round_number}")
 def get_predict_and_compete(
-    season_year: int = Path(..., ge=2018, le=2026),
+    season_year: int = Path(..., ge=2018, le=2100),
     round_number: int = Path(..., ge=1, le=30),
     db: Session = Depends(get_db)
 ):
