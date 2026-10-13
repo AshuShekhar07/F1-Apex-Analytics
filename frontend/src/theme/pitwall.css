@@ -267,6 +267,26 @@ button { font: inherit; }
 .chart-legend i { width: 14px; height: 2px; }
 .chart-legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; }
 
+/* race trace: controls above the chart, line keys, car toggles */
+.trace-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; }
+.chart:focus-visible { outline: 1px solid var(--text-3); outline-offset: 4px; }
+i.key { display: inline-block; flex: none; width: 14px; height: 2px; background: currentColor; }
+i.key.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); }
+.chart-tip .trace-row { gap: 7px; }
+.chart-tip .trace-row b.num { min-width: 64px; margin-left: 0; font: 700 0.78rem var(--mono); color: var(--text); }
+.chart-tip .trace-row .who { font: 700 0.72rem var(--mono); color: var(--text-2); }
+.chart-tip .trace-row .small { margin-left: auto; font-size: 0.68rem; }
+.pit-tag { font: 700 0.62rem var(--mono); letter-spacing: 0.04em; }
+.chart-tip.inline { position: static; min-width: 0; margin-top: 10px; box-shadow: none; }
+.trace-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.trace-keys button {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--line-2);
+  border-radius: var(--radius); background: none; color: var(--text-3); font: 700 0.72rem var(--mono); cursor: pointer;
+}
+.trace-keys button:not(.on) i.key { opacity: 0.35; }
+.trace-keys button.on { color: var(--text); border-color: var(--text-3); background: var(--surface-2); }
+.trace-keys button:hover { border-color: var(--text-2); }
+
 .strategy-lane { position: relative; }
 .lap-axis { display: flex; justify-content: space-between; margin-top: 6px; font: 500 0.66rem/1 var(--mono); color: var(--text-3); }
 .lane { position: relative; height: 26px; margin-top: 8px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }

@@ -529,3 +529,32 @@ export interface PreStart {
   plans: Record<string, WinningPlan>
   note: string
 }
+
+export interface RaceTraceDriver {
+  driver_id: number
+  driver_name: string | null
+  team_name: string | null
+  color_hex: string | null
+  finish: number | null
+  grid: number | null
+  status: string | null
+  classified: boolean
+  pits: { lap: number; compound: string | null }[]
+  /** seconds behind the leader at the end of each lap (index = lap - 1) */
+  gap: (number | null)[]
+  /** seconds ahead (+) or behind (-) the winner's average pace (index = lap - 1) */
+  trace: (number | null)[]
+}
+
+export interface RaceTrace {
+  race_id: number
+  season: number
+  round: number
+  track: string
+  total_laps: number | null
+  reference_lap: number | null
+  neutralised: { kind: 'SC' | 'VSC' | 'RED_FLAG'; start_lap: number; end_lap: number }[]
+  neutralised_known?: boolean
+  drivers: RaceTraceDriver[]
+  note?: string
+}

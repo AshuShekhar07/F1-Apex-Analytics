@@ -22,7 +22,7 @@ function niceMax(v: number): number {
 }
 
 /** Spread end labels so they never overlap (min gap in px), keeping their order. */
-function spread(ys: number[], gap: number, lo: number, hi: number): number[] {
+export function spread(ys: number[], gap: number, lo: number, hi: number): number[] {
   const order = ys.map((y, i) => [y, i] as const).sort((a, b) => a[0] - b[0])
   const out = new Array<number>(ys.length)
   let last = -Infinity

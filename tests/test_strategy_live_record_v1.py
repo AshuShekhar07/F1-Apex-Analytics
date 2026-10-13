@@ -99,11 +99,14 @@ def strategy_client(synthetic_db):
         finally:
             db.close()
 
+    previous = app.dependency_overrides.get(get_db)        # the shared api_client's, if set
     app.dependency_overrides[get_db] = override
     try:
         yield TestClient(app)
     finally:
         app.dependency_overrides.pop(get_db, None)
+        if previous is not None:
+            app.dependency_overrides[get_db] = previous
 
 
 def test_winning_strategy_and_live_strategy_endpoints(strategy_client):

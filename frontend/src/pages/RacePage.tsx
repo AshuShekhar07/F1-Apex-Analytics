@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api'
 import { LapChart } from '../charts/LapChart'
+import { RaceTrace } from '../charts/RaceTrace'
 import { DataNotes, ErrorBox } from '../components/Status'
 import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
@@ -22,6 +23,7 @@ export function RacePage() {
   const r = race.data
   const finished = (r?.results.length ?? 0) > 0
   const battle = useAsync(() => (finished ? api.positionBattle(raceId) : Promise.resolve(null)), [raceId, finished])
+  const trace = useAsync(() => (finished ? api.raceTrace(raceId) : Promise.resolve(null)), [raceId, finished])
   const actual = useAsync(() => (finished ? api.actualStrategy(raceId) : Promise.resolve(null)), [raceId, finished])
   const strategy = useAsync(() => api.winningStrategy(raceId), [raceId])
   const quali = useAsync(() => api.qualifying(raceId), [raceId])
@@ -72,6 +74,13 @@ export function RacePage() {
               )}
             </div>
           </div>
+
+          {trace.data && trace.data.drivers.length > 0 && (
+            <>
+              <div className="section-head" style={{ marginTop: 26 }}><h2>Race trace</h2><span className="aside">gap to the leader, lap by lap</span></div>
+              <RaceTrace data={trace.data} />
+            </>
+          )}
 
           {battle.data && battle.data.results.some((d) => d.positions.length) && (
             <>
