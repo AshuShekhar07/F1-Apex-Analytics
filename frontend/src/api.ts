@@ -13,6 +13,7 @@ import type {
   LiveRecord,
   LongRuns,
   OvertakingIndex,
+  Overtakes,
   PreStart,
   TeammatePairs,
   TeamSeason,
@@ -93,6 +94,7 @@ export const api = {
   winningStrategy: (raceId: number) => optional(request<WinningStrategy>(`/strategy/winning?race_id=${raceId}`)),
   idealLap: (id: number, session?: string) =>
     optional(request<IdealLap>(`/races/${id}/ideal-lap${session ? `?session=${session}` : ''}`)),
+  overtakes: (id: number) => optional(request<Overtakes>(`/races/${id}/overtakes`)),
   raceTrace: (id: number) => optional(request<RaceTrace>(`/races/${id}/race-trace`)),
   positionBattle: (id: number) => optional(request<PositionBattle>(`/races/${id}/position-battle`)),
   qualifying: (id: number) => optional(request<{ results: QualifyingRow[] }>(`/races/${id}/qualifying`)),

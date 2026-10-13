@@ -592,3 +592,30 @@ export interface IdealLap {
   drivers: IdealLapDriver[]
   note?: string
 }
+
+export interface OvertakesDriver {
+  driver_id: number
+  driver_name: string | null
+  team_name: string | null
+  color_hex: string | null
+  grid: number | null
+  finish: number | null
+  classified: boolean
+  made: number
+  lost: number
+  /** places gained (+) or lost (-) from the grid to the end of lap 1 */
+  start_gain: number | null
+}
+
+export interface Overtakes {
+  race_id: number
+  total_laps?: number
+  total_overtakes: number
+  per_lap: number[]
+  overtakes: { lap: number; by: number; on: number; for_position: number }[]
+  battles: { attacker: number; defender: number; from_lap: number; to_lap: number; laps: number; closest: number; changes: number; passed_on_lap: number | null }[]
+  drivers: OvertakesDriver[]
+  neutralised?: { kind: 'SC' | 'VSC' | 'RED_FLAG'; start_lap: number; end_lap: number }[]
+  neutralised_known?: boolean
+  note?: string
+}

@@ -35,3 +35,16 @@ def get_ideal_lap(race_id: int = Path(..., ge=1),
     if table is None:
         raise HTTPException(status_code=404, detail="Race not found")
     return table
+
+
+@router.get("/{race_id}/overtakes")
+def get_overtakes(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
+    """On-track overtakes (pit-stop swaps, Safety Car / VSC / red-flag laps, cars about to retire
+    and the start are not counted), places gained on lap 1, overtakes per lap and per driver,
+    and the longest battles (nose to tail within 1 s, lap after lap) with how they ended."""
+    from overtakes_v1 import load_overtakes
+
+    body = load_overtakes(db, race_id)
+    if body is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    return body

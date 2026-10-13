@@ -549,3 +549,23 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
   .ideal-kv { grid-template-columns: minmax(0, 1fr); }
   .ideal-row .hide-sm, .ideal-row .hide-md { display: none; }
 }
+
+/* overtakes and battles */
+.ot-kv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ot-bar { display: flex; align-items: center; gap: 8px; min-width: 70px; }
+.ot-bar i { display: block; height: 6px; min-width: 0; border-radius: 0 2px 2px 0; }
+.ot-bar b { font-size: 0.8rem; }
+.battle-list { list-style: none; margin: 0; padding: 0; }
+.battle-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.battle-list li:last-child { border-bottom: 0; }
+.battle-list .pair { display: flex; align-items: center; gap: 7px; font: 700 0.85rem var(--mono); }
+.battle-list .pair .team-bar { height: 14px; }
+.battle-list .pair .dim { font: 500 0.75rem var(--ui); }
+.battle-list .meta { grid-column: 1; font-size: 0.75rem; color: var(--text-3); }
+.battle-list .outcome { grid-column: 2; grid-row: 1 / span 2; align-self: center; font: 600 0.75rem var(--mono); color: var(--text-2); text-align: right; }
+.battle-list .outcome.up { color: var(--up); }
+@media (max-width: 760px) {
+  .ot-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .battle-list li { grid-template-columns: minmax(0, 1fr); }
+  .battle-list .outcome { grid-column: 1; grid-row: auto; text-align: left; }
+}
