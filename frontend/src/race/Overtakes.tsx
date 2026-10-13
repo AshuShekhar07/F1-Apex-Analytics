@@ -46,8 +46,8 @@ export function Overtakes({ data }: { data: OvertakesData }) {
                     <td><div className="driver-cell"><span className="team-bar" style={{ background: colourOf(d) }} /><span className="code">{code(d)}</span><span className="name hide-sm">{d.driver_name}</span></div></td>
                     <td className="r num hide-sm dim">{d.grid ? `P${d.grid}` : 'Pit'} → {d.finish ? (d.classified ? `P${d.finish}` : 'DNF') : '–'}</td>
                     <td className="r num">{signed(d.start_gain)}</td>
-                    <td><span className="ot-bar"><i style={{ width: `${(d.made / maxBar) * 100}%`, background: 'var(--up)' }} /><b className="num">{d.made}</b></span></td>
-                    <td><span className="ot-bar"><i style={{ width: `${(d.lost / maxBar) * 100}%`, background: 'var(--down)' }} /><b className="num">{d.lost}</b></span></td>
+                    <td><span className="ot-bar"><span className="track"><i style={{ width: `${(d.made / maxBar) * 100}%`, background: 'var(--up)' }} /></span><b className="num">{d.made}</b></span></td>
+                    <td><span className="ot-bar"><span className="track"><i style={{ width: `${(d.lost / maxBar) * 100}%`, background: 'var(--down)' }} /></span><b className="num">{d.lost}</b></span></td>
                   </tr>
                 ))}
               </tbody>

@@ -12,6 +12,7 @@ const NAV = [
   { to: '/teams', label: 'Teams' },
   { to: '/drivers', label: 'Drivers' },
   { to: '/tracks', label: 'Tracks' },
+  { to: '/records', label: 'Records' },
 ]
 
 export function SiteHeader() {

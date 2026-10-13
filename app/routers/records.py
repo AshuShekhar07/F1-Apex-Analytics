@@ -377,3 +377,13 @@ def get_calibration():
                          "mean_favourite_p": s["mean_favourite_p"],
                          "bins": [{k: b[k] for k in ("lo", "hi", "races", "mean_p", "favourite_won")} for b in s["bins"]]}
     return {"source": data["source"], "stages": stages}
+
+
+@router.get("/history")
+def get_records_history(db: Session = Depends(get_db)):
+    """Records and streaks over the Grands Prix in the database (2018 onwards): hat-tricks and
+    Grand Chelems, the longest and the active streaks (wins, podiums, points, finishes, poles),
+    the leaders, how often pole wins at each circuit and the furthest back a race was won from."""
+    from records_v1 import load_records
+
+    return load_records(db)

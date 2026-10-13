@@ -11,6 +11,7 @@ import { ChampionshipPage } from './pages/ChampionshipPage'
 import { DriversPage } from './pages/DriversPage'
 import { RaceHubPage } from './pages/RaceHubPage'
 import { RacePage } from './pages/RacePage'
+import { RecordsPage } from './pages/RecordsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { TeamPage, TeamsPage } from './pages/TeamsPage'
 import { SiteHeader } from './shell/Header'
@@ -64,6 +65,7 @@ export function App() {
               <Route path="/drivers" element={<Page><DriversPage /></Page>} />
               <Route path="/teams/:year?" element={<Page><TeamsPage /></Page>} />
               <Route path="/teams/:year/:id" element={<Page><TeamPage /></Page>} />
+              <Route path="/records" element={<Page><RecordsPage /></Page>} />
               <Route
                 path="/tracks"
                 element={<Page><Suspense fallback={<div className="page muted">Loading circuits…</div>}><TracksPage /></Suspense></Page>}

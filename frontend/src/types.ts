@@ -619,3 +619,46 @@ export interface Overtakes {
   neutralised_known?: boolean
   note?: string
 }
+
+export interface RecordRace {
+  race_id: number
+  season: number
+  round: number
+  track: string
+  race_date: string
+}
+
+export interface Streak {
+  driver_id: number
+  driver_name: string
+  team_name: string | null
+  color_hex: string | null
+  length: number
+  from: RecordRace
+  to: RecordRace
+}
+
+export type StreakKind = 'wins' | 'podiums' | 'points' | 'finishes' | 'poles'
+
+export interface RecordLeader {
+  driver_id: number
+  driver_name: string
+  team_name: string | null
+  color_hex: string | null
+  count: number
+}
+
+export interface RecordsHistory {
+  races: number
+  first_season: number | null
+  last_season: number | null
+  latest_race?: RecordRace
+  streaks: Record<StreakKind, { longest: Streak[]; active: Streak[] }>
+  hat_tricks: (RecordRace & { driver_id: number; driver_name: string; team_name: string | null; color_hex: string | null; grand_chelem: boolean | null })[]
+  leaders: Record<'wins' | 'poles' | 'podiums' | 'fastest_laps' | 'hat_tricks', RecordLeader[]>
+  pole_to_win: { track_id: number; track: string; races: number; pole_won: number }[]
+  pole_to_win_overall?: { races: number; pole_won: number }
+  furthest_back_wins: { race_id: number; season: number; round: number; track: string; driver_id: number; driver_name: string;
+    team_name: string | null; color_hex: string | null; grid: number; pit_lane: boolean }[]
+  note?: string
+}

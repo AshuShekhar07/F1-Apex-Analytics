@@ -553,7 +553,8 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 /* overtakes and battles */
 .ot-kv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .ot-bar { display: flex; align-items: center; gap: 8px; min-width: 70px; }
-.ot-bar i { display: block; height: 6px; min-width: 0; border-radius: 0 2px 2px 0; }
+.ot-bar .track { flex: 1 1 auto; max-width: 140px; min-width: 36px; height: 6px; }
+.ot-bar .track i { display: block; height: 100%; border-radius: 0 2px 2px 0; }
 .ot-bar b { font-size: 0.8rem; }
 .battle-list { list-style: none; margin: 0; padding: 0; }
 .battle-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
@@ -568,4 +569,33 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
   .ot-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .battle-list li { grid-template-columns: minmax(0, 1fr); }
   .battle-list .outcome { grid-column: 1; grid-row: auto; text-align: left; }
+}
+
+/* records */
+.rec-kv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.badge.gold { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
+.streak-list { list-style: none; margin: 0; padding: 4px 0; }
+.streak-list li {
+  display: grid; align-items: center; gap: 2px 12px; padding: 8px 16px; border-bottom: 1px solid var(--line);
+  grid-template-columns: 18px minmax(120px, 190px) minmax(40px, 1fr) 34px;
+}
+.streak-list li:last-child { border-bottom: 0; }
+.streak-list .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.streak-list .who .team-bar { height: 14px; }
+.streak-list .who .name { color: var(--text-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.85rem; }
+.streak-list .bar { display: block; height: 6px; }
+.streak-list .bar i { display: block; height: 100%; border-radius: 0 2px 2px 0; }
+.streak-list .len { text-align: right; font-size: 1rem; }
+.streak-list .span { grid-column: 2 / -1; font-size: 0.72rem; }
+.streak-list.compact li { grid-template-columns: 18px 56px minmax(30px, 1fr) 34px; padding: 7px 14px; }
+.rec-leaders { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.rec-back { padding: 0 16px; }
+@media (max-width: 1080px) { .rec-leaders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.trace-controls .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.trace-controls .tabs button { flex: none; }
+@media (max-width: 760px) {
+  .rec-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rec-leaders { grid-template-columns: minmax(0, 1fr); }
+  .streak-list .hide-sm { display: none; }
+  .streak-list li { grid-template-columns: 18px 52px minmax(30px, 1fr) 30px; }
 }
