@@ -17,6 +17,7 @@ import type {
   PreStart,
   TeammatePairs,
   TeamSeason,
+  Undercuts,
   WetRanking,
   PositionBattle,
   QualifyingRow,
@@ -96,6 +97,7 @@ export const api = {
   idealLap: (id: number, session?: string) =>
     optional(request<IdealLap>(`/races/${id}/ideal-lap${session ? `?session=${session}` : ''}`)),
   overtakes: (id: number) => optional(request<Overtakes>(`/races/${id}/overtakes`)),
+  undercuts: (id: number) => optional(request<Undercuts>(`/races/${id}/undercuts`)),
   raceTrace: (id: number) => optional(request<RaceTrace>(`/races/${id}/race-trace`)),
   positionBattle: (id: number) => optional(request<PositionBattle>(`/races/${id}/position-battle`)),
   qualifying: (id: number) => optional(request<{ results: QualifyingRow[] }>(`/races/${id}/qualifying`)),

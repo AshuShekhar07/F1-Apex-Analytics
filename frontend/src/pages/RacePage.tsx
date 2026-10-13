@@ -14,6 +14,7 @@ import { Overtakes } from '../race/Overtakes'
 import { PredictionTower } from '../race/PredictionTower'
 import { QualifyingTable } from '../race/QualifyingTable'
 import { StrategyLane } from '../race/StrategyLane'
+import { Undercuts } from '../race/Undercuts'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { ActualDriverStrategy, Forecast, RaceResult, WinnerPrediction } from '../types'
 
@@ -27,6 +28,7 @@ export function RacePage() {
   const battle = useAsync(() => (finished ? api.positionBattle(raceId) : Promise.resolve(null)), [raceId, finished])
   const trace = useAsync(() => (finished ? api.raceTrace(raceId) : Promise.resolve(null)), [raceId, finished])
   const overtakes = useAsync(() => (finished ? api.overtakes(raceId) : Promise.resolve(null)), [raceId, finished])
+  const undercuts = useAsync(() => (finished ? api.undercuts(raceId) : Promise.resolve(null)), [raceId, finished])
   const actual = useAsync(() => (finished ? api.actualStrategy(raceId) : Promise.resolve(null)), [raceId, finished])
   const strategy = useAsync(() => api.winningStrategy(raceId), [raceId])
   const quali = useAsync(() => api.qualifying(raceId), [raceId])
@@ -86,6 +88,7 @@ export function RacePage() {
           )}
 
           {overtakes.data && overtakes.data.per_lap.length > 0 && <Overtakes data={overtakes.data} />}
+          {undercuts.data && (undercuts.data.duels.length > 0 || undercuts.data.skipped_neutralised > 0) && <Undercuts data={undercuts.data} />}
 
           {battle.data && battle.data.results.some((d) => d.positions.length) && (
             <>

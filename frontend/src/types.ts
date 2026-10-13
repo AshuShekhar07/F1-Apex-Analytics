@@ -662,3 +662,31 @@ export interface RecordsHistory {
     team_name: string | null; color_hex: string | null; grid: number; pit_lane: boolean }[]
   note?: string
 }
+
+export interface UndercutDuel {
+  first: number
+  second: number
+  first_lap: number
+  second_lap: number
+  first_compound: string | null
+  second_compound: string | null
+  /** seconds the first stopper was behind (+) or ahead (-) before the stops */
+  gap_before: number
+  gap_after: number
+  gain: number
+  kind: 'undercut' | 'overcut'
+  worked: boolean
+  for_position: number | null
+}
+
+export interface Undercuts {
+  race_id: number
+  reach: number
+  window: number
+  duels: UndercutDuel[]
+  skipped_neutralised: number
+  summary: Record<'undercut' | 'overcut', { tried: number; worked: number }>
+  drivers: { driver_id: number; driver_name: string | null; team_name: string | null; color_hex: string | null }[]
+  neutralised_known?: boolean
+  note?: string
+}

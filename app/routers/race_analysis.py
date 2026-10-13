@@ -48,3 +48,16 @@ def get_overtakes(race_id: int = Path(..., ge=1), db: Session = Depends(get_db))
     if body is None:
         raise HTTPException(status_code=404, detail="Race not found")
     return body
+
+
+@router.get("/{race_id}/undercuts")
+def get_undercuts(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
+    """Pit-stop duels between cars running within 3.5 s: whether pitting first (undercut) or
+    staying out (overcut) won the place, with the gap before and after the stops. Stops under a
+    Safety Car / VSC / red flag are left out."""
+    from undercut_v1 import load_undercuts
+
+    body = load_undercuts(db, race_id)
+    if body is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    return body
