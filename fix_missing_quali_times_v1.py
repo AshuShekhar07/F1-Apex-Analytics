@@ -16,6 +16,13 @@ Safety:
     python fix_missing_quali_times_v1.py                    # report every race with rows but no times
     python fix_missing_quali_times_v1.py --race-id 155 --race-id 156 --apply
     python fix_missing_quali_times_v1.py --race-id 11          # also races missing only some times
+    python fix_missing_quali_times_v1.py --season 2026 --apply  # pipeline step: every race of the season
+                                                                 # with rows but no times
+
+Qualifying loaded before the official Q1/Q2/Q3 times were out has positions but no times
+(2026 R17 Marina Bay), and data_quality_v1 then blocks the forecast; the pipeline runs the
+--season form after each load. A race that cannot be repaired yet is reported and skipped,
+so the step never stops the pipeline.
 """
 
 from __future__ import annotations
@@ -115,6 +122,7 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--race-id", type=int, action="append", default=[])
+    parser.add_argument("--season", type=int, help="every race of this season with qualifying rows but no times")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
@@ -125,7 +133,12 @@ def main() -> int:
     for m in missing:
         print(f"  race {m['id']}: {m['season_year']} R{m['round_number']} {m['track_name']} ({m['rows']} rows)")
     targets = []
-    if args.race_id:
+    if args.season:
+        targets = [dict(m) for m in missing if m["season_year"] == args.season]
+        if not targets:
+            print(f"{args.season}: every race with qualifying rows has times")
+            return 0
+    elif args.race_id:
         # any race given by id, including ones missing only SOME times (2018 Hockenheim:
         # 13/20); apply_updates only fills NULL columns, so complete rows are untouched
         with engine.connect() as conn:
@@ -138,30 +151,40 @@ def main() -> int:
     fastf1.Cache.enable_cache(fastf1_cache_dir())
     from backfill_fastf1_enrichment_v1 import entry_map
 
-    with engine.begin() as conn:
-        for m in targets:
-            session_id = conn.execute(text(
-                "SELECT id FROM sessions WHERE race_id = :r AND session_type = 'Q'"), {"r": m["id"]}).scalar()
-            session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
-            session.load(laps=False, telemetry=False, weather=False, messages=False)
-            entries = entry_map(conn, m["id"])
-            updates, unmatched = planned_updates(session.results.to_dict("records"), entries)
-            source = "results table"
-            if not updates:
-                # results table empty: use lap timing (needs laps + status + race control messages)
-                session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
-                session.load(laps=True, telemetry=False, weather=False, messages=True)
-                rows = results_from_lap_timing(session.laps.split_qualifying_sessions())
-                updates, unmatched = planned_updates(rows, entries)
-                source = "lap timing (fastest non-deleted lap per segment)"
-            print(f"race {m['id']} {m['track_name']}: FastF1 times for {len(updates)} drivers from {source}"
-                  + (f"; car numbers not in this race: {unmatched}" if unmatched else ""))
-            if args.apply:
-                print(f"  updated {apply_updates(conn, session_id, updates)} rows")
-        if not args.apply:
-            conn.rollback()
-            print("Dry run -- re-run with --apply to write.")
+    for m in targets:
+        try:
+            with engine.begin() as conn:
+                repair_race(conn, m, apply=args.apply, entry_map=entry_map)
+        except Exception as exc:          # FastF1 has nothing yet, network down: try again next run
+            print(f"race {m['id']} {m['track_name']}: not repaired ({type(exc).__name__}: {exc})")
+    if not args.apply:
+        print("Dry run -- re-run with --apply to write.")
     return 0
+
+
+def repair_race(conn, m: dict, *, apply: bool, entry_map) -> None:
+    import fastf1
+
+    session_id = conn.execute(text(
+        "SELECT id FROM sessions WHERE race_id = :r AND session_type = 'Q'"), {"r": m["id"]}).scalar()
+    session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
+    session.load(laps=False, telemetry=False, weather=False, messages=False)
+    entries = entry_map(conn, m["id"])
+    updates, unmatched = planned_updates(session.results.to_dict("records"), entries)
+    source = "results table"
+    if not updates:
+        # results table empty: use lap timing (needs laps + status + race control messages)
+        session = fastf1.get_session(m["season_year"], m["round_number"], "Qualifying")
+        session.load(laps=True, telemetry=False, weather=False, messages=True)
+        rows = results_from_lap_timing(session.laps.split_qualifying_sessions())
+        updates, unmatched = planned_updates(rows, entries)
+        source = "lap timing (fastest non-deleted lap per segment)"
+    print(f"race {m['id']} {m['track_name']}: FastF1 times for {len(updates)} drivers from {source}"
+          + (f"; car numbers not in this race: {unmatched}" if unmatched else ""))
+    if apply:
+        print(f"  updated {apply_updates(conn, session_id, updates)} rows")
+    else:
+        conn.rollback()
 
 
 if __name__ == "__main__":
