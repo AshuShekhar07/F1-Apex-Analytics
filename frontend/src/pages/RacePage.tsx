@@ -8,6 +8,7 @@ import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
 import { useAsync } from '../hooks'
 import { driverCode } from '../names'
+import { IdealLap } from '../race/IdealLap'
 import { LongRuns } from '../race/LongRuns'
 import { PredictionTower } from '../race/PredictionTower'
 import { QualifyingTable } from '../race/QualifyingTable'
@@ -142,6 +143,8 @@ export function RacePage() {
           </div>
         </>
       ) : null}
+
+      <IdealLap raceId={raceId} />
 
       {f && (
         <details className="panel" style={{ marginTop: 26 }}>

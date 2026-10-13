@@ -9,6 +9,7 @@ import type {
   Forecast,
   Calibration,
   Health,
+  IdealLap,
   LiveRecord,
   LongRuns,
   OvertakingIndex,
@@ -90,6 +91,8 @@ export const api = {
   health: () => request<Health>('/health'),
   liveRecord: () => request<LiveRecord>('/records/live-predictions'),
   winningStrategy: (raceId: number) => optional(request<WinningStrategy>(`/strategy/winning?race_id=${raceId}`)),
+  idealLap: (id: number, session?: string) =>
+    optional(request<IdealLap>(`/races/${id}/ideal-lap${session ? `?session=${session}` : ''}`)),
   raceTrace: (id: number) => optional(request<RaceTrace>(`/races/${id}/race-trace`)),
   positionBattle: (id: number) => optional(request<PositionBattle>(`/races/${id}/position-battle`)),
   qualifying: (id: number) => optional(request<{ results: QualifyingRow[] }>(`/races/${id}/qualifying`)),

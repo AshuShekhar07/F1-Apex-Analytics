@@ -513,3 +513,39 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 }
 .matrix a, .timing a { text-decoration: none; }
 .matrix a:hover, .timing a:hover { text-decoration: underline; }
+
+/* ideal lap: one row per driver, a shared gap scale (dumbbell) and the numbers beside it */
+.ideal-rows { padding: 4px 0; }
+.ideal-row {
+  display: grid; align-items: center; gap: 0 14px; padding: 5px 16px; border-bottom: 1px solid var(--line);
+  grid-template-columns: 22px minmax(150px, 210px) minmax(120px, 1fr) 76px 76px 92px 58px 58px 58px;
+  font-size: 0.82rem;
+}
+.ideal-row:last-child { border-bottom: 0; }
+.ideal-row:not(.head):hover { background: var(--surface-2); }
+.ideal-row.head { font: 600 0.6rem/1.4 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); padding-top: 10px; }
+.ideal-row .r { text-align: right; }
+.ideal-row .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ideal-row .who .team-bar { height: 14px; }
+.ideal-row .who .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-2); }
+.ideal-row .scale-head { display: flex; justify-content: space-between; gap: 8px; }
+.ideal-row .num b { color: var(--text); }
+.ideal-row .gain { margin-left: 6px; font: 700 0.62rem var(--mono); color: var(--up); }
+.ideal-row .sector { color: var(--text-2); border-radius: var(--radius); padding: 1px 4px; }
+.ideal-row .sector.purple { background: color-mix(in srgb, var(--purple) 26%, transparent); color: var(--text); font-weight: 700; }
+.dumbbell { position: relative; height: 16px; }
+.dumbbell i { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.dumbbell .pole { top: -5px; bottom: -5px; width: 1px; transform: none; background: var(--line-2); }
+.dumbbell .bar { height: 2px; transform: translateY(-50%); opacity: 0.6; }
+.dumbbell .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dumbbell .ring { width: 13px; height: 13px; border-radius: 50%; border: 2px solid; background: var(--surface); }
+.ideal-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1080px) {
+  .ideal-row { grid-template-columns: 22px minmax(120px, 180px) minmax(100px, 1fr) 76px 76px 92px; }
+  .ideal-row .hide-md { display: none; }
+}
+@media (max-width: 760px) {
+  .ideal-row { grid-template-columns: 18px 46px minmax(0, 1fr) 82px; gap: 0 10px; padding: 6px 12px; }
+  .ideal-kv { grid-template-columns: minmax(0, 1fr); }
+  .ideal-row .hide-sm, .ideal-row .hide-md { display: none; }
+}

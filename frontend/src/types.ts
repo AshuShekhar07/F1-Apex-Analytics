@@ -558,3 +558,37 @@ export interface RaceTrace {
   drivers: RaceTraceDriver[]
   note?: string
 }
+
+export interface IdealLapSector {
+  time: number
+  /** the lap it was set on */
+  lap: number
+  /** the fastest of the session (purple) */
+  session_best: boolean
+}
+
+export interface IdealLapDriver {
+  driver_id: number
+  driver_name: string | null
+  team_name: string | null
+  color_hex: string | null
+  position: number | null
+  best_lap: number | null
+  ideal_lap: number | null
+  left_on_table: number | null
+  best_rank: number | null
+  ideal_rank: number | null
+  sectors: (IdealLapSector | null)[]
+}
+
+export interface IdealLap {
+  race_id: number
+  session: string | null
+  sessions_available: string[]
+  ultimate_lap?: number | null
+  ultimate_sectors?: ({ time: number; driver_id: number; driver_name: string | null } | null)[]
+  pole_lap?: number | null
+  deleted_known?: boolean
+  drivers: IdealLapDriver[]
+  note?: string
+}
