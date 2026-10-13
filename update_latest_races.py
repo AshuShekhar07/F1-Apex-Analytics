@@ -11,7 +11,8 @@ One command instead of a dozen scripts in the right order:
               forecast made from the qualifying order is redone once the provisional grid
               (fetch_starting_grid_v1, penalties applied) is in
   5. titles   drivers' and constructors' title chances after the latest round, if not stored
-              yet (championship_projection_v1)
+              yet (championship_projection_v1); they wait while that round's official points
+              are missing, and are redone if they were stored from missing (NaN) points
   6. live     the next race's winner prediction frozen for the live record: before
               qualifying, then again once the grid is known (live_record_v1); and its
               predicted winning strategy, before and after practice (strategy_live_record_v1)
@@ -46,6 +47,7 @@ def loaders(season: int) -> list[tuple[str, list[str]]]:
         ("laps missing for drivers with results", ["repair_session_laps_v1.py", "--season", y, "--apply"]),
         ("weekend format (sprint or not)", ["populate_weekend_format.py"]),
         ("sprint results", ["backfill_sprint_results.py"]),
+        ("official points where missing (Jolpica)", ["repair_missing_points_v1.py", "--season", y, "--apply"]),
         ("official starting grid", ["backfill_grid_position.py"]),
         ("provisional starting grid for the next race (OpenF1)", ["fetch_starting_grid_v1.py", "--season", y]),
         ("winner race time", ["backfill_winner_time.py"]),
@@ -92,6 +94,33 @@ def fill_regulation_era(db, season: int) -> list[int]:
         UPDATE races SET regulation_era = :e
         WHERE season_year = :s AND regulation_era IS NULL RETURNING id
     """), {"e": eras[0], "s": season}).scalars().all()
+
+
+def points_state(db, season: int) -> tuple[int | None, bool]:
+    """(latest raced round if any of its race/sprint points are still missing, whether the
+    stored title chances after that round were computed from missing (NaN) points and must
+    be redone). Title chances wait for complete points: a missing value counts as 0."""
+    latest = db.execute(text("""
+        SELECT MAX(r.round_number) FROM races r JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
+        WHERE r.season_year = :y AND EXISTS (SELECT 1 FROM race_results rr WHERE rr.session_id = s.id)
+    """), {"y": season}).scalar()
+    if latest is None:
+        return None, False
+    missing = db.execute(text("""
+        SELECT EXISTS (SELECT 1 FROM race_results rr JOIN sessions s ON s.id = rr.session_id
+                       JOIN races r ON r.id = s.race_id
+                       WHERE r.season_year = :y AND r.round_number = :n AND s.session_type IN ('R', 'S')
+                         AND (rr.points IS NULL OR rr.points = 'NaN'))
+    """), {"y": season, "n": latest}).scalar()
+    if missing:
+        return int(latest), False
+    redo = bool(db.execute(text("SELECT to_regclass('championship_projections') IS NOT NULL")).scalar()) and \
+        bool(db.execute(text("""
+            SELECT EXISTS (SELECT 1 FROM championship_projections
+                           WHERE season_year = :y AND after_round = :n
+                             AND (points_now = 'NaN' OR expected_points = 'NaN'))
+        """), {"y": season, "n": latest}).scalar())
+    return None, redo
 
 
 def fetch_start_tyres_if_due(db, race_id: int) -> None:
@@ -183,12 +212,19 @@ def main() -> int:
 
     print(f"\n=== CHAMPIONSHIP {args.season} ===")
     from championship_projection_v1 import update as update_championship
-    try:
-        with engine.begin() as db:
-            rounds = update_championship(db, args.season)
-        print(f"  title chances stored after round(s) {rounds}" if rounds else "  nothing new to project")
-    except ValueError as exc:
-        print(f"  not projectable yet ({exc})")
+    with engine.connect() as db:
+        waiting, redo = points_state(db, args.season)
+    if waiting:
+        print(f"  waiting for the official points of round {waiting}: title chances not updated this run")
+    else:
+        try:
+            with engine.begin() as db:
+                rounds = update_championship(db, args.season, recompute=redo)
+            print(f"  title chances stored after round(s) {rounds}" + (" (redone: the stored ones had missing points)"
+                                                                       if redo else "")
+                  if rounds else "  nothing new to project")
+        except ValueError as exc:
+            print(f"  not projectable yet ({exc})")
 
     print(f"\n=== LIVE RECORD ===")
     from live_record_v1 import freeze
