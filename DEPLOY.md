@@ -1,12 +1,15 @@
 # Deploying Apex21
 
-Everything runs as three containers from one image:
+Everything runs as four containers:
 
 | service     | what it does                                                         |
 |-------------|----------------------------------------------------------------------|
 | `db`        | PostgreSQL 16 with all race data, forecasts and the live record      |
 | `api`       | FastAPI on port 8000 (`/health`, `/about`, forecasts, strategy, ...)  |
 | `scheduler` | `run_pipeline.py --loop`: loads new races and forecasts them unattended |
+| `web`       | the website (nginx) on port 80; it forwards `/api/...` to the `api` container |
+
+The website and its data share one address, so no CORS setup is needed.
 
 ## 1. Pick a server
 
@@ -31,8 +34,10 @@ In `.env` set at least:
 
 ```
 POSTGRES_PASSWORD=<a long random password>
-CORS_ORIGINS=https://<your-frontend-domain>
 ```
+
+Optional: `WEB_PORT` (website, default 80), `API_PORT` (the API on its own, default 8000),
+`CORS_ORIGINS` (only if a site on another domain calls the API directly).
 
 `APP_ENV=production` is set by `docker-compose.yml`. Team logos and driver photos stay off
 (`SERVE_BRAND_ASSETS=false`): they belong to Formula 1, the teams or photographers.
@@ -60,8 +65,13 @@ docker compose exec db pg_restore --clean --if-exists --no-owner -U apex21 -d ap
 
 ```bash
 docker compose up -d --build
-curl http://localhost:8000/health
+curl http://localhost:8000/health          # the API
+curl -I http://localhost/                  # the website (WEB_PORT)
+docker compose exec scheduler python run_pipeline.py   # load anything newer than your dump now
+docker compose exec api python api_check_v1.py --deep  # every API route against the real data
 ```
+
+Then open `http://<server>/` in a browser.
 
 `/health` says `ok` once a pipeline run has succeeded; `degraded` lists the problem (a failed
 run, or no run for a week); HTTP 503 means the database is unreachable. Point an uptime
@@ -83,9 +93,11 @@ monitor at it.
 
 ## 6. Put HTTPS in front
 
-Run a reverse proxy (Caddy, nginx, or the host's load balancer) on 443 forwarding to port
-8000; the API trusts `X-Forwarded-For` for rate limiting (`--proxy-headers`). Don't expose
-PostgreSQL publicly (compose does not publish port 5432).
+Run a reverse proxy (Caddy, nginx, or the host's load balancer) on 443 forwarding to the
+website port (`WEB_PORT`, 80); the website passes `/api` on to the API. The API rate-limits
+per visitor using `X-Forwarded-For` (600 requests a minute; `RATE_LIMIT_PER_MINUTE`). Don't
+expose PostgreSQL publicly (compose does not publish port 5432); the API port only needs to
+be open if something other than the website calls it.
 
 ## 7. Checks on every push (GitHub Actions)
 

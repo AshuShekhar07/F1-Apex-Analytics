@@ -50,7 +50,7 @@ def load_settings() -> Settings:
         env=env,
         cors_origins=origins or (() if production else DEV_ORIGINS),
         serve_brand_assets=_bool("SERVE_BRAND_ASSETS", not production),
-        rate_limit_per_minute=_int("RATE_LIMIT_PER_MINUTE", 120 if production else 0),
+        rate_limit_per_minute=_int("RATE_LIMIT_PER_MINUTE", 600 if production else 0),
         what_if_max_sims=_int("WHAT_IF_MAX_SIMS", 2000),
         warm_caches=_bool("WARM_CACHES", production),
     )
