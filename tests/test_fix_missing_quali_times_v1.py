@@ -57,3 +57,42 @@ def test_results_from_lap_timing_uses_fastest_non_deleted_lap_per_segment():
     assert rows["44"] == {"DriverNumber": "44", "Q1": timedelta(seconds=80.9)}
     updates, _ = planned_updates(list(rows.values()), {1: 10, 44: 11})
     assert {u["entry"]: (u["q1"], u["q2"], u["q3"]) for u in updates} == {10: (80.6, 80.1, None), 11: (80.9, None, None)}
+
+
+def test_season_mode_repairs_or_skips_without_stopping_the_pipeline(fixture_db_url, monkeypatch, capsys):
+    """Pipeline step: qualifying loaded before the official times were out (2026 R17) is
+    found by season; when FastF1 cannot give times yet the race is skipped and exit is 0."""
+    import sys
+
+    import fastf1
+    from sqlalchemy import create_engine
+
+    import fix_missing_quali_times_v1 as fix
+
+    engine = create_engine(fixture_db_url)
+    with engine.begin() as db:
+        saved = db.execute(text("""
+            SELECT q.id, q.q1_time, q.q2_time, q.q3_time FROM qualifying_results q
+            JOIN sessions s ON s.id = q.session_id WHERE s.race_id = 1""")).all()
+        db.execute(text("""UPDATE qualifying_results SET q1_time = NULL, q2_time = NULL, q3_time = NULL
+                           WHERE session_id = (SELECT id FROM sessions WHERE race_id = 1 AND session_type = 'Q')"""))
+    try:
+        monkeypatch.setenv("DATABASE_URL", fixture_db_url)
+        monkeypatch.setattr(fastf1.Cache, "enable_cache", lambda *a, **k: None)
+
+        def unavailable(*args, **kwargs):
+            raise ConnectionError("not published yet")
+        monkeypatch.setattr(fastf1, "get_session", unavailable)
+        monkeypatch.setattr(sys, "argv", ["fix_missing_quali_times_v1.py", "--season", "2021", "--apply"])
+        assert fix.main() == 0
+        out = capsys.readouterr().out
+        assert "race 1 Test Circuit One: not repaired (ConnectionError: not published yet)" in out
+        monkeypatch.setattr(sys, "argv", ["fix_missing_quali_times_v1.py", "--season", "2022", "--apply"])
+        assert fix.main() == 0
+        assert "2022: every race with qualifying rows has times" in capsys.readouterr().out
+    finally:
+        with engine.begin() as db:
+            for row in saved:
+                db.execute(text("UPDATE qualifying_results SET q1_time = :a, q2_time = :b, q3_time = :c WHERE id = :i"),
+                           {"i": row[0], "a": row[1], "b": row[2], "c": row[3]})
+        engine.dispose()
