@@ -28,6 +28,7 @@ export function TitleMaths({ kind, matrix, standings }: { kind: 'drivers' | 'con
               ? <><b>{leader.name}</b> can seal it at the next round ({next.track_name}) with a maximum score there if nobody else scores.</>
               : <><b>{leader.name}</b> leads by {m.rows[1].gap} with {m.available} still available.</>}
         </p>
+        <div className="table-wrap">
         <table className="timing">
           <tbody>
             {m.rows.slice(0, 6).map((r) => (
@@ -40,6 +41,7 @@ export function TitleMaths({ kind, matrix, standings }: { kind: 'drivers' | 'con
             ))}
           </tbody>
         </table>
+        </div>
         <p className="dim small" style={{ margin: '10px 0 0' }}>
           {kind === 'drivers'
             ? `"Max" is the points total if they win every race${sprints ? ' and sprint' : ''} left.`

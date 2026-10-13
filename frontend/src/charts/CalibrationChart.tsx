@@ -53,7 +53,8 @@ export function CalibrationChart({ data }: { data: Calibration }) {
             ))}
           </svg>
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
+          <div className="table-wrap">
           <table className="timing">
             <thead><tr><th>We said</th><th className="r">Races</th><th className="r">Favourite won</th></tr></thead>
             <tbody>
@@ -66,6 +67,7 @@ export function CalibrationChart({ data }: { data: Calibration }) {
               ))}
             </tbody>
           </table>
+          </div>
           <p className="small muted" style={{ marginTop: 12 }}>
             {s.races} races, each predicted only from the races before it. Our favourite won {pct(s.favourite_won, 0)} of
             them; the average chance we gave was {pct(s.mean_favourite_p, 0)}. Dots close to the dashed line mean the
