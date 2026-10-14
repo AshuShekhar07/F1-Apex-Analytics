@@ -35,6 +35,8 @@ import type {
   WinnerPrediction,
 } from './types'
 
+import { fetchWithRetry } from './net'
+
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 export class ApiError extends Error {
@@ -46,7 +48,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
+  // tried again for about a minute while the server restarts (a deployment): see net.ts
+  const response = await fetchWithRetry(`${BASE}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })

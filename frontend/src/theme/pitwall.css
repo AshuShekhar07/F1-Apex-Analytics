@@ -768,3 +768,15 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
   .compare-score { font-size: 1.5rem; }
   .compare-table td.cat { width: 30%; }
 }
+
+/* reconnecting / new version bar under the header */
+.status-bar {
+  position: relative; z-index: 25; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  max-width: var(--page); margin: 0 auto; padding: 10px var(--gutter); font-size: 0.85rem; color: var(--text);
+  background: color-mix(in srgb, var(--yellow) 12%, var(--bg, #0a0a0c)); border-bottom: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
+}
+.status-bar.update { background: color-mix(in srgb, var(--green) 10%, var(--bg, #0a0a0c)); border-bottom-color: color-mix(in srgb, var(--green) 40%, transparent); }
+.status-bar .btn { height: 30px; font-size: 0.7rem; }
+.status-bar .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--yellow); border-right-color: transparent; animation: spin 0.9s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status-bar .spin { animation: none; } }

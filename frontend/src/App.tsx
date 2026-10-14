@@ -17,6 +17,8 @@ import { RecordsPage } from './pages/RecordsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { TeamPage, TeamsPage } from './pages/TeamsPage'
 import { SiteHeader } from './shell/Header'
+import { StatusBar } from './shell/StatusBar'
+import { startUpdateWatch, updateReady } from './updates'
 import { AccentProvider } from './theme/accent'
 
 // three.js and the circuit files only load when someone opens the tracks
@@ -44,6 +46,11 @@ function SeasonRedirect() {
 export function App() {
   const [intro, introDone] = useIntroOnce()
   const location = useLocation()
+  useEffect(() => startUpdateWatch(), [])
+  // a new version was deployed while this page was open: switch to it on the next page change
+  useEffect(() => {
+    if (updateReady()) window.location.reload()
+  }, [location.pathname])
   useEffect(() => {
     const offUnlock = installAudioUnlock()
     const offMusic = installMusic()
@@ -58,6 +65,7 @@ export function App() {
         <SmoothScroll>
           {intro && <Intro onDone={introDone} />}
           <SiteHeader />
+          <StatusBar />
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<Page><RaceHubPage /></Page>} />
