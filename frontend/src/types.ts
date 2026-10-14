@@ -690,3 +690,54 @@ export interface Undercuts {
   neutralised_known?: boolean
   note?: string
 }
+
+export interface CarRatings {
+  overall: number | null
+  quali: number | null
+  race: number | null
+  speed: number | null
+  reliability: number | null
+}
+
+export interface CarRow {
+  key: string
+  season: number
+  team_id: number
+  team_name: string | null
+  color_hex: string | null
+  car: string | null
+  pu: string | null
+  livery: string | null
+  notes: string[]
+  palette: string[] | null
+  wiki: string | null
+  drivers: { id: number; name: string | null; races: number }[]
+  results: { position: number; points: number; races: number; season_races: number; wins: number; poles: number;
+    podiums: number; one_twos: number }
+  metrics: { quali_gap_pct: number | null; race_gap_pct: number | null; top_speed_kmh: number | null; finish_rate: number | null;
+    starts: number; finishes: number; incidents: number; mechanical: number; retired_unknown: number;
+    quickest_in_qualifying: number; quickest_in_race: number; quali_races: number; race_races: number; speed_races: number }
+  ratings: CarRatings
+  character: { kind: 'low-drag' | 'high-downforce' | 'balanced'; label: string; text: string } | null
+  season_best: { quali?: number; race?: number }
+}
+
+export interface CarsResponse {
+  seasons: number[]
+  cars: CarRow[]
+  count: number
+  method: Record<string, string>
+}
+
+export interface LiveryPhoto {
+  src: string
+  thumb: string
+  file: string
+  page: string | null
+  author: string
+  license: string
+  license_url: string | null
+  article: string | null
+  width: number | null
+  height: number | null
+}

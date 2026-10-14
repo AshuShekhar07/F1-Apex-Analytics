@@ -9,6 +9,7 @@ import { LiveWeekendProvider } from './live'
 import { scrollToTop, SmoothScroll } from './motion/SmoothScroll'
 import { ChampionshipPage } from './pages/ChampionshipPage'
 import { DriversPage } from './pages/DriversPage'
+import { LiveriesPage } from './pages/LiveriesPage'
 import { PredictPage } from './pages/PredictPage'
 import { RaceHubPage } from './pages/RaceHubPage'
 import { RacePage } from './pages/RacePage'
@@ -76,6 +77,7 @@ export function App() {
               <Route path="/seasons" element={<Navigate to="/results" replace />} />
               <Route path="/next" element={<Navigate to="/" replace />} />
               <Route path="/predict" element={<Page><PredictPage /></Page>} />
+              <Route path="/liveries" element={<Page><LiveriesPage /></Page>} />
               <Route path="/play/winner" element={<Navigate to="/predict" replace />} />
               <Route path="/play/constructors" element={<Navigate to="/predict" replace />} />
               <Route

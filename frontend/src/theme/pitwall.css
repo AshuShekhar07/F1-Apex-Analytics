@@ -61,16 +61,17 @@ button { font: inherit; }
 /* --- header ----------------------------------------------------------------------------------- */
 .site-head { position: sticky; top: 0; z-index: 30; background: rgba(8, 8, 10, 0.94); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .head-row { display: flex; align-items: center; gap: 28px; height: 56px; max-width: var(--page); margin: 0 auto; padding: 0 var(--gutter); }
+.head-row .brand { flex: none; }
 .head-row .brand img { display: block; height: 20px; width: auto; }
 .main-nav { display: flex; height: 100%; gap: 2px; }
 .main-nav a {
-  position: relative; display: flex; align-items: center; padding: 0 14px; text-decoration: none;
+  position: relative; display: flex; align-items: center; padding: 0 10px; text-decoration: none; white-space: nowrap;
   font: 600 0.95rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2);
   transition: color 0.15s;
 }
 .main-nav a:hover { color: var(--text); }
 .main-nav a.active { color: var(--text); }
-.main-nav a.active::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 3px; background: var(--red); }
+.main-nav a.active::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; background: var(--red); }
 .head-tools { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 .freshness { display: flex; align-items: center; gap: 8px; font: 500 0.72rem/1 var(--mono); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 .freshness i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
@@ -464,9 +465,9 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
   .track-list button { flex: 0 0 200px; border-bottom: 0; border-right: 1px solid var(--line); }
   .track-stage { height: 60vh; }
 }
-/* the full header (seven sections, data freshness, music) needs about 1,180 px: below that the
+/* the full header (nine sections, data freshness, music) needs about 1,320 px: below that the
    sections move to their own scrollable row */
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   .head-row { gap: 12px; height: auto; flex-wrap: wrap; padding-top: 10px; }
   .main-nav { order: 3; width: 100%; height: 42px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
   .main-nav a { flex: none; padding: 0 10px; }
@@ -696,4 +697,39 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 /* one column: the winner pick and its lock button before the long finishing-order list */
 @media (max-width: 1080px) {
   .predict-grid > .stack { order: -1; }
+}
+
+/* cars and liveries */
+.car-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; }
+.car-card { display: flex; flex-direction: column; scroll-margin-top: 140px; }
+.car-media { position: relative; aspect-ratio: 16 / 9; background: radial-gradient(ellipse at 50% 80%, var(--surface-3), var(--surface)); border-bottom: 1px solid var(--line); overflow: hidden; }
+.car-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-media .livery-drawing { position: absolute; inset: 12% 4% 4%; width: 92%; height: 84%; }
+.car-overall {
+  position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; align-items: center; min-width: 58px;
+  padding: 6px 8px; border-radius: var(--radius); background: rgba(10, 10, 12, 0.82); border: 1px solid var(--line-2);
+}
+.car-overall b { font: 700 1.7rem/1 var(--display); }
+.car-overall small { font: 600 0.55rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+.car-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+.car-title { flex: 1; min-width: 0; }
+.car-title h3 { margin: 0 0 3px; font: 700 1.05rem/1.15 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
+.car-ratings { display: grid; gap: 7px; padding: 4px 16px 12px; }
+.rating-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 30px; align-items: center; gap: 10px; }
+.rating-row .num { text-align: right; font-weight: 700; }
+.rating-meter { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.rating-meter i { display: block; height: 100%; border-radius: 3px; }
+.car-facts { padding: 0 16px; border-top: 1px solid var(--line); }
+.car-facts p { margin: 10px 0; line-height: 1.45; }
+.badge.char-low-drag { color: #7cc4ff; border-color: color-mix(in srgb, #7cc4ff 45%, transparent); }
+.badge.char-high-downforce { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.car-numbers { margin: 4px 16px 12px; font-size: 0.82rem; }
+.car-numbers summary { cursor: pointer; color: var(--text-2); font: 600 0.72rem/1.6 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.car-numbers ul { margin: 8px 0 0; padding-left: 18px; color: var(--text-2); display: grid; gap: 4px; }
+.car-credit { margin: auto 0 0; padding: 8px 16px 12px; font-size: 0.7rem; color: var(--text-3); border-top: 1px solid var(--line); }
+.car-credit a { color: var(--text-2); }
+.timing tr.clickable { cursor: pointer; }
+@media (max-width: 480px) {
+  .car-grid { grid-template-columns: minmax(0, 1fr); }
+  .rating-row { grid-template-columns: 100px minmax(0, 1fr) 28px; }
 }
