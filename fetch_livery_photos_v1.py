@@ -79,19 +79,21 @@ def search_article(car: catalogue.Car) -> tuple[str | None, str | None]:
     return None, None
 
 
-def search_commons(car: catalogue.Car, width: int, used: set[str]) -> dict | None:
-    """A freely licensed, landscape photo on Commons whose file name carries this car's model
-    name (e.g. "MCL35M"): for cars that Wikipedia covers inside an earlier car's article."""
-    code = car.car.split()[-1]
-    data = api(COMMONS, action="query", list="search", srnamespace=6, srsearch=code, srlimit=30)
-    for hit in data.get("query", {}).get("search", []):
-        title = hit["title"]
-        if code.lower() not in title.lower() or title in used or not title.lower().endswith((".jpg", ".jpeg")):
-            continue
-        info = commons_file(title, width)
-        if info and not info["non_free"] and free_licence(info["license"]) \
-                and (info["width"] or 0) >= 1.3 * (info["height"] or 1):
-            return info
+def search_commons(car: catalogue.Car, width: int, used: set[str], queries: list[str] | None = None) -> dict | None:
+    """A freely licensed, landscape photo on Commons whose file name carries every word of a
+    query: by default this car's model name (e.g. "MCL35M"), for cars that Wikipedia covers
+    inside an earlier car's article; or the car's own `photo="search:a|b"` queries."""
+    for query in queries or [car.car.split()[-1]]:
+        words = query.lower().split()
+        data = api(COMMONS, action="query", list="search", srnamespace=6, srsearch=query, srlimit=40)
+        for hit in data.get("query", {}).get("search", []):
+            title = hit["title"]
+            if not all(w in title.lower() for w in words) or title in used or not title.lower().endswith((".jpg", ".jpeg")):
+                continue
+            info = commons_file(title, width)
+            if info and not info["non_free"] and free_licence(info["license"]) \
+                    and (info["width"] or 0) >= 1.3 * (info["height"] or 1):
+                return info
     return None
 
 
@@ -144,7 +146,10 @@ def main() -> int:
     used: dict[str, str] = {}                                  # Commons file -> car name it shows
     for car in cars:
         try:
-            if car.key in overrides or car.photo:
+            if car.photo and car.photo.startswith("search:") and car.key not in overrides:
+                info = search_commons(car, args.width, set(used), car.photo.removeprefix("search:").split("|"))
+                article, image = car.wiki, info["file"] if info else None
+            elif car.key in overrides or car.photo:
                 article, image = car.wiki, overrides.get(car.key) or car.photo
             else:
                 if car.wiki not in by_article:
