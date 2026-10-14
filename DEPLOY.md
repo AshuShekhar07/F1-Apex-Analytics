@@ -90,6 +90,9 @@ monitor at it.
 * Weekly report: `docker compose exec api python apex_report.py --no-wait`
 * Back up: `docker compose exec db pg_dump -Fc -U apex21 apex21 > backup_$(date +%F).dump`
 * Upgrade: `git pull && docker compose up -d --build`
+* Car photos (Liveries page): on a machine with internet, `python fetch_livery_photos_v1.py`, then commit
+  `frontend/public/livery-photos/` and rebuild. It keeps only freely licensed Wikimedia Commons photos and
+  stores each one's author and licence, which the page shows. Without it the page draws each car in its colours.
 
 ## 6. Put HTTPS in front
 

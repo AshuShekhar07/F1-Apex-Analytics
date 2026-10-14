@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import (championship, compare, drivers, forecast, ops, practice, predict_and_compete, predictions, race_analysis, races,
+from app.routers import (cars, championship, compare, drivers, forecast, ops, practice, predict_and_compete, predictions, race_analysis, races,
                          records, seasons, strategy, teams, tracks, wet_weather)
 from app.settings import scrub_brand_assets, settings
 
@@ -125,6 +125,7 @@ app.include_router(championship.router)
 app.include_router(seasons.router)
 app.include_router(race_analysis.router)
 app.include_router(ops.router)
+app.include_router(cars.router)
 
 
 @app.get("/")
