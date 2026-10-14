@@ -3,8 +3,8 @@
 One entry per team and season: the car's name, its power unit (maker), the livery's main
 colours in words, a well-documented special livery or note where there is one, an illustrative
 colour palette (for the drawing shown when there is no photo; approximate, not official
-colour codes) and the English Wikipedia article of the car (used by fetch_livery_photos_v1.py
-to find a freely licensed photo).
+colour codes), the English Wikipedia article of the car (used by fetch_livery_photos_v1.py
+to find a freely licensed photo) and, where that article's image is not right, a chosen Commons file.
 
 Entries are matched to the database's teams by season and team name (`match`, compared without
 case, spaces or punctuation). Facts only: anything not certain is left out rather than guessed.
@@ -27,6 +27,9 @@ class Car:
     livery: str | None = None
     notes: tuple[str, ...] = field(default_factory=tuple)
     palette: tuple[str, ...] | None = None
+    # a specific Wikimedia Commons file for the photo, when the article's own image is not a good
+    # picture of this car in this livery (fetch_livery_photos_v1.py)
+    photo: str | None = None
 
     @property
     def key(self) -> str:

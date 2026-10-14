@@ -34,7 +34,7 @@ WIKI = "https://en.wikipedia.org/w/api.php"
 COMMONS = "https://commons.wikimedia.org/w/api.php"
 UA = "Apex21-livery-photos/1.0 (fan analytics project; https://github.com/AshuShekhar07/F1-Apex-Analytics)"
 OUT_DIR = Path(__file__).resolve().parent / "frontend" / "public" / "livery-photos"
-WIDTH = 1280
+WIDTH = 800                 # wide enough for the cards on a high-density screen
 
 
 def free_licence(name: str | None) -> bool:
@@ -86,11 +86,11 @@ def plain(value: str | None) -> str | None:
     return re.sub(r"\s+", " ", text).strip() or None
 
 
-def commons_file(file_title: str) -> dict | None:
+def commons_file(file_title: str, width: int = WIDTH) -> dict | None:
     if not file_title.startswith("File:"):
         file_title = f"File:{file_title}"
     data = api(COMMONS, action="query", titles=file_title, prop="imageinfo",
-               iiprop="url|extmetadata|size", iiurlwidth=WIDTH)
+               iiprop="url|extmetadata|size", iiurlwidth=width)
     pages = data.get("query", {}).get("pages", [])
     if not pages or pages[0].get("missing") or not pages[0].get("imageinfo"):
         return None                                            # not on Commons (e.g. a non-free local file)
@@ -115,6 +115,7 @@ def main() -> int:
     parser.add_argument("--download", action="store_true", help="save resized copies under frontend/public/livery-photos/img")
     parser.add_argument("--only", action="append", default=[], help="car key(s) to fetch, e.g. 2020-mercedes")
     parser.add_argument("--use", action="append", default=[], help='KEY=File:Name.jpg: use this Commons file for a car')
+    parser.add_argument("--width", type=int, default=WIDTH, help=f"photo width in pixels (default {WIDTH})")
     args = parser.parse_args()
     overrides = dict(u.split("=", 1) for u in args.use)
 
@@ -126,8 +127,8 @@ def main() -> int:
     by_article: dict[str, tuple[str | None, str | None]] = {}
     for car in cars:
         try:
-            if car.key in overrides:
-                article, image = car.wiki, overrides[car.key]
+            if car.key in overrides or car.photo:
+                article, image = car.wiki, overrides.get(car.key) or car.photo
             else:
                 if car.wiki not in by_article:
                     title, image = page_image(car.wiki)
@@ -137,7 +138,7 @@ def main() -> int:
                 missing += 1
                 print(f"  {car.key:28} no article image found ({car.wiki})")
                 continue
-            info = commons_file(image)
+            info = commons_file(image, args.width)
             if info is None or info["non_free"] or not free_licence(info["license"]):
                 skipped += 1
                 why = "not on Commons (likely non-free)" if info is None else f"licence {info['license']}"
@@ -148,11 +149,15 @@ def main() -> int:
             if args.download:
                 img_dir = OUT_DIR / "img"
                 img_dir.mkdir(parents=True, exist_ok=True)
-                target = img_dir / f"{car.key}.jpg"
+                ext = Path(info["thumb"].split("?")[0]).suffix.lower()
+                ext = ext if ext in (".jpg", ".jpeg", ".png", ".webp") else ".jpg"
+                for old in img_dir.glob(f"{car.key}.*"):
+                    old.unlink()
+                target = img_dir / f"{car.key}{ext}"
                 r = session.get(info["thumb"], timeout=60)
                 r.raise_for_status()
                 target.write_bytes(r.content)
-                info["src"] = f"/livery-photos/img/{car.key}.jpg"
+                info["src"] = f"/livery-photos/img/{car.key}{ext}"
                 time.sleep(0.4)
             else:
                 info["src"] = info["thumb"]
