@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-14T15:44:16+00:00",
+ "generated": "2026-10-14T15:47:45+00:00",
  "source": "Wikimedia Commons (free licences only)",
  "photos": {
   "2018-ferrari": {
@@ -483,15 +483,15 @@
    "src": "/livery-photos/img/2021-red-bull-racing.jpg"
   },
   "2021-williams": {
-   "file": "File:George Russell 2020 Tuscan Grand Prix - race day.jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5f/George_Russell_2020_Tuscan_Grand_Prix_-_race_day.jpg/960px-George_Russell_2020_Tuscan_Grand_Prix_-_race_day.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "file": "File:FIA F1 Austria 2021 Nr. 6 Latifi (corner).jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/FIA_F1_Austria_2021_Nr._6_Latifi_%28corner%29.jpg/960px-FIA_F1_Austria_2021_Nr._6_Latifi_%28corner%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
    "width": 800,
-   "height": 533,
-   "page": "https://commons.wikimedia.org/wiki/File:George_Russell_2020_Tuscan_Grand_Prix_-_race_day.jpg",
-   "author": "Eustace Bagge",
+   "height": 450,
+   "page": "https://commons.wikimedia.org/wiki/File:FIA_F1_Austria_2021_Nr._6_Latifi_(corner).jpg",
+   "author": "Lukas Raich",
    "license": "CC BY-SA 4.0",
    "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
-   "article": "Williams FW43",
+   "article": "Williams FW43B",
    "src": "/livery-photos/img/2021-williams.jpg"
   },
   "2022-alfa-romeo": {
