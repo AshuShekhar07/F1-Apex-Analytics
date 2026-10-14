@@ -79,6 +79,22 @@ def search_article(car: catalogue.Car) -> tuple[str | None, str | None]:
     return None, None
 
 
+def search_commons(car: catalogue.Car, width: int, used: set[str]) -> dict | None:
+    """A freely licensed, landscape photo on Commons whose file name carries this car's model
+    name (e.g. "MCL35M"): for cars that Wikipedia covers inside an earlier car's article."""
+    code = car.car.split()[-1]
+    data = api(COMMONS, action="query", list="search", srnamespace=6, srsearch=code, srlimit=30)
+    for hit in data.get("query", {}).get("search", []):
+        title = hit["title"]
+        if code.lower() not in title.lower() or title in used or not title.lower().endswith((".jpg", ".jpeg")):
+            continue
+        info = commons_file(title, width)
+        if info and not info["non_free"] and free_licence(info["license"]) \
+                and (info["width"] or 0) >= 1.3 * (info["height"] or 1):
+            return info
+    return None
+
+
 def plain(value: str | None) -> str | None:
     if not value:
         return None
@@ -125,6 +141,7 @@ def main() -> int:
     cars = [c for c in catalogue.CARS if not args.only or c.key in args.only]
     found = skipped = missing = 0
     by_article: dict[str, tuple[str | None, str | None]] = {}
+    used: dict[str, str] = {}                                  # Commons file -> car name it shows
     for car in cars:
         try:
             if car.key in overrides or car.photo:
@@ -139,6 +156,13 @@ def main() -> int:
                 print(f"  {car.key:28} no article image found ({car.wiki})")
                 continue
             info = commons_file(image, args.width)
+            if info and car.key not in overrides and not car.photo and used.get(info["file"], car.car) != car.car:
+                # the article covers an earlier car too (MCL35 / MCL35M): look for this car's own photo
+                own = search_commons(car, args.width, set(used))
+                if own:
+                    info = own
+                else:
+                    print(f"  {car.key:28} no photo of its own on Commons; sharing {info['file']}")
             if info is None or info["non_free"] or not free_licence(info["license"]):
                 skipped += 1
                 why = "not on Commons (likely non-free)" if info is None else f"licence {info['license']}"
@@ -146,6 +170,7 @@ def main() -> int:
                 continue
             info.pop("non_free")
             info["article"] = article
+            used.setdefault(info["file"], car.car)
             if args.download:
                 img_dir = OUT_DIR / "img"
                 img_dir.mkdir(parents=True, exist_ok=True)
