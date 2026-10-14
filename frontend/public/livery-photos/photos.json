@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-14T15:39:39+00:00",
+ "generated": "2026-10-14T15:44:16+00:00",
  "source": "Wikimedia Commons (free licences only)",
  "photos": {
   "2018-ferrari": {
@@ -447,14 +447,14 @@
    "src": "/livery-photos/img/2021-haas.jpg"
   },
   "2021-mclaren": {
-   "file": "File:Lando Norris-McLaren MCL35 (3).jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Lando_Norris-McLaren_MCL35_%283%29.jpg/960px-Lando_Norris-McLaren_MCL35_%283%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "file": "File:2021 McLaren MCL35M.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c4/2021_McLaren_MCL35M.jpg/960px-2021_McLaren_MCL35M.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
    "width": 800,
-   "height": 550,
-   "page": "https://commons.wikimedia.org/wiki/File:Lando_Norris-McLaren_MCL35_(3).jpg",
-   "author": "Alberto-g-rovi",
-   "license": "CC BY 3.0",
-   "license_url": "https://creativecommons.org/licenses/by/3.0",
+   "height": 493,
+   "page": "https://commons.wikimedia.org/wiki/File:2021_McLaren_MCL35M.jpg",
+   "author": "Calreyn88",
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
    "article": "McLaren MCL35",
    "src": "/livery-photos/img/2021-mclaren.jpg"
   },
@@ -471,14 +471,14 @@
    "src": "/livery-photos/img/2021-mercedes.jpg"
   },
   "2021-red-bull-racing": {
-   "file": "File:Alexander Albon-Red Bull RB16 (4).jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a2/Alexander_Albon-Red_Bull_RB16_%284%29.jpg/960px-Alexander_Albon-Red_Bull_RB16_%284%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "file": "File:Red Bull RB16B at Formula 1 Exhibition, London 05.jpg",
+   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/11/Red_Bull_RB16B_at_Formula_1_Exhibition%2C_London_05.jpg/960px-Red_Bull_RB16B_at_Formula_1_Exhibition%2C_London_05.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
    "width": 800,
-   "height": 519,
-   "page": "https://commons.wikimedia.org/wiki/File:Alexander_Albon-Red_Bull_RB16_(4).jpg",
-   "author": "Alberto-g-rovi",
-   "license": "CC BY 3.0",
-   "license_url": "https://creativecommons.org/licenses/by/3.0",
+   "height": 533,
+   "page": "https://commons.wikimedia.org/wiki/File:Red_Bull_RB16B_at_Formula_1_Exhibition,_London_05.jpg",
+   "author": "Hullian111",
+   "license": "CC BY-SA 4.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
    "article": "Red Bull Racing RB16",
    "src": "/livery-photos/img/2021-red-bull-racing.jpg"
   },
