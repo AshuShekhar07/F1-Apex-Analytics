@@ -17,6 +17,26 @@ export function writePick<T>(key: string, value: T | null): void {
   }
 }
 
+/** Every saved pick whose key starts with `prefix`, as [key without the prefix, value]. */
+export function listPicks<T>(prefix: string): [string, T][] {
+  const out: [string, T][] = []
+  try {
+    const storage = window.localStorage
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (!key || !key.startsWith(`apex21:${prefix}`)) continue
+      try {
+        out.push([key.slice(`apex21:${prefix}`.length), JSON.parse(storage.getItem(key) ?? 'null') as T])
+      } catch {
+        /* a damaged entry is skipped */
+      }
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  return out
+}
+
 export function sessionFlag(key: string): boolean {
   try {
     return window.sessionStorage.getItem(`apex21:${key}`) === '1'

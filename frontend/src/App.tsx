@@ -9,6 +9,7 @@ import { LiveWeekendProvider } from './live'
 import { scrollToTop, SmoothScroll } from './motion/SmoothScroll'
 import { ChampionshipPage } from './pages/ChampionshipPage'
 import { DriversPage } from './pages/DriversPage'
+import { PredictPage } from './pages/PredictPage'
 import { RaceHubPage } from './pages/RaceHubPage'
 import { RacePage } from './pages/RacePage'
 import { RecordsPage } from './pages/RecordsPage'
@@ -74,8 +75,9 @@ export function App() {
               <Route path="/season/:year" element={<SeasonRedirect />} />
               <Route path="/seasons" element={<Navigate to="/results" replace />} />
               <Route path="/next" element={<Navigate to="/" replace />} />
-              <Route path="/play/winner" element={<Navigate to="/" replace />} />
-              <Route path="/play/constructors" element={<Navigate to="/championship?view=constructors" replace />} />
+              <Route path="/predict" element={<Page><PredictPage /></Page>} />
+              <Route path="/play/winner" element={<Navigate to="/predict" replace />} />
+              <Route path="/play/constructors" element={<Navigate to="/predict" replace />} />
               <Route
                 path="*"
                 element={<Page><div className="page"><h1 className="h1">Off track</h1><p className="muted">This page does not exist.</p><Link to="/" className="btn">Back to the race</Link></div></Page>}

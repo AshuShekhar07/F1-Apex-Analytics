@@ -134,6 +134,7 @@ export function RaceHubPage() {
           ))}
         </div>
         <span className={`badge ${conf.level}`}>Confidence: {conf.level}</span>
+        <Link to="/predict" className="btn">Make your picks</Link>
         <span className="spacer" />
         {prediction.updatedAt && (
           <span className="freshness"><i />Checked {new Date(prediction.updatedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>

@@ -13,6 +13,7 @@ const NAV = [
   { to: '/drivers', label: 'Drivers' },
   { to: '/tracks', label: 'Tracks' },
   { to: '/records', label: 'Records' },
+  { to: '/predict', label: 'Predict' },
 ]
 
 export function SiteHeader() {
