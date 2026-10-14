@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../api'
 import { driverLine, liveryColours, metricLines, overallBand, ranking } from '../cars'
+import { compareCars, headToHead, label, pickPair, shortCar } from '../compareCars'
 import { ErrorBox } from '../components/Status'
 import { useAsync } from '../hooks'
 import { LiveryDrawing } from '../race/LiveryDrawing'
@@ -31,7 +32,7 @@ export function LiveriesPage() {
   const cars = useAsync(() => api.cars(), [])
   const photos = useAsync(loadPhotos, [])
   const data = cars.data
-  const view = params.get('view') === 'ranking' ? 'ranking' : 'season'
+  const view = params.get('view') === 'ranking' ? 'ranking' : params.get('view') === 'compare' ? 'compare' : 'season'
   const season = Number(params.get('season')) || data?.seasons[0] || 0
   const shown = useMemo(() => (data?.cars ?? []).filter((c) => c.season === season)
     .sort((a, b) => a.results.position - b.results.position), [data, season])
@@ -55,6 +56,8 @@ export function LiveriesPage() {
                     onClick={() => setParams({ season: String(season) })}>Season</button>
             <button role="tab" aria-selected={view === 'ranking'} className={view === 'ranking' ? 'on' : ''}
                     onClick={() => setParams({ view: 'ranking' })}>All-time ranking</button>
+            <button role="tab" aria-selected={view === 'compare'} className={view === 'compare' ? 'on' : ''}
+                    onClick={() => setParams({ view: 'compare' })}>Compare</button>
           </div>
           {view === 'season' && data && (
             <select className="select" aria-label="Season" value={season} onChange={(e) => setParams({ season: e.target.value })}>
@@ -73,11 +76,16 @@ export function LiveriesPage() {
 
       {data && view === 'season' && (
         shown.length
-          ? <div className="car-grid">{shown.map((c) => <CarCard key={c.key} c={c} photo={photos.data?.[c.key]} />)}</div>
+          ? <div className="car-grid">{shown.map((c) => <CarCard key={c.key} c={c} photo={photos.data?.[c.key]}
+                                                               onCompare={() => setParams({ view: 'compare', a: c.key })} />)}</div>
           : <div className="panel empty">No cars with results in {season}.</div>
       )}
       {data && view === 'ranking' && (
         <Ranking cars={best} onPick={(c) => setParams({ season: String(c.season) }, { replace: false })} />
+      )}
+      {data && view === 'compare' && (
+        <CompareView cars={data.cars} ranked={best} photos={photos.data ?? {}} a={params.get('a')} b={params.get('b')}
+                     onPick={(a, b) => setParams({ view: 'compare', a, b })} />
       )}
 
       {data && (
@@ -101,21 +109,28 @@ function Meter({ value, colour }: { value: number | null; colour: string }) {
   )
 }
 
-function CarCard({ c, photo }: { c: CarRow; photo?: LiveryPhoto }) {
+function CarMedia({ c, photo }: { c: CarRow; photo?: LiveryPhoto }) {
+  const name = c.car ?? c.team_name ?? 'Unknown car'
+  return (
+    <div className="car-media">
+      {photo
+        ? <img src={photo.src} alt={`${name}, ${c.season}`} loading="lazy" referrerPolicy="no-referrer" />
+        : <LiveryDrawing colours={liveryColours(c)} label={name} />}
+      <span className="car-overall" title="Overall rating, against every car of 2018 onwards">
+        <b>{c.ratings.overall ?? '–'}</b><small>{overallBand(c.ratings.overall)}</small>
+      </span>
+    </div>
+  )
+}
+
+function CarCard({ c, photo, onCompare }: { c: CarRow; photo?: LiveryPhoto; onCompare: () => void }) {
   const colour = glowColour(normaliseHex(c.color_hex, '#888888'))
   const r = c.ratings
   const name = c.car ?? c.team_name ?? 'Unknown car'
   const res = c.results
   return (
     <article className="panel car-card" id={c.key}>
-      <div className="car-media">
-        {photo
-          ? <img src={photo.src} alt={`${name}, ${c.season}`} loading="lazy" referrerPolicy="no-referrer" />
-          : <LiveryDrawing colours={liveryColours(c)} label={name} />}
-        <span className="car-overall" title="Overall rating, against every car of 2018 onwards">
-          <b>{r.overall ?? '–'}</b><small>{overallBand(r.overall)}</small>
-        </span>
-      </div>
+      <CarMedia c={c} photo={photo} />
       <div className="car-head">
         <span className="team-bar" style={{ background: colour, height: 34 }} />
         <div className="car-title">
@@ -149,6 +164,9 @@ function CarCard({ c, photo }: { c: CarRow; photo?: LiveryPhoto }) {
         <ul>{metricLines(c).map((l) => <li key={l}>{l}</li>)}</ul>
         {!metricLines(c).length && <p className="dim">Not enough timing data for this car yet.</p>}
       </details>
+      <div className="car-actions">
+        <button type="button" className="btn" onClick={onCompare}>Compare with another car</button>
+      </div>
       {photo && (
         <p className="car-credit">
           Photo: {photo.author} · {photo.license_url ? <a href={photo.license_url} target="_blank" rel="noreferrer">{photo.license}</a> : photo.license}
@@ -194,5 +212,140 @@ function Ranking({ cars, onPick }: { cars: CarRow[]; onPick: (c: CarRow) => void
         </table>
       </div>
     </div>
+  )
+}
+
+// --- compare two cars ---------------------------------------------------------------------------
+
+function CompareView({ cars, ranked, photos, a, b, onPick }: {
+  cars: CarRow[]; ranked: CarRow[]; photos: Record<string, LiveryPhoto>; a: string | null; b: string | null
+  onPick: (a: string, b: string) => void
+}) {
+  const [x, y] = pickPair(cars, ranked, a, b)
+  const sameSeason = !!x && !!y && x.season === y.season
+  const matrix = useAsync(() => (sameSeason ? api.seasonResults(x!.season) : Promise.resolve(null)), [sameSeason ? x!.season : 0])
+  const seasons = useMemo(() => [...new Set(cars.map((c) => c.season))].sort((p, q) => q - p), [cars])
+  if (!x || !y) return <div className="panel empty">Not enough cars with results to compare.</div>
+  const cmp = compareCars(x, y)
+  const h2h = sameSeason && matrix.data ? headToHead(matrix.data, x.team_id, y.team_id) : null
+  const colourOf = (c: CarRow) => glowColour(normaliseHex(c.color_hex, '#888888'))
+  const winner = cmp.winner === 'a' ? x : cmp.winner === 'b' ? y : null
+  const options = (other: string) => seasons.map((s) => (
+    <optgroup key={s} label={String(s)}>
+      {cars.filter((c) => c.season === s).sort((p, q) => p.results.position - q.results.position).map((c) => (
+        <option key={c.key} value={c.key} disabled={c.key === other}>{c.season} · {shortCar(c)} · P{c.results.position} · {c.ratings.overall ?? '–'}</option>
+      ))}
+    </optgroup>
+  ))
+
+  return (
+    <>
+      <div className="compare-pick">
+        <select className="select" aria-label="First car" value={x.key} onChange={(e) => onPick(e.target.value, y.key)}>{options(y.key)}</select>
+        <button type="button" className="btn" onClick={() => onPick(y.key, x.key)} aria-label="Swap the two cars" title="Swap">⇄</button>
+        <select className="select" aria-label="Second car" value={y.key} onChange={(e) => onPick(x.key, e.target.value)}>{options(x.key)}</select>
+      </div>
+
+      <div className="compare-heads">
+        {[x, y].map((c, i) => (
+          <div key={c.key} className={`panel compare-head ${winner === c ? 'won' : ''}`} style={winner === c ? { borderColor: colourOf(c) } : undefined}>
+            <CarMedia c={c} photo={photos[c.key]} />
+            <div className="car-head">
+              <span className="team-bar" style={{ background: colourOf(c), height: 34 }} />
+              <div className="car-title" title={c.car ?? undefined}>
+                <h3>{shortCar(c)}</h3>
+                <span className="dim small">{c.season}{c.pu ? ` · ${c.pu} power` : ''}</span>
+              </div>
+              <span className="compare-score num" title="Categories won">{i === 0 ? cmp.score.a : cmp.score.b}</span>
+            </div>
+            {winner === c && <div className="compare-badge" style={{ background: colourOf(c) }}>The better car</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="panel verdict-banner" style={{ borderLeftColor: winner ? colourOf(winner) : 'var(--line-2)' }}>
+        <span className="kicker"><b>Verdict</b>{cmp.decidedBy === 'overall rating' ? ' · decided on the overall rating' : ` · ${cmp.score.a}–${cmp.score.b} on categories`}</span>
+        <h2>{winner ? `${label(winner)} is the better car` : 'Too close to call'}</h2>
+        <p>{verdictLine(cmp, x, y)}</p>
+      </div>
+
+      <div className="grid-main">
+        <div className="panel">
+          <div className="panel-head"><h3>Category by category</h3><span className="aside">✓ = better · each category counts once</span></div>
+          <div className="table-wrap">
+            <table className="timing compare-table">
+              <thead><tr><th>Category</th><th>{shortCar(x)} <span className="dim">{x.season}</span></th><th>{shortCar(y)} <span className="dim">{y.season}</span></th></tr></thead>
+              <tbody>
+                {cmp.rows.filter((r) => r.verdict).map((r) => <CompareRowView key={r.key} r={r} x={x} y={y} colourOf={colourOf} />)}
+                <tr className="compare-sep"><td colSpan={3}>Shown for information, not counted</td></tr>
+                {cmp.rows.filter((r) => !r.verdict).map((r) => <CompareRowView key={r.key} r={r} x={x} y={y} colourOf={colourOf} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="stack">
+          <div className="panel">
+            <div className="panel-head"><h3>The report</h3></div>
+            <ul className="report-list">{cmp.report.slice(1).map((line) => <li key={line}>{line}</li>)}</ul>
+          </div>
+          {sameSeason && (
+            <div className="panel">
+              <div className="panel-head"><h3>Head to head in {x.season}</h3><span className="aside">best car of each team, every race</span></div>
+              <div className="panel-body">
+                {matrix.loading && <div className="skeleton" style={{ height: 40 }} />}
+                {h2h && (h2h.races ? (
+                  <>
+                    <div className="h2h-bar" role="img" aria-label={`${shortCar(x)} ahead ${h2h.a} times, ${shortCar(y)} ${h2h.b}`}>
+                      <i style={{ flex: h2h.a || 0.0001, background: colourOf(x) }} />
+                      <i style={{ flex: Math.max(h2h.races - h2h.a - h2h.b, 0) || 0.0001, background: 'var(--surface-3)' }} />
+                      <i style={{ flex: h2h.b || 0.0001, background: colourOf(y) }} />
+                    </div>
+                    <p className="small" style={{ margin: '10px 0 0' }}>
+                      {shortCar(x)} finished ahead in <b>{h2h.a}</b> of {h2h.races} races, {shortCar(y)} in <b>{h2h.b}</b>
+                      {h2h.races - h2h.a - h2h.b ? `; ${h2h.races - h2h.a - h2h.b} level` : ''}. The one comparison where the two cars raced each other.
+                    </p>
+                  </>
+                ) : <p className="dim small" style={{ margin: 0 }}>No races where both had a classified finisher.</p>)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <p className="small muted" style={{ margin: 0 }}>
+          <b style={{ color: 'var(--text)' }}>How the verdict is made.</b> Eight categories, each counting once: qualifying pace and race pace
+          (against the median team of the car's own season), win rate, pole rate, podiums per race, one-twos and reliability (per race
+          entered, so seasons of different lengths compare fairly) and the constructors' championship. The car that wins more of them is
+          the better car; a tie goes to the higher overall rating. Points per race and top speed are shown but not counted: the points
+          system changed over the years (sprints, the fastest-lap point), and top speed says what kind of car it was, not how good.
+        </p>
+      </div>
+    </>
+  )
+}
+
+function verdictLine(cmp: ReturnType<typeof compareCars>, x: CarRow, y: CarRow): string {
+  const level = cmp.score.counted - cmp.score.a - cmp.score.b
+  const tail = level ? `, ${level} level` : ''
+  if (cmp.decidedBy === 'overall rating') {
+    return `Level on categories (${cmp.score.a}–${cmp.score.b}${tail}); the higher overall rating decides it: ${x.ratings.overall} against ${y.ratings.overall}.`
+  }
+  if (!cmp.winner) return `${cmp.score.a}–${cmp.score.b} on categories${tail}, and the same overall rating.`
+  const [w, l, ws, ls] = cmp.winner === 'a' ? [x, y, cmp.score.a, cmp.score.b] : [y, x, cmp.score.b, cmp.score.a]
+  return `${shortCar(w)} wins ${ws} of the ${cmp.score.counted} categories, the ${shortCar(l)} ${ls}${tail}.`
+}
+
+function CompareRowView({ r, x, y, colourOf }: { r: ReturnType<typeof compareCars>['rows'][number]; x: CarRow; y: CarRow
+  colourOf: (c: CarRow) => string }) {
+  return (
+    <tr>
+      <td className="cat">{r.label}</td>
+      {(['a', 'b'] as const).map((side) => (
+        <td key={side} className={r.winner === side ? 'win' : ''}
+            style={r.winner === side ? { boxShadow: `inset 3px 0 0 ${colourOf(side === 'a' ? x : y)}` } : undefined}>
+          {r.winner === side && <span className="tick" aria-label="better">✓ </span>}{side === 'a' ? r.a : r.b}
+        </td>
+      ))}
+    </tr>
   )
 }
