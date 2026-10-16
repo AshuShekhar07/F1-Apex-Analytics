@@ -80,3 +80,18 @@ test('short names for chart labels', () => {
   assert.equal(shortName('Racing Bulls', 'constructors'), 'Racing Bulls')
   assert.equal(shortName('Mercedes', 'constructors'), 'Mercedes')
 })
+
+test('lap times arrive as seconds or as text ("1:23.456") and never show as NaN', async () => {
+  const { lapTime, toSeconds } = await import('./format.ts')
+  assert.equal(toSeconds('1:32.510'), 92.51)
+  assert.equal(toSeconds(' 59.875 '), 59.875)
+  assert.equal(toSeconds(92.51), 92.51)
+  assert.equal(toSeconds('1:01:02.500'), 3662.5)
+  for (const missing of [null, undefined, '', 'NaN', 'DNF', Number.NaN]) assert.equal(toSeconds(missing), null)
+  assert.equal(lapTime('1:32.510'), '1:32.510')
+  assert.equal(lapTime(92.51), '1:32.510')
+  assert.equal(lapTime('1:05.007'), '1:05.007')
+  assert.equal(lapTime(59.875), '59.875')
+  assert.equal(lapTime(null), '')
+  assert.equal(lapTime('NaN'), '')
+})

@@ -1,19 +1,14 @@
+import { lapTime, toSeconds } from '../format'
 import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { QualifyingRow } from '../types'
 
-/** 83.456 -> "1:23.456" */
-export function lapTime(seconds: number | null | undefined): string {
-  if (seconds == null) return ''
-  const s = Number(seconds)
-  const m = Math.floor(s / 60)
-  return m ? `${m}:${(s - m * 60).toFixed(3).padStart(6, '0')}` : s.toFixed(3)
-}
+export { lapTime }
 
 /** Qualifying as on a timing screen: Q1 / Q2 / Q3 times, the gap to pole, and where each
     driver was knocked out (fastest time per segment in purple). */
 export function QualifyingTable({ rows }: { rows: QualifyingRow[] }) {
-  const best = (k: 'q1_time' | 'q2_time' | 'q3_time') => Math.min(...rows.map((r) => (r[k] == null ? Infinity : Number(r[k]))))
+  const best = (k: 'q1_time' | 'q2_time' | 'q3_time') => Math.min(...rows.map((r) => toSeconds(r[k]) ?? Infinity))
   const fastest = { q1_time: best('q1_time'), q2_time: best('q2_time'), q3_time: best('q3_time') }
   return (
     <div className="table-wrap">
@@ -33,7 +28,7 @@ export function QualifyingTable({ rows }: { rows: QualifyingRow[] }) {
                 </div>
               </td>
               {(['q1_time', 'q2_time', 'q3_time'] as const).map((k) => (
-                <td key={k} className="r num" style={{ color: r[k] != null && Number(r[k]) === fastest[k] ? 'var(--purple)' : r[k] == null ? 'var(--text-3)' : undefined }}>
+                <td key={k} className="r num" style={{ color: toSeconds(r[k]) != null && toSeconds(r[k]) === fastest[k] ? 'var(--purple)' : toSeconds(r[k]) == null ? 'var(--text-3)' : undefined }}>
                   {lapTime(r[k])}
                 </td>
               ))}

@@ -455,9 +455,10 @@ export interface QualifyingRow {
   team_name: string
   color_hex: string | null
   final_position: number | null
-  q1_time: number | null
-  q2_time: number | null
-  q3_time: number | null
+  /** as text, e.g. "1:23.456" (read with toSeconds / lapTime) */
+  q1_time: string | number | null
+  q2_time: string | number | null
+  q3_time: string | number | null
   gap_to_pole: number | null
   eliminated_in: string | null
 }

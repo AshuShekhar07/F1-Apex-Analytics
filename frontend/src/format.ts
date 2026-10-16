@@ -179,3 +179,23 @@ export function localDay(d = new Date()): string {
 export function signed(n: number): string {
   return n > 0 ? `+${n}` : `${n}`
 }
+
+/** Seconds from a lap time as the API sends it: 83.456, or text such as "1:23.456" (the
+    qualifying endpoint formats its times). null when there is no usable time. */
+export function toSeconds(value: number | string | null | undefined): number | null {
+  if (value == null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const text = value.trim()
+  if (!text) return null
+  const parts = text.split(':').map(Number)
+  if (parts.some((p) => !Number.isFinite(p))) return null
+  return Math.round(parts.reduce((total, p) => total * 60 + p, 0) * 1000) / 1000     // to the thousandth, as timed
+}
+
+/** 83.456 or "1:23.456" -> "1:23.456"; '' when there is no time. */
+export function lapTime(value: number | string | null | undefined): string {
+  const s = toSeconds(value)
+  if (s == null) return ''
+  const m = Math.floor(s / 60)
+  return m ? `${m}:${(s - m * 60).toFixed(3).padStart(6, '0')}` : s.toFixed(3)
+}
