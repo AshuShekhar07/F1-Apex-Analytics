@@ -1,0 +1,24 @@
+# Render Blueprint for the Apex21 API on Render's free plan (no card needed). See DEPLOY.md,
+# "Free hosting without a card": the database is on Neon, the website on Cloudflare Pages and
+# the data pipeline runs in GitHub Actions (.github/workflows/pipeline.yml).
+services:
+  - type: web
+    name: apex21-api
+    runtime: docker
+    plan: free
+    branch: feature/frontend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL          # Neon connection string (…?sslmode=require)
+        sync: false
+      - key: CORS_ORIGINS          # the website's address, e.g. https://apex21.pages.dev
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: WEB_CONCURRENCY       # one worker fits the free plan's 512 MB
+        value: "1"
+      - key: SERVE_BRAND_ASSETS
+        value: "false"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "600"

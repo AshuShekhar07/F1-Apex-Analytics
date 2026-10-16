@@ -110,6 +110,50 @@ be open if something other than the website calls it.
 `.github/workflows/tests.yml` runs the full test suite against a throwaway PostgreSQL and
 builds the Docker image. A red check means do not deploy that commit.
 
+## Free hosting without a card
+
+No server of your own: each part goes to a free plan that needs no credit card. The site works
+the same; the costs are a slow first visit after the API has been idle and a small CPU.
+
+| part     | free host (no card)                    | limits that matter                                              |
+|----------|----------------------------------------|-----------------------------------------------------------------|
+| database | Neon                                   | 1 GB per project; sleeps after 5 min idle (wakes in about a second) |
+| API      | Render web service (Docker, `render.yaml`) | 512 MB, 0.1 CPU, one worker; sleeps after 15 min idle (about 1 min to wake) |
+| website  | Cloudflare Pages                       | static files, no practical limit                                 |
+| pipeline | GitHub Actions (`.github/workflows/pipeline.yml`) | free on a public repo; schedules run from the default branch only |
+
+**0. Check the database fits (1 GB).** On your computer:
+`psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"`
+
+**1. Database (Neon).** Sign up at neon.tech, create a project (Postgres 16), and copy its
+connection string with connection pooling switched **off** (the pipeline holds an advisory lock).
+Then, on your computer: `ops/db_dump.sh`, then `ops/db_restore.sh apex21_*.dump "<neon string>"`.
+
+**2. API (Render).** Sign up at render.com with GitHub. New → Blueprint → this repository (it reads
+`render.yaml`), or New → Web Service → Docker, branch `feature/frontend`, plan Free. Set
+`DATABASE_URL` to the Neon string; leave `CORS_ORIGINS` for step 4. When it is live,
+`https://<service>.onrender.com/health` answers `ok` (or `degraded` with the reason).
+
+**3. Website (Cloudflare Pages).** Workers & Pages → Create → Pages → connect the repository.
+Branch `feature/frontend`, root directory `frontend`, build command `npm run build`, output
+directory `dist`, environment variables `VITE_API_BASE=https://<service>.onrender.com` and
+`NODE_VERSION=22`. The site gets an address like `https://apex21.pages.dev`. Pages serves the app for
+any path (no `404.html`), and `frontend/public/_headers` sets the same caching as `nginx.conf`.
+
+**4. Let the website call the API.** In Render, set `CORS_ORIGINS=https://apex21.pages.dev` (your
+Pages address, plus any custom domain, comma-separated). Render restarts the API.
+
+**5. Pipeline (GitHub Actions).** Repository → Settings → Secrets and variables → Actions → New
+secret `DATABASE_URL` = the Neon string. `pipeline.yml` must be on the default branch (`main`) to
+run on its schedule; once it is, Actions → pipeline → Run workflow (tick "Load now") tests it.
+GitHub turns schedules off after 60 days without any repository activity; re-enable them in the
+Actions tab.
+
+**6. Optional: no slow first visit.** A free uptime monitor (e.g. UptimeRobot) calling
+`https://<service>.onrender.com/` every 5 minutes keeps the API awake. That address does not
+touch the database, so Neon can still sleep. One always-on service fits Render's 750 free hours
+a month.
+
 ## Public demo notes
 
 Apex21 is an independent fan project. `/about` carries the disclaimer (not affiliated with
