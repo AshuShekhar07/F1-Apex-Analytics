@@ -6,6 +6,7 @@ services:
     name: apex21-api
     runtime: docker
     plan: free
+    region: singapore            # keep it in the same region as the Neon database
     branch: feature/frontend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health

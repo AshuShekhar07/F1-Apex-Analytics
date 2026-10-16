@@ -125,7 +125,8 @@ the same; the costs are a slow first visit after the API has been idle and a sma
 **0. Check the database fits (1 GB).** On your computer:
 `psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"`
 
-**1. Database (Neon).** Sign up at neon.tech, create a project (Postgres 16), and copy its
+**1. Database (Neon).** Sign up at neon.tech, create a project (Postgres 16, region Singapore, the
+same region as the API in `render.yaml`: every page makes several queries), and copy its
 connection string with connection pooling switched **off** (the pipeline holds an advisory lock).
 Then, on your computer: `ops/db_dump.sh`, then `ops/db_restore.sh apex21_*.dump "<neon string>"`.
 
