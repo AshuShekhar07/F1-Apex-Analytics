@@ -1074,3 +1074,39 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 .sr-bars .bar i { display: block; height: 100%; border-radius: 2px; transition: width 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .sr-bars .pts { text-align: right; font-size: 0.82rem; }
 @media (prefers-reduced-motion: reduce) { .sr-bars .bar i { transition: none; } }
+
+/* the race hub hero: circuit, countdown, night races and rain */
+.event-hero { min-height: 250px; isolation: isolate; }
+.event-hero .hero-copy { position: relative; z-index: 1; }
+.event-side { position: relative; z-index: 1; display: grid; gap: 10px; justify-items: center; }
+.hero-fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.hero-fx i { position: absolute; display: block; }
+.hero-fx .trace-line { left: -10%; right: -10%; bottom: 18px; height: 40px; opacity: 0.35;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='40'><path d='M0 30 L40 30 L55 8 L70 30 L120 30 L135 18 L150 30 L210 30 L222 4 L236 30 L300 30 L318 14 L334 30 L400 30' fill='none' stroke='%23e10600' stroke-width='1.5'/></svg>") repeat-x 0 0 / 400px 40px;
+  animation: trace-run 9s linear infinite; -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent); mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent); }
+@keyframes trace-run { to { background-position: -400px 0; } }
+.hero-chips { display: flex; gap: 6px; min-height: 0; }
+.hero-chips:empty { display: none; }
+.hero-chip { padding: 4px 8px; border-radius: var(--radius); font: 700 0.62rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.hero-chip.night { background: #1d2a52; color: #c9d6ff; box-shadow: inset 0 0 0 1px #33447a; }
+.hero-chip.rain { background: #0e3046; color: #9fdcff; box-shadow: inset 0 0 0 1px #1f5675; }
+/* night race: deep blue sky and floodlights */
+.event-hero.night { background: linear-gradient(110deg, #0a0f22 0%, #0d1530 55%, color-mix(in srgb, var(--accent) 16%, #0d1530)); }
+.event-hero.night .flood { top: -40%; width: 46%; height: 140%; opacity: 0.55; filter: blur(8px);
+  background: radial-gradient(closest-side, rgba(210, 225, 255, 0.28), transparent); }
+.event-hero.night .flood.l { left: 8%; transform: rotate(18deg); }
+.event-hero.night .flood.r { right: 22%; transform: rotate(-14deg); }
+/* rain expected: fine streaks falling */
+.event-hero.rain .rainfall { inset: -20% 0 0 0; opacity: 0.22;
+  background: repeating-linear-gradient(104deg, transparent 0 14px, rgba(170, 210, 255, 0.55) 14px 15px, transparent 15px 34px);
+  animation: rain-fall 0.7s linear infinite; }
+@keyframes rain-fall { to { transform: translate(-18px, 60px); } }
+/* countdown to the next session */
+.countdown { display: grid; gap: 4px; justify-items: center; padding: 8px 14px; border-radius: var(--radius);
+  background: rgba(5, 5, 7, 0.55); box-shadow: inset 0 0 0 1px var(--line-2); text-align: center; }
+.countdown .cd-label { font: 600 0.6rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); }
+.countdown b { font: italic 800 1.5rem/1 var(--display); letter-spacing: 0.02em; }
+.countdown .cd-when { font: 500 0.66rem/1 var(--mono); color: var(--text-3); }
+.countdown.live { box-shadow: inset 0 0 0 1px var(--red); }
+.countdown.live .cd-label { color: var(--red); }
+@media (prefers-reduced-motion: reduce) { .hero-fx .trace-line, .event-hero.rain .rainfall { animation: none; } }

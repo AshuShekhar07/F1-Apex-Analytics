@@ -95,3 +95,12 @@ test('lap times arrive as seconds or as text ("1:23.456") and never show as NaN'
   assert.equal(lapTime(null), '')
   assert.equal(lapTime('NaN'), '')
 })
+
+test('night races', async () => {
+  const { nightRace } = await import('./format.ts')
+  assert.equal(nightRace('Marina Bay'), true)
+  assert.equal(nightRace('Las Vegas'), true)
+  assert.equal(nightRace('Bahrain'), true)
+  assert.equal(nightRace('Suzuka'), false)
+  assert.equal(nightRace(null), false)
+})

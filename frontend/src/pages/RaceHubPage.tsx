@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 
 import { api } from '../api'
 import type { Circuit } from '../circuitTypes'
+import { Countdown } from '../components/Countdown'
 import { ErrorBox } from '../components/Status'
 import { CircuitOutline } from '../fx/CircuitOutline'
-import { localDay, pct, sessionStates } from '../format'
+import { localDay, nightRace, pct, sessionStates } from '../format'
 import { useAsync, useLive } from '../hooks'
 import { useLiveWeekend } from '../live'
 import { driverCode } from '../names'
@@ -42,6 +43,10 @@ export function RaceHubPage() {
   const longRuns = useLive(() => (raceId ? api.longRuns(raceId) : Promise.resolve(null)), [raceId], 300_000)
   const preStart = useLive(() => (raceId ? api.preStart(raceId) : Promise.resolve(null)), [raceId], 120_000)
   const [circuit, setCircuit] = useState<Circuit | null>(null)
+  const raceInfo = useAsync(() => (raceId ? api.race(raceId) : Promise.resolve(null)), [raceId])
+  const trackId = raceInfo.data?.track_id
+  const weather = useLive(() => (trackId && p ? api.strategyPrediction(trackId, p.race_date).catch(() => null) : Promise.resolve(null)),
+    [trackId, p?.race_date], 1_800_000)
 
   useEffect(() => {
     if (!p) return
@@ -103,8 +108,13 @@ export function RaceHubPage() {
 
   return (
     <div className="page">
-      <section className="event-hero">
-        <div>
+      <section className={`event-hero ${nightRace(p.track) ? 'night' : ''} ${weather.data?.weather?.rain_expected ? 'rain' : ''}`}>
+        <div className="hero-fx" aria-hidden="true"><i className="flood l" /><i className="flood r" /><i className="rainfall" /><i className="trace-line" /></div>
+        <div className="hero-copy">
+          <div className="hero-chips">
+            {nightRace(p.track) && <span className="hero-chip night">Night race</span>}
+            {weather.data?.weather?.rain_expected && <span className="hero-chip rain">Rain forecast</span>}
+          </div>
           <span className="kicker"><b>Round {p.round}</b> · {p.season} season{s?.weekend_format && s.weekend_format !== 'conventional' ? ' · Sprint weekend' : ''}</span>
           <h1>{p.track}</h1>
           <div className="event-meta">
@@ -115,7 +125,10 @@ export function RaceHubPage() {
             <div><span>Prediction</span><b>{STAGE_LABEL[stage]}</b></div>
           </div>
         </div>
-        <div className="event-map">{circuit && <CircuitOutline circuit={circuit} sectors width={9} />}</div>
+        <div className="event-side">
+          <div className="event-map">{circuit && <CircuitOutline circuit={circuit} sectors width={9} />}</div>
+          {s && <Countdown sessions={s.sessions} />}
+        </div>
       </section>
 
       {p.stage === 'pre_qualifying' && qualiWaiting && (

@@ -199,3 +199,8 @@ export function lapTime(value: number | string | null | undefined): string {
   const m = Math.floor(s / 60)
   return m ? `${m}:${(s - m * 60).toFixed(3).padStart(6, '0')}` : s.toFixed(3)
 }
+
+/** Night races: run under floodlights (by circuit or country name). */
+export function nightRace(track: string | null | undefined): boolean {
+  return /singapore|marina bay|las vegas|bahrain|sakhir|qatar|lusail|abu dhabi|yas marina|jeddah|saudi/i.test(track ?? '')
+}
