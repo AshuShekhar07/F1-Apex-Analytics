@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../api'
 import { ErrorBox } from '../components/Status'
@@ -23,6 +24,15 @@ export function DriversPage() {
   const wet = useAsync(() => api.wetRanking(), [])
   const [team, setTeam] = useState<number | null>(null)
   const [open, setOpen] = useState<RosterDriver | null>(null)
+  const [params, setParams] = useSearchParams()
+  const wanted = Number(params.get('driver')) || null
+  // a link to one driver (from the search) opens their card once the roster is in
+  useEffect(() => {
+    if (!wanted || !roster.data) return
+    const d = roster.data.drivers.find((x) => x.id === wanted)
+    if (d) setOpen(d)
+    setParams({}, { replace: true })
+  }, [wanted, roster.data, setParams])
   const { preview } = useAccent()
   const drivers = roster.data?.drivers ?? []
   const teams = useMemo(() => {

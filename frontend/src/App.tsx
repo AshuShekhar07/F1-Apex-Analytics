@@ -21,6 +21,7 @@ import { useScrollReveal } from './motion/useScrollReveal'
 import { Backdrop } from './shell/Backdrop'
 import { SiteHeader } from './shell/Header'
 import { PageWipe } from './shell/PageWipe'
+import { QuickSearch } from './shell/QuickSearch'
 import { RevBar } from './shell/RevBar'
 import { StatusBar } from './shell/StatusBar'
 import { startUpdateWatch, updateReady } from './updates'
@@ -74,6 +75,7 @@ export function App() {
           <PageWipe />
           {intro && <Intro onDone={introDone} />}
           <SiteHeader />
+          <QuickSearch />
           <StatusBar />
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>

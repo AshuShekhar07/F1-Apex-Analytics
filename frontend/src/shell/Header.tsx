@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { musicState, onMusicChange, setMusicEnabled, type MusicState } from '../fx/music'
 import { ago, localDay, sessionStates, type SessionState } from '../format'
 import { useLiveWeekend } from '../live'
+import { openSearch } from './QuickSearch'
 
 const NAV = [
   { to: '/', label: 'Race', end: true },
@@ -30,7 +31,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="head-tools">
-          <Freshness />
+          <SearchButton />
           <MusicButton />
         </div>
       </div>
@@ -51,6 +52,18 @@ function Freshness() {
       <i />
       {failed ? `Update failed ${ago(h.last_pipeline_run_minutes_ago)}` : `Data ${ago(h.last_pipeline_run_minutes_ago)}`}
     </span>
+  )
+}
+
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+
+function SearchButton() {
+  return (
+    <button type="button" className="icon-btn search-btn" onClick={openSearch} aria-label="Search" title="Search"
+            aria-keyshortcuts="Control+K Meta+K /">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 21 21" /></svg>
+      <kbd>{MAC ? '⌘' : 'Ctrl'} K</kbd>
+    </button>
   )
 }
 
@@ -80,7 +93,13 @@ function WeekendStrip() {
   const { prediction, sessions } = useLiveWeekend()
   const p = prediction.data
   const s = sessions.data
-  if (!p) return null
+  if (!p) {
+    return (
+      <div className="weekend-strip">
+        <div className="strip-row"><span className="spacer" /><Freshness /></div>
+      </div>
+    )
+  }
   const states = s ? sessionStates(s.sessions, s.race_date, s.weekend_format, s.season, localDay()) : []
   const date = new Date(`${p.race_date}T12:00:00`)
   return (
@@ -107,6 +126,7 @@ function WeekendStrip() {
             })}
           </div>
         )}
+        <Freshness />
       </div>
     </div>
   )

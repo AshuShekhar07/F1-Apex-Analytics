@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../api'
 import { CIRCUITS } from '../circuits'
@@ -32,7 +33,13 @@ export function TracksPage() {
     () => bestMatch(CIRCUITS, nextTrack)?.id,
     [nextTrack],
   )
-  const [picked, setPicked] = useState<string | null>(null)
+  // a link to one circuit (from the search): /tracks?circuit=jp-1962
+  const fromLink = useSearchParams()[0].get('circuit')
+  const linked = CIRCUITS.some((c) => c.id === fromLink) ? fromLink : null
+  const [picked, setPicked] = useState<string | null>(linked)
+  useEffect(() => {
+    if (linked) setPicked(linked)
+  }, [linked])
   const id = picked ?? nextId ?? 'sg-2008'
   const circuit = CIRCUITS.find((c) => c.id === id) ?? CIRCUITS[0]
   const [view, setView] = useState<'3d' | 'map'>('3d')
