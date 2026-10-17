@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { lapPoints, type Circuit, type Pt } from '../circuitTypes'
+import { Empty, Skeleton } from '../components/Empty'
 import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
 import { bestMatch } from '../trackMatch'
@@ -27,9 +28,9 @@ export function RaceReplay({ trace, track }: { trace: RaceTrace; track: string }
     }
   }, [track])
 
-  if (circuit === undefined) return <div className="panel panel-pad dim small">Loading the circuit…</div>
+  if (circuit === undefined) return <div className="panel panel-pad"><Skeleton rows={4} /></div>
   if (!circuit || !trace.reference_lap || !trace.total_laps) {
-    return <div className="panel panel-pad dim small">No circuit map or lap timing for a replay of this race.</div>
+    return <Empty panel icon="track" title="No replay for this race">There is no circuit map or lap timing for it.</Empty>
   }
   return <Replay trace={trace} circuit={circuit} />
 }

@@ -8,6 +8,7 @@ import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { RecordLeader, RecordRace, RecordsHistory, Streak, StreakKind } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 
 const KINDS: [StreakKind, string, string][] = [
   ['wins', 'Wins', 'Grands Prix won in a row'],
@@ -28,7 +29,7 @@ export function RecordsPage() {
 
   if (q.loading) return <div className="page"><LightsOut height={320} /></div>
   if (q.error) return <div className="page"><ErrorBox error={q.error} /></div>
-  if (!data || !data.races) return <div className="page"><div className="panel empty">No Grands Prix in the database yet.</div></div>
+  if (!data || !data.races) return <div className="page"><Empty panel icon="flag" title="No Grands Prix in the database yet" /></div>
 
   const streaks = data.streaks[kind]
   const longestBar = Math.max(1, ...streaks.longest.map((s) => s.length), ...streaks.active.map((s) => s.length))

@@ -14,6 +14,7 @@ import { SEASONS } from '../seasons'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { Championship, ChampionshipHistory, SeasonResults } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 import { useFlip } from '../motion/useFlip'
 
 type Kind = 'drivers' | 'constructors'
@@ -131,7 +132,10 @@ export function ChampionshipPage() {
       {(champ.error || matrix.error) && <ErrorBox error={(champ.error ?? matrix.error)!} />}
       {(champ.loading || matrix.loading) && <LightsOut height={300} />}
 
-      {!champ.loading && !matrix.loading && rows.length === 0 && <div className="panel empty">No results or title projection for {year} yet.</div>}
+      {!champ.loading && !matrix.loading && rows.length === 0 && (
+        year < SEASONS[0] ? <Empty panel icon="flag" title={`No ${year} results stored`} />
+          : <Empty panel icon="lights" title={`No ${year} results yet`}>The standings and the title projection appear after the season's first race.</Empty>
+      )}
 
       {rows.length > 0 && (
         <div className="grid-main">

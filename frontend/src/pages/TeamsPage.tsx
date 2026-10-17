@@ -14,6 +14,7 @@ import { glowColour, normaliseHex } from '../theme/color'
 import type { SeasonResults } from '../types'
 import { cellOf } from './ResultsPage'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 
 function teamDrivers(m: SeasonResults, teamId: number) {
   return m.drivers.filter((d) => d.results.some((c) => c.team_id === teamId))
@@ -95,7 +96,7 @@ export function TeamPage() {
 
   if (summary.loading || matrix.loading) return <div className="page"><LightsOut height={240} /></div>
   if (summary.error) return <div className="page"><ErrorBox error={summary.error} /></div>
-  if (!s) return <div className="page"><div className="panel empty">No results for this team in {year}. <Link to={`/teams/${year}`}>All teams</Link></div></div>
+  if (!s) return <div className="page"><Empty panel icon="flag" title={`No results for this team in ${year}`}><Link to={`/teams/${year}`}>All teams</Link></Empty></div>
 
   return (
     <div className="page">

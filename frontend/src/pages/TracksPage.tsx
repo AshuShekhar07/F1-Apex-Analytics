@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { CIRCUITS } from '../circuits'
 import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
+import { Skeleton } from '../components/Empty'
 import { CircuitOutline } from '../fx/CircuitOutline'
 import { CountNum } from '../fx/CountNum'
 import { useAsync } from '../hooks'
@@ -176,8 +177,8 @@ export function TracksPage() {
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="small dim">{dbTracks.loading || stats.loading ? 'Loading…' : 'No races at this circuit in our data (2018 onwards).'}</p>
+            ) : dbTracks.loading || stats.loading ? <Skeleton rows={3} /> : (
+              <p className="small dim">No races at this circuit in our data (2018 onwards).</p>
             )}
             <p className="small dim" style={{ marginTop: 14 }}>Sector speeds: average from the circuit pipeline's lap data.</p>
           </div>

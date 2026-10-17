@@ -5,6 +5,7 @@ import { LapChart } from '../charts/LapChart'
 import { RaceTrace } from '../charts/RaceTrace'
 import { RaceReplay } from '../race/RaceReplay'
 import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
+import { Empty, SessionWait, Skeleton } from '../components/Empty'
 import { DataNotes, ErrorBox } from '../components/Status'
 import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
@@ -37,6 +38,7 @@ export function RacePage() {
   const quali = useAsync(() => api.qualifying(raceId), [raceId])
   const longRuns = useAsync(() => api.longRuns(raceId), [raceId])
   const photo = useCircuitPhoto({ track: r?.track_name })
+  const sessions = useAsync(() => (r && !finished ? api.raceSessions(raceId) : Promise.resolve(null)), [raceId, !!r, finished])
 
   if (race.loading) return <div className="page"><LightsOut height={160} /></div>
   if (race.error || !r) return <div className="page"><ErrorBox error={race.error ?? new Error('Race not found')} /></div>
@@ -122,7 +124,8 @@ export function RacePage() {
                 predicted: f?.drivers.find((x) => x.driver_id === d.driver_id)?.predicted_position ?? null, change: null,
                 strategy: f?.drivers.find((x) => x.driver_id === d.driver_id)?.strategy ?? null,
               }))} />
-            ) : <div className="empty">{winner.loading ? 'Loading…' : 'No prediction for this race yet.'}</div>}
+            ) : winner.loading ? <div className="panel-body"><Skeleton rows={6} /></div>
+              : <Empty icon="lights" title="No prediction for this race yet" />}
           </div>
           <div className="stack">
             {strategy.data?.prediction && totalLaps && (
@@ -138,7 +141,7 @@ export function RacePage() {
         </div>
       )}
 
-      {(quali.data?.results.length || longRuns.data?.drivers.length) ? (
+      {(quali.data?.results.length || longRuns.data?.drivers.length || (!finished && sessions.data)) ? (
         <>
           <div className="section-head" style={{ marginTop: 26 }}><h2>Weekend sessions</h2><span className="aside">qualifying and Friday pace</span></div>
           <div className="cols-2" style={{ alignItems: 'start' }}>
@@ -147,13 +150,28 @@ export function RacePage() {
                 <div className="panel-head"><h3>Qualifying</h3><span className="aside">Q1 · Q2 · Q3</span></div>
                 <QualifyingTable rows={quali.data.results} />
               </div>
+            ) : !finished && sessions.data ? (
+              <div className="panel">
+                <div className="panel-head"><h3>Qualifying</h3><span className="aside">Q1 · Q2 · Q3</span></div>
+                <div className="panel-body">
+                  <SessionWait sessions={sessions.data.sessions} types={['Q']} what="The Q1, Q2 and Q3 times" none="Qualifying results are not in yet" />
+                </div>
+              </div>
             ) : <div />}
-            {longRuns.data && (
+            {longRuns.data?.drivers.length ? (
               <div className="panel">
                 <div className="panel-head"><h3>Practice long runs</h3><span className="aside">race-trim pace</span></div>
                 <div className="panel-body"><LongRuns data={longRuns.data} /></div>
               </div>
-            )}
+            ) : !finished && sessions.data ? (
+              <div className="panel">
+                <div className="panel-head"><h3>Practice long runs</h3><span className="aside">race-trim pace</span></div>
+                <div className="panel-body">
+                  <SessionWait sessions={sessions.data.sessions} types={['FP1', 'FP2', 'FP3']} what="Race-trim pace from the long runs"
+                               none="No long runs in practice yet" />
+                </div>
+              </div>
+            ) : null}
           </div>
         </>
       ) : null}

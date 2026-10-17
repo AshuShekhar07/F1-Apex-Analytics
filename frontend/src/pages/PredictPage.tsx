@@ -19,6 +19,7 @@ import {
 } from '../titleScenarios'
 import type { RaceDetail, SeasonResults, WinnerDriver, WinnerPrediction } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 import { useFlip } from '../motion/useFlip'
 
 const colourOf = (hex: string | null | undefined) => glowColour(normaliseHex(hex, '#888888'))
@@ -58,7 +59,7 @@ export function PredictPage() {
       {(next.error || matrix.error) && <ErrorBox error={(next.error ?? matrix.error)!} />}
       {(next.loading || matrix.loading) && <LightsOut height={320} />}
 
-      {!next.loading && !p && <div className="panel empty">No upcoming race to predict yet: the calendar opens with the next season.</div>}
+      {!next.loading && !p && <Empty panel icon="lights" title="No upcoming race to predict yet">The calendar opens with the next season.</Empty>}
       {p && matrix.data !== undefined && <RacePicks p={p} matrix={matrix.data} now={now} />}
 
       <PastPicks currentRaceId={p?.race_id ?? null} now={now} />
@@ -125,7 +126,7 @@ function RacePicks({ p, matrix, now }: { p: WinnerPrediction; matrix: SeasonResu
     writePick(key, null)
   }
 
-  if (!lineup.length) return <div className="panel empty">The line-up for {p.track} is not known yet.</div>
+  if (!lineup.length) return <Empty panel icon="tyre" title={`The line-up for ${p.track} is not known yet`} />
   const favourite = stage ? [...stage.drivers].sort((a, b) => b.p_win - a.p_win)[0] : null
   const yours = pick.winner != null ? byId.get(pick.winner) : undefined
 

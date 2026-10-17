@@ -13,6 +13,7 @@ import { useAccent, usePageAccent } from '../theme/accent'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { DriverStats, RosterDriver, WetRanking as WetRankingData } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 
 const SEASON = 2026
 
@@ -43,7 +44,7 @@ export function DriversPage() {
 
       {roster.loading && <LightsOut height={300} />}
       {roster.error && <ErrorBox error={roster.error} />}
-      {!roster.loading && !roster.error && !roster.data && <div className="panel empty">No {SEASON} drivers in the database yet.</div>}
+      {!roster.loading && !roster.error && !roster.data && <Empty panel icon="tyre" title={`No ${SEASON} drivers in the database yet`} />}
 
       {roster.data && (
         <>

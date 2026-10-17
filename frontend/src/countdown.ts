@@ -21,3 +21,18 @@ export function nextSession(sessions: WeekendSession[], now: number): { s: Weeke
   const next = timed.find((x) => x.start > now)
   return next ? { ...next, live: false } : null
 }
+
+export type SessionWaitState =
+  | { state: 'upcoming' | 'running' | 'loading'; name: string; start: number }
+  | { state: 'unknown' }
+
+/** Why a session panel is empty: the first of these session types (weekend order) without data
+    is still to come, running now (its first 2 hours), or has finished and its data is not in yet;
+    'unknown' when there is no such session or its start time is not known. */
+export function sessionWait(sessions: WeekendSession[] | null | undefined, types: string[], now: number): SessionWaitState {
+  const s = sessions?.find((x) => types.includes(x.type) && !x.has_laps && !x.has_results)
+  const start = s?.start_time_utc ? Date.parse(`${s.start_time_utc}Z`) : NaN
+  if (!s || !Number.isFinite(start)) return { state: 'unknown' }
+  const state = now < start ? 'upcoming' : now < start + 2 * 3600_000 ? 'running' : 'loading'
+  return { state, name: s.name, start }
+}

@@ -5,6 +5,7 @@ import { api } from '../api'
 import type { Circuit } from '../circuitTypes'
 import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
 import { Countdown } from '../components/Countdown'
+import { Empty, SessionWait, Skeleton } from '../components/Empty'
 import { ErrorBox } from '../components/Status'
 import { CircuitOutline } from '../fx/CircuitOutline'
 import { localDay, nightRace, pct, sessionStates } from '../format'
@@ -93,7 +94,9 @@ export function RaceHubPage() {
   if (!p || !stage || !current) {
     return (
       <div className="page">
-        <div className="panel empty">No upcoming race in the calendar. <Link to="/results">See the season results</Link>.</div>
+        <Empty panel icon="flag" title="No upcoming race in the calendar">
+          The season is over or the next calendar is not out yet. <Link to="/results">See the season results</Link>.
+        </Empty>
       </div>
     )
   }
@@ -212,7 +215,7 @@ export function RaceHubPage() {
                   </p>
                 </>
               ) : (
-                <p className="muted small" style={{ margin: 0 }}>{strategy.loading ? 'Loading…' : 'No strategy prediction for this race yet.'}</p>
+                strategy.loading ? <Skeleton rows={2} /> : <Empty icon="tyre" title="No strategy prediction for this race yet" />
               )}
             </div>
           </div>
@@ -226,13 +229,18 @@ export function RaceHubPage() {
         <div className="panel">
           <div className="panel-head"><h3>Qualifying</h3><span className="aside">Q1 · Q2 · Q3</span></div>
           {quali.data?.results.length ? <QualifyingTable rows={quali.data.results} /> : (
-            <div className="panel-body"><p className="muted small" style={{ margin: 0 }}>{quali.loading ? 'Loading…' : 'Qualifying results are not in the database yet.'}</p></div>
+            <div className="panel-body">
+              {quali.loading ? <Skeleton rows={5} />
+                : <SessionWait sessions={s?.sessions} types={['Q']} what="The Q1, Q2 and Q3 times" none="Qualifying results are not in yet" />}
+            </div>
           )}
         </div>
         <div className="panel">
           <div className="panel-head"><h3>Practice long runs</h3><span className="aside">race-trim pace</span></div>
           <div className="panel-body">
-            {longRuns.data ? <LongRuns data={longRuns.data} /> : <p className="muted small" style={{ margin: 0 }}>{longRuns.loading ? 'Loading…' : 'No practice data yet.'}</p>}
+            {longRuns.data?.drivers.length ? <LongRuns data={longRuns.data} />
+              : longRuns.loading ? <Skeleton rows={4} />
+              : <SessionWait sessions={s?.sessions} types={['FP1', 'FP2', 'FP3']} what="Race-trim pace from the long runs" none="No long runs in practice yet" />}
           </div>
         </div>
       </div>

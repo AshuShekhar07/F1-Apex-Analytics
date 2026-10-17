@@ -16,6 +16,7 @@ import { LiveryDrawing } from '../race/LiveryDrawing'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { CarDetail, CarRow, LiveryPhoto } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { Empty } from '../components/Empty'
 
 /** Credits file written by fetch_livery_photos_v1.py; missing (no photos yet) is fine. */
 let photosOnce: Promise<Record<string, LiveryPhoto>> | null = null
@@ -85,7 +86,7 @@ export function LiveriesPage() {
         shown.length
           ? <div className="car-grid">{shown.map((c) => <CarCard key={c.key} c={c} photo={photos.data?.[c.key]}
                                                                onCompare={() => setParams({ view: 'compare', a: c.key })} />)}</div>
-          : <div className="panel empty">No cars with results in {season}.</div>
+          : <Empty panel icon="tyre" title={`No cars with results in ${season}`} />
       )}
       {data && view === 'ranking' && (
         <Ranking cars={best} onPick={(c) => setParams({ season: String(c.season) }, { replace: false })} />
@@ -275,7 +276,7 @@ function CompareView({ cars, ranked, photos, a, b, onPick }: {
     return () => ctx.revert()
   }, [pair])
 
-  if (!x || !y) return <div className="panel empty">Not enough cars with results to compare.</div>
+  if (!x || !y) return <Empty panel icon="tyre" title="Not enough cars with results to compare" />
   const cmp = compareCars(x, y, mode)
   const h2h = sameSeason && matrix.data ? headToHead(matrix.data, x.team_id, y.team_id) : null
   const capW = cmp.capability.verdict.winner, achW = cmp.achievement.verdict.winner
