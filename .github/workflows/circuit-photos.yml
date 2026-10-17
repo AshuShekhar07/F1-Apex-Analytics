@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install requests
+      - run: pip install requests pillow
       - name: fetch the photos and their credits
         run: python fetch_circuit_photos_v1.py --download
       - name: commit them

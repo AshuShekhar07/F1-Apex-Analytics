@@ -7,10 +7,15 @@ wide, with no track-map, logo or diagram in the file name, and only free licence
 domain, CC BY, CC BY-SA). Every photo is stored with its author, licence and source page, which
 the site shows. A photo picked by hand goes in PICKS.
 
-Needs internet access (Wikimedia Commons). Run it from the repo folder:
+A circuit that already has a photo keeps it (reruns are cheap and stable) unless the photo is in
+REJECT (looked at and not right for a header) or the circuit is named with --only; --refresh
+searches every circuit again. Downloads are shrunk to WIDTH px wide JPEGs for the web.
 
-    python fetch_circuit_photos_v1.py --download        # saves 1600 px copies under frontend/public/circuit-photos/img
-    python fetch_circuit_photos_v1.py --only jp-1962
+Needs internet access (Wikimedia Commons), except --shrink. Run it from the repo folder:
+
+    python fetch_circuit_photos_v1.py --download        # saves copies under frontend/public/circuit-photos/img
+    python fetch_circuit_photos_v1.py --download --only jp-1962
+    python fetch_circuit_photos_v1.py --shrink          # re-compress the saved copies (no internet)
 
 Then commit frontend/public/circuit-photos/.
 """
@@ -31,8 +36,12 @@ OUT_DIR = ROOT / "frontend" / "public" / "circuit-photos"
 WIDTH = 1600
 MIN_WIDTH = 1600            # original width
 MIN_ASPECT = 1.45           # clearly landscape: a header is wide and short
+MAX_ASPECT = 2.6            # but not a thin strip, which the header would blow up and blur
+QUALITY = 72                # JPEG quality of the saved copies
 SKIP_WORDS = ("map", "layout", "logo", "diagram", "plan", "svg", "sign", "ticket", "trophy", "badge", "poster",
-              "helmet", "portrait", "interview", "press", "museum", "statue", "plaque", "crash", "accident")
+              "helmet", "portrait", "interview", "press", "museum", "statue", "plaque", "crash", "accident",
+              "motogp", "rider", "racer", "mural", "graffiti", "painting", "drawing", "illustration", "banner",
+              "vogelschau")
 GOOD_WORDS = ("aerial", "panorama", "grandstand", "start", "straight", "circuit", "track", "race", "view", "pit")
 
 # Searches per circuit, best first (the circuit's own name is always tried last).
@@ -71,6 +80,16 @@ QUERIES: dict[str, list[str]] = {
 }
 # Hand-picked Commons files (after review), circuit id -> "File:..."
 PICKS: dict[str, str] = {}
+# Looked at and not right for a circuit header (a rider close-up, a mural, a 1927 drawing, a thin
+# strip, a city road away from the circuit): never used, the next search result is taken instead.
+REJECT: set[str] = {
+    "File:Italian professional motorcycle racer and multiple MotoGP World Champion Valentino Rossi in action in the day 1 "
+    "of Qatar test at the Losail International Circuit. (33220830442).jpg",
+    "File:Serty31 - Aston Martin F1 Miami - 2025.jpg",
+    "File:Nürburgring, Vogelschauansicht, Eugen Felle, 1927.jpg",
+    "File:Imola banner.jpg",
+    "File:Jeddah Corniche 37.jpg",
+}
 
 
 def circuits() -> list[dict]:
@@ -100,10 +119,21 @@ def file_info(title: str, width: int) -> dict | None:
 
 
 def acceptable(info: dict | None) -> bool:
-    if not info or info["non_free"] or not free_licence(info["license"]) or info["mime"] != "image/jpeg":
+    if not info or info["file"] in REJECT or info["non_free"] or not free_licence(info["license"]) or info["mime"] != "image/jpeg":
         return False
     w, h = info["orig_width"] or 0, info["orig_height"] or 1
-    return w >= MIN_WIDTH and w / h >= MIN_ASPECT
+    return w >= MIN_WIDTH and MIN_ASPECT <= w / h <= MAX_ASPECT
+
+
+def shrink(path: Path, width: int = WIDTH) -> None:
+    """At most `width` px wide, progressive JPEG at QUALITY (Commons serves 1920 px copies)."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        im = im.convert("RGB")
+        if im.width > width:
+            im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
+        im.save(path, "JPEG", quality=QUALITY, optimize=True, progressive=True)
 
 
 def score(title: str) -> int:
@@ -128,14 +158,31 @@ def main() -> int:
     parser.add_argument("--download", action="store_true", help="save resized copies under frontend/public/circuit-photos/img")
     parser.add_argument("--only", action="append", default=[], help="circuit id(s), e.g. jp-1962")
     parser.add_argument("--width", type=int, default=WIDTH)
+    parser.add_argument("--refresh", action="store_true", help="search again for circuits that already have a photo")
+    parser.add_argument("--shrink", action="store_true", help="only re-compress the saved copies (no internet)")
     args = parser.parse_args()
+
+    if args.shrink:
+        for f in sorted((OUT_DIR / "img").glob("*.jpg")):
+            before = f.stat().st_size
+            shrink(f, args.width)
+            print(f"  {f.name:12} {before // 1024:5} KB -> {f.stat().st_size // 1024:4} KB")
+        return 0
 
     out_file = OUT_DIR / "photos.json"
     existing = json.loads(out_file.read_text()) if out_file.exists() else {"photos": {}}
     photos: dict = existing.get("photos", {})
-    found = missing = 0
+    found = missing = kept = 0
     for c in circuits():
         if args.only and c["id"] not in args.only:
+            continue
+        have = photos.get(c["id"])
+        if have and have["file"] in REJECT:
+            photos.pop(c["id"])
+            if have.get("src", "").startswith("/circuit-photos/img/"):
+                (OUT_DIR / "img" / f"{c['id']}.jpg").unlink(missing_ok=True)
+        elif have and not args.refresh and not args.only:
+            kept += 1
             continue
         try:
             info = file_info(PICKS[c["id"]], args.width) if c["id"] in PICKS else find(c, args.width)
@@ -153,6 +200,7 @@ def main() -> int:
                 r = session.get(info["thumb"], timeout=60)
                 r.raise_for_status()
                 target.write_bytes(r.content)
+                shrink(target, args.width)
                 info["src"] = f"/circuit-photos/img/{c['id']}.jpg"
                 time.sleep(0.4)
             else:
@@ -169,7 +217,7 @@ def main() -> int:
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "photos": dict(sorted(photos.items())),
     }, indent=1, ensure_ascii=False) + "\n")
-    print(f"{found} photos, {missing} without; wrote {out_file}")
+    print(f"{found} photos found, {kept} kept, {missing} without; wrote {out_file}")
     return 0
 
 

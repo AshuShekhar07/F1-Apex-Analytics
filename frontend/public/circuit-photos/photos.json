@@ -119,19 +119,6 @@
    "location": "Shanghai",
    "src": "/circuit-photos/img/cn-2004.jpg"
   },
-  "de-1927": {
-   "file": "File:Nürburgring, Vogelschauansicht, Eugen Felle, 1927.jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/N%C3%BCrburgring%2C_Vogelschauansicht%2C_Eugen_Felle%2C_1927.jpg/1920px-N%C3%BCrburgring%2C_Vogelschauansicht%2C_Eugen_Felle%2C_1927.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 4500,
-   "orig_height": 2862,
-   "page": "https://commons.wikimedia.org/wiki/File:N%C3%BCrburgring,_Vogelschauansicht,_Eugen_Felle,_1927.jpg",
-   "author": "Eugen Felle",
-   "license": "Public domain",
-   "license_url": null,
-   "name": "Nürburgring",
-   "location": "Nürburg",
-   "src": "/circuit-photos/img/de-1927.jpg"
-  },
   "de-1932": {
    "file": "File:Aerial image of Hockenheimring (view from the southwest).jpg",
    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e4/Aerial_image_of_Hockenheimring_%28view_from_the_southwest%29.jpg/1920px-Aerial_image_of_Hockenheimring_%28view_from_the_southwest%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
@@ -223,19 +210,6 @@
    "location": "Monza",
    "src": "/circuit-photos/img/it-1922.jpg"
   },
-  "it-1953": {
-   "file": "File:Imola banner.jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fc/Imola_banner.jpg/1920px-Imola_banner.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 2362,
-   "orig_height": 338,
-   "page": "https://commons.wikimedia.org/wiki/File:Imola_banner.jpg",
-   "author": "Marpol",
-   "license": "Public domain",
-   "license_url": null,
-   "name": "Autodromo Enzo e Dino Ferrari",
-   "location": "Imola",
-   "src": "/circuit-photos/img/it-1953.jpg"
-  },
   "jp-1962": {
    "file": "File:Aéreo do Circuito de Suzuka e arredores - panoramio (1).jpg",
    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a0/A%C3%A9reo_do_Circuito_de_Suzuka_e_arredores_-_panoramio_%281%29.jpg/1920px-A%C3%A9reo_do_Circuito_de_Suzuka_e_arredores_-_panoramio_%281%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
@@ -301,19 +275,6 @@
    "location": "Portimão",
    "src": "/circuit-photos/img/pt-2008.jpg"
   },
-  "qa-2004": {
-   "file": "File:Italian professional motorcycle racer and multiple MotoGP World Champion Valentino Rossi in action in the day 1 of Qatar test at the Losail International Circuit. (33220830442).jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Italian_professional_motorcycle_racer_and_multiple_MotoGP_World_Champion_Valentino_Rossi_in_action_in_the_day_1_of_Qatar_test_at_the_Losail_International_Circuit._%2833220830442%29.jpg/1920px-thumbnail.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 4500,
-   "orig_height": 2352,
-   "page": "https://commons.wikimedia.org/wiki/File:Italian_professional_motorcycle_racer_and_multiple_MotoGP_World_Champion_Valentino_Rossi_in_action_in_the_day_1_of_Qatar_test_at_the_Losail_International_Circuit._(33220830442).jpg",
-   "author": "Doha Stadium Plus Qatar from Doha, Qatar",
-   "license": "CC BY 2.0",
-   "license_url": "https://creativecommons.org/licenses/by/2.0",
-   "name": "Losail International Circuit",
-   "location": "Lusail",
-   "src": "/circuit-photos/img/qa-2004.jpg"
-  },
   "ru-2014": {
    "file": "File:Sochi adler aerial view 2018 15.jpg",
    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/Sochi_adler_aerial_view_2018_15.jpg/1920px-Sochi_adler_aerial_view_2018_15.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
@@ -326,19 +287,6 @@
    "name": "Sochi Autodrom",
    "location": "Sochi",
    "src": "/circuit-photos/img/ru-2014.jpg"
-  },
-  "sa-2021": {
-   "file": "File:Jeddah Corniche 37.jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Jeddah_Corniche_37.jpg/1920px-Jeddah_Corniche_37.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 2048,
-   "orig_height": 1152,
-   "page": "https://commons.wikimedia.org/wiki/File:Jeddah_Corniche_37.jpg",
-   "author": "Tahir mq",
-   "license": "CC BY-SA 4.0",
-   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
-   "name": "Jeddah Corniche Circuit",
-   "location": "Jeddah",
-   "src": "/circuit-photos/img/sa-2021.jpg"
   },
   "sg-2008": {
    "file": "File:Singapore Marina Bay Night View - panoramio.jpg",
@@ -378,19 +326,6 @@
    "name": "Circuit of the Americas",
    "location": "Austin",
    "src": "/circuit-photos/img/us-2012.jpg"
-  },
-  "us-2022": {
-   "file": "File:Serty31 - Aston Martin F1 Miami - 2025.jpg",
-   "thumb": "https://upload.wikimedia.org/wikipedia/commons/a/af/Serty31_-_Aston_Martin_F1_Miami_-_2025.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
-   "orig_width": 1698,
-   "orig_height": 896,
-   "page": "https://commons.wikimedia.org/wiki/File:Serty31_-_Aston_Martin_F1_Miami_-_2025.jpg",
-   "author": "Dakujeme",
-   "license": "CC BY-SA 4.0",
-   "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
-   "name": "Miami International Autodrome",
-   "location": "Miami",
-   "src": "/circuit-photos/img/us-2022.jpg"
   },
   "us-2023": {
    "file": "File:Las Vegas Grand Prix (54941208862).jpg",
