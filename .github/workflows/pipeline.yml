@@ -6,14 +6,18 @@
 #
 # Needs the repository secret DATABASE_URL (the database's direct connection string: the
 # pipeline holds a PostgreSQL advisory lock, which a transaction pooler would not keep).
-# Scheduled runs only start from the default branch. Remove the schedule (or this file) when the
-# scheduler container is used instead, so two runners don't take turns.
+#
+# The schedule is off: there is no hosted database yet, and every scheduled run would fail. It
+# runs by hand only (Actions -> pipeline -> Run workflow). Once the DATABASE_URL secret is set,
+# switch the schedule on by removing the "#" in front of the three schedule lines below.
+# Scheduled runs only start from the default branch. Keep the schedule off when the scheduler
+# container is used instead, so two runners don't take turns.
 name: pipeline
 
 on:
-  schedule:
-    - cron: "7,37 * * * 5,6,0,1"   # race weekends (Fri-Mon, UTC): every 30 minutes
-    - cron: "17 */6 * * 2,3,4"     # other days: every 6 hours (a load runs once a day)
+  # schedule:
+  #   - cron: "7,37 * * * 5,6,0,1"   # race weekends (Fri-Mon, UTC): every 30 minutes
+  #   - cron: "17 */6 * * 2,3,4"     # other days: every 6 hours (a load runs once a day)
   workflow_dispatch:
     inputs:
       force:

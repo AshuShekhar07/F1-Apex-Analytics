@@ -120,7 +120,7 @@ the same; the costs are a slow first visit after the API has been idle and a sma
 | database | Neon                                   | 1 GB per project; sleeps after 5 min idle (wakes in about a second) |
 | API      | Render web service (Docker, `render.yaml`) | 512 MB, 0.1 CPU, one worker; sleeps after 15 min idle (about 1 min to wake) |
 | website  | Cloudflare Pages                       | static files, no practical limit                                 |
-| pipeline | GitHub Actions (`.github/workflows/pipeline.yml`) | free on a public repo; schedules run from the default branch only |
+| pipeline | GitHub Actions (`.github/workflows/pipeline.yml`) | free on a public repo; schedule off until step 5; schedules run from the default branch only |
 
 **0. Check the database fits (1 GB).** On your computer:
 `psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"`
@@ -145,10 +145,11 @@ any path (no `404.html`), and `frontend/public/_headers` sets the same caching a
 Pages address, plus any custom domain, comma-separated). Render restarts the API.
 
 **5. Pipeline (GitHub Actions).** Repository → Settings → Secrets and variables → Actions → New
-secret `DATABASE_URL` = the Neon string. `pipeline.yml` must be on the default branch (`main`) to
-run on its schedule; once it is, Actions → pipeline → Run workflow (tick "Load now") tests it.
-GitHub turns schedules off after 60 days without any repository activity; re-enable them in the
-Actions tab.
+secret `DATABASE_URL` = the Neon string. Actions → pipeline → Run workflow (tick "Load now") tests
+it. The schedule ships switched off (with no database every run would fail): to switch it on,
+remove the `#` in front of the three `schedule` lines in `pipeline.yml`. `pipeline.yml` must be on
+the default branch (`main`) to run on its schedule. GitHub turns schedules off after 60 days
+without any repository activity; re-enable them in the Actions tab.
 
 **6. Optional: no slow first visit.** A free uptime monitor (e.g. UptimeRobot) calling
 `https://<service>.onrender.com/` every 5 minutes keeps the API awake. That address does not
