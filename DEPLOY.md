@@ -192,13 +192,19 @@ answers take seconds of full CPU to compute (the next race's win chances fit a m
 race since 2018). In production the API keeps every successful answer in the database
 (`api_response_cache`, `app/response_cache.py`), keyed by the data version and the date, and the
 pipeline workflow computes them after each check on GitHub's machine
-(`warm_api_cache_v1.py`). The API then only reads them. After copying the database in, fill them
-once from your computer: `DATABASE_URL="<database string>" python warm_api_cache_v1.py`
-(`--all` also does every older race page; those are otherwise computed on their first visit).
-On Render: `WARM_CACHES=false` and the health check path `/` (both in `render.yaml`).
+(`warm_api_cache_v1.py`, four pages at a time). The API then only reads them. When the data
+version has moved on (new data, a pipeline run, a new day) and a page is not computed again
+yet, the API sends its last answer at once (`x-apex21-cache: stale`, up to 7 days old) and
+computes the new one in the background, one at a time, so no visitor waits for the small CPU
+(`RESPONSE_CACHE_STALE=false` turns that off). After copying the database in, fill them once
+from your computer: `DATABASE_URL="<database string>" python warm_api_cache_v1.py` (`--all`
+also does every older race page; those are otherwise computed on their first visit). On
+Render: `WARM_CACHES=false` and the health check path `/` (both in `render.yaml`).
 
-**6. Optional: no slow first visit.** A free uptime monitor (e.g. UptimeRobot) calling
-`https://<service>.onrender.com/` every 5 minutes keeps the API awake. That address does not
+**6. No slow first visit.** A free uptime monitor (e.g. UptimeRobot or cron-job.org) calling
+`https://<service>.onrender.com/` every 5 minutes keeps the API awake. The keep-awake workflow
+does the same from GitHub, but GitHub starts scheduled runs late at busy times, and a newly
+added schedule can take hours to start, so a monitor is steadier. That address does not
 touch the database, so the database can still sleep. One always-on service fits Render's 750 free hours
 a month.
 

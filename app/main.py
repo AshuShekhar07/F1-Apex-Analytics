@@ -57,7 +57,8 @@ def _engine():
 
 
 # added first, so it runs inside CORS: saved answers still get each visitor's CORS headers
-app.add_middleware(ResponseCache, engine_getter=_engine, enabled=lambda: settings.response_cache)
+app.add_middleware(ResponseCache, engine_getter=_engine, enabled=lambda: settings.response_cache,
+                   serve_stale=lambda: settings.response_cache_stale)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),

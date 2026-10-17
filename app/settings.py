@@ -37,6 +37,7 @@ class Settings:
     what_if_max_sims: int
     warm_caches: bool                   # load the strategy history at startup instead of on first request
     response_cache: bool                # keep GET answers in the database per data version (app/response_cache.py)
+    response_cache_stale: bool          # after new data, send the last saved answer while it is computed again
 
     @property
     def production(self) -> bool:
@@ -56,6 +57,7 @@ def load_settings() -> Settings:
         what_if_max_sims=_int("WHAT_IF_MAX_SIMS", 2000),
         warm_caches=_bool("WARM_CACHES", production),
         response_cache=_bool("RESPONSE_CACHE", production),
+        response_cache_stale=_bool("RESPONSE_CACHE_STALE", True),
     )
 
 

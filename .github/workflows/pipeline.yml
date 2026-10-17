@@ -10,7 +10,8 @@
 #
 # After each check it also refreshes the API's saved answers (warm_api_cache_v1.py): they are
 # keyed by the data version and the date, so new data and each new day are computed here, on
-# GitHub's machine, instead of on the small free API server when a visitor asks.
+# GitHub's machine, instead of on the small free API server when a visitor asks. Until a page
+# is computed again, the API sends its last answer at once.
 # Scheduled runs only start from the default branch. Remove the schedule when the scheduler
 # container is used instead, so two runners don't take turns.
 name: pipeline
@@ -76,7 +77,8 @@ jobs:
           exit $code
       - name: refresh the API's saved answers
         if: always() && steps.secret.outputs.ready == 'true'
-        run: python -u warm_api_cache_v1.py
+        timeout-minutes: 60
+        run: python -u warm_api_cache_v1.py --workers 4
       - name: save FastF1 downloads (only after a load)
         if: always() && steps.run.outputs.loaded == 'true'
         uses: actions/cache/save@v4
