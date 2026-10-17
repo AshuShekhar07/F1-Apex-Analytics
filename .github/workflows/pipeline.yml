@@ -4,24 +4,29 @@
 # up every 30 min after a session, every 2 h on race weekends, daily otherwise); a check that is
 # not due takes about a minute.
 #
-# Needs the repository secret DATABASE_URL (the database's direct connection string: the
-# pipeline holds a PostgreSQL advisory lock, which a transaction pooler would not keep).
+# Needs the repository secret DATABASE_URL: the database's direct or session-mode connection
+# string (Supabase: "Session pooler"; the pipeline holds a PostgreSQL advisory lock, which a
+# transaction pooler would not keep). Without the secret every run stops at once, quietly.
 #
-# The schedule is off: there is no hosted database yet, and every scheduled run would fail. It
-# runs by hand only (Actions -> pipeline -> Run workflow). Once the DATABASE_URL secret is set,
-# switch the schedule on by removing the "#" in front of the three schedule lines below.
-# Scheduled runs only start from the default branch. Keep the schedule off when the scheduler
+# After each check it also refreshes the API's saved answers (warm_api_cache_v1.py): they are
+# keyed by the data version and the date, so new data and each new day are computed here, on
+# GitHub's machine, instead of on the small free API server when a visitor asks.
+# Scheduled runs only start from the default branch. Remove the schedule when the scheduler
 # container is used instead, so two runners don't take turns.
 name: pipeline
 
 on:
-  # schedule:
-  #   - cron: "7,37 * * * 5,6,0,1"   # race weekends (Fri-Mon, UTC): every 30 minutes
-  #   - cron: "17 */6 * * 2,3,4"     # other days: every 6 hours (a load runs once a day)
+  schedule:
+    - cron: "7,37 * * * 5,6,0,1"   # race weekends (Fri-Mon, UTC): every 30 minutes
+    - cron: "17 */6 * * 2,3,4"     # other days: every 6 hours (a load runs once a day)
   workflow_dispatch:
     inputs:
       force:
         description: "Load now, even if not due"
+        type: boolean
+        default: false
+      saved_answers_only:
+        description: "Only refresh the API's saved answers (no data load)"
         type: boolean
         default: false
 
@@ -37,13 +42,22 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FASTF1_CACHE_DIR: ${{ github.workspace }}/cache
     steps:
+      - name: is a database set?
+        id: secret
+        run: |
+          if [ -n "$DATABASE_URL" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::No DATABASE_URL repository secret: nothing to update"; fi
       - uses: actions/checkout@v4
+        if: steps.secret.outputs.ready == 'true'
       - uses: actions/setup-python@v5
+        if: steps.secret.outputs.ready == 'true'
         with:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+        if: steps.secret.outputs.ready == 'true'
       - name: FastF1 downloads from earlier runs
+        if: steps.secret.outputs.ready == 'true'
         uses: actions/cache/restore@v4
         with:
           path: cache
@@ -51,8 +65,8 @@ jobs:
           restore-keys: fastf1-
       - name: run the pipeline
         id: run
+        if: steps.secret.outputs.ready == 'true' && inputs.saved_answers_only != true
         run: |
-          if [ -z "$DATABASE_URL" ]; then echo "Set the DATABASE_URL repository secret first"; exit 1; fi
           set +e
           if [ "${{ inputs.force }}" = "true" ]; then python -u run_pipeline.py | tee out.txt
           else python -u run_pipeline.py --if-due | tee out.txt; fi
@@ -60,6 +74,9 @@ jobs:
           grep -qE "^pipeline (ok|failed)" out.txt && echo "loaded=true" >> "$GITHUB_OUTPUT"
           if [ "$code" = 2 ]; then echo "another pipeline run holds the lock: nothing to do"; exit 0; fi
           exit $code
+      - name: refresh the API's saved answers
+        if: always() && steps.secret.outputs.ready == 'true'
+        run: python -u warm_api_cache_v1.py
       - name: save FastF1 downloads (only after a load)
         if: always() && steps.run.outputs.loaded == 'true'
         uses: actions/cache/save@v4
@@ -67,7 +84,7 @@ jobs:
           path: cache
           key: fastf1-${{ github.run_id }}
       - name: keep the run's log
-        if: always()
+        if: always() && steps.secret.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pipeline-log-${{ github.run_id }}

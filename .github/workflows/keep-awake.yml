@@ -1,0 +1,23 @@
+# Keeps the free Render API awake. Render's free plan stops it after 15 minutes without a visit,
+# and starting again takes about a minute on its tenth of a CPU, so the first visitor after a
+# quiet spell would wait. This opens the API's front page (no database needed) every 10 minutes.
+# GitHub may start scheduled runs a few minutes late; a free uptime monitor (DEPLOY.md, step 6)
+# is steadier. Set the repository variable API_URL for another address. Runs from main only.
+name: keep awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: open the API's front page
+        env:
+          API_URL: ${{ vars.API_URL || 'https://f1-apex-analytics.onrender.com' }}
+        run: |
+          if curl -fsS --max-time 150 --retry 2 -o /dev/null "$API_URL/"; then echo "awake: $API_URL"
+          else echo "::warning::$API_URL did not answer"; fi

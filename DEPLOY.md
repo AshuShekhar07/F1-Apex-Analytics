@@ -181,15 +181,25 @@ any path (no `404.html`), and `frontend/public/_headers` sets the same caching a
 Pages address, plus any custom domain, comma-separated). Render restarts the API.
 
 **5. Pipeline (GitHub Actions).** Repository → Settings → Secrets and variables → Actions → New
-secret `DATABASE_URL` = the Neon string. Actions → pipeline → Run workflow (tick "Load now") tests
-it. The schedule ships switched off (with no database every run would fail): to switch it on,
-remove the `#` in front of the three `schedule` lines in `pipeline.yml`. `pipeline.yml` must be on
-the default branch (`main`) to run on its schedule. GitHub turns schedules off after 60 days
-without any repository activity; re-enable them in the Actions tab.
+secret `DATABASE_URL` = the database string (Supabase: the Session pooler one; Neon: pooling off).
+Actions → pipeline → Run workflow (tick "Load now") tests it. Without the secret every scheduled
+run stops at once, quietly. `pipeline.yml` must be on the default branch (`main`) to run on its
+schedule. GitHub turns schedules off after 60 days without any repository activity; re-enable
+them in the Actions tab.
+
+**Saved answers: why the free API stays fast.** Render's free plan has a tenth of a CPU, and some
+answers take seconds of full CPU to compute (the next race's win chances fit a model over every
+race since 2018). In production the API keeps every successful answer in the database
+(`api_response_cache`, `app/response_cache.py`), keyed by the data version and the date, and the
+pipeline workflow computes them after each check on GitHub's machine
+(`warm_api_cache_v1.py`). The API then only reads them. After copying the database in, fill them
+once from your computer: `DATABASE_URL="<database string>" python warm_api_cache_v1.py`
+(`--all` also does every older race page; those are otherwise computed on their first visit).
+On Render: `WARM_CACHES=false` and the health check path `/` (both in `render.yaml`).
 
 **6. Optional: no slow first visit.** A free uptime monitor (e.g. UptimeRobot) calling
 `https://<service>.onrender.com/` every 5 minutes keeps the API awake. That address does not
-touch the database, so Neon can still sleep. One always-on service fits Render's 750 free hours
+touch the database, so the database can still sleep. One always-on service fits Render's 750 free hours
 a month.
 
 ## Public demo notes

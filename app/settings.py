@@ -36,6 +36,7 @@ class Settings:
     rate_limit_per_minute: int          # per client IP; 0 = off
     what_if_max_sims: int
     warm_caches: bool                   # load the strategy history at startup instead of on first request
+    response_cache: bool                # keep GET answers in the database per data version (app/response_cache.py)
 
     @property
     def production(self) -> bool:
@@ -45,7 +46,8 @@ class Settings:
 def load_settings() -> Settings:
     env = os.getenv("APP_ENV", "development").strip().lower()
     production = env == "production"
-    origins = tuple(o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip())
+    # an origin never ends in "/": "https://site.example/" would match no browser request
+    origins = tuple(o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip().rstrip("/"))
     return Settings(
         env=env,
         cors_origins=origins or (() if production else DEV_ORIGINS),
@@ -53,6 +55,7 @@ def load_settings() -> Settings:
         rate_limit_per_minute=_int("RATE_LIMIT_PER_MINUTE", 600 if production else 0),
         what_if_max_sims=_int("WHAT_IF_MAX_SIMS", 2000),
         warm_caches=_bool("WARM_CACHES", production),
+        response_cache=_bool("RESPONSE_CACHE", production),
     )
 
 
