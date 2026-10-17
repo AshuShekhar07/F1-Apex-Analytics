@@ -314,11 +314,16 @@ def _round(v: float | None, digits: int) -> float | None:
 _cache: dict[tuple, dict] = {}
 
 
-def car_table(db) -> dict:
-    """compute(), cached until race results, qualifying or laps change."""
-    stamp = tuple(db.execute(text("""
+def data_stamp(db) -> tuple:
+    """Changes whenever race results, qualifying or laps change."""
+    return tuple(db.execute(text("""
         SELECT (SELECT COUNT(*) FROM race_results), (SELECT MAX(id) FROM race_results),
                (SELECT MAX(id) FROM qualifying_results), (SELECT MAX(id) FROM laps)""")).one())
+
+
+def car_table(db) -> dict:
+    """compute(), cached until race results, qualifying or laps change."""
+    stamp = data_stamp(db)
     if stamp not in _cache:
         _cache.clear()
         _cache[stamp] = compute(db)

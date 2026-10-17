@@ -92,8 +92,8 @@ async def rate_limit(request: Request, call_next):
 
 @app.on_event("startup")
 def warm_caches():
-    """Load the strategy history (every race's real stints) in the background so the first
-    /strategy/predict request is not the slow one."""
+    """Load the strategy history (every race's real stints) and the car tables in the background so
+    the first /strategy/predict and /cars requests are not the slow ones."""
     if not settings.warm_caches:
         return
 
@@ -104,6 +104,10 @@ def warm_caches():
             with SessionLocal() as db:
                 strategy_service_v7._history(db)
             log.info("strategy history warmed")
+            import car_compare_v1
+            with SessionLocal() as db:
+                car_compare_v1.fair_table(db)
+            log.info("car tables warmed")
         except Exception:
             log.exception("warming the strategy history failed (it loads on first request instead)")
     threading.Thread(target=load, daemon=True).start()

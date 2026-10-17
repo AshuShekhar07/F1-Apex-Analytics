@@ -59,7 +59,13 @@ def candidates(db: Any, *, all_races: bool = True) -> dict[str, list]:
     drivers = ids("SELECT DISTINCT driver_id FROM race_entries ORDER BY 1")
     rounds = ids("SELECT DISTINCT round_number FROM races ORDER BY 1")[:3]
     dates = [str(d) for (d,) in db.execute(text("SELECT race_date FROM races ORDER BY race_date DESC LIMIT 2"))]
+    try:
+        from car_ratings_v1 import car_table
+        car_keys = [c["key"] for c in car_table(db)["cars"]][:6]
+    except Exception:                                   # no results yet: the misses below still run
+        car_keys = []
     return {
+        "key": car_keys + ["2021-nosuchteam", "not-a-key"],
         "race_id": races + [MISSING_ID],
         "driver_id": drivers + [MISSING_ID],
         "driver1_id": drivers[:3] + [MISSING_ID],
