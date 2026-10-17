@@ -16,6 +16,7 @@ import { RacePage } from './pages/RacePage'
 import { RecordsPage } from './pages/RecordsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { TeamPage, TeamsPage } from './pages/TeamsPage'
+import { Backdrop } from './shell/Backdrop'
 import { SiteHeader } from './shell/Header'
 import { StatusBar } from './shell/StatusBar'
 import { startUpdateWatch, updateReady } from './updates'
@@ -63,6 +64,7 @@ export function App() {
     <AccentProvider>
       <LiveWeekendProvider>
         <SmoothScroll>
+          <Backdrop />
           {intro && <Intro onDone={introDone} />}
           <SiteHeader />
           <StatusBar />
