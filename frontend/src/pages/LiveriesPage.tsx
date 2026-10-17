@@ -9,11 +9,13 @@ import {
 } from '../compareCars'
 import { useWidth } from '../charts/useWidth'
 import { gsap, reducedMotion } from '../motion/gsap'
+import { useTilt } from '../motion/useTilt'
 import { ErrorBox } from '../components/Status'
 import { useAsync } from '../hooks'
 import { LiveryDrawing } from '../race/LiveryDrawing'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { CarDetail, CarRow, LiveryPhoto } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 /** Credits file written by fetch_livery_photos_v1.py; missing (no photos yet) is fine. */
 let photosOnce: Promise<Record<string, LiveryPhoto>> | null = null
@@ -77,7 +79,7 @@ export function LiveriesPage() {
       </p>
 
       {cars.error && <ErrorBox error={cars.error} />}
-      {cars.loading && <div className="skeleton" style={{ height: 360 }} />}
+      {cars.loading && <LightsOut height={360} />}
 
       {data && view === 'season' && (
         shown.length
@@ -119,8 +121,10 @@ function Meter({ value, colour }: { value: number | null; colour: string }) {
 
 function CarMedia({ c, photo }: { c: CarRow; photo?: LiveryPhoto }) {
   const name = c.car ?? c.team_name ?? 'Unknown car'
+  const media = useRef<HTMLDivElement>(null)
+  useTilt(media)
   return (
-    <div className="car-media">
+    <div className="car-media" ref={media}>
       {photo
         ? <img src={photo.src} alt={`${name}, ${c.season}`} loading="lazy" referrerPolicy="no-referrer" />
         : <LiveryDrawing colours={liveryColours(c)} label={name} />}
@@ -137,7 +141,7 @@ function CarCard({ c, photo, onCompare }: { c: CarRow; photo?: LiveryPhoto; onCo
   const name = c.car ?? c.team_name ?? 'Unknown car'
   const res = c.results
   return (
-    <article className="panel car-card" id={c.key}>
+    <article className="panel car-card" id={c.key} style={{ ['--car' as string]: colour }}>
       <CarMedia c={c} photo={photo} />
       <div className="car-head">
         <span className="team-bar" style={{ background: colour, height: 34 }} />

@@ -9,6 +9,7 @@ import { driverCode } from '../names'
 import { SEASONS } from '../seasons'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { LiveRecord, MatrixResult, SeasonResults } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 /** What a results cell shows and how it is coloured. */
 export function cellOf(r: MatrixResult | null): { text: string; cls: string } {
@@ -46,7 +47,7 @@ export function ResultsPage() {
         </select>
       </div>
 
-      {matrix.loading && <div className="skeleton" style={{ height: 200 }} />}
+      {matrix.loading && <LightsOut height={200} />}
       {matrix.error && <ErrorBox error={matrix.error} />}
       {!matrix.loading && !matrix.error && !m && <div className="panel empty">No races stored for {year}.</div>}
 

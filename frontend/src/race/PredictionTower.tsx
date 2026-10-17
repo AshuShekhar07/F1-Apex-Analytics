@@ -67,7 +67,7 @@ export function PredictionTower({ rows, stageKey }: { rows: TowerRow[]; stageKey
   }, [rows, stageKey])
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" data-own-motion>
       <table className="timing">
         <thead>
           <tr>

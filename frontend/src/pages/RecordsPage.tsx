@@ -7,6 +7,7 @@ import { useAsync } from '../hooks'
 import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { RecordLeader, RecordRace, RecordsHistory, Streak, StreakKind } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 const KINDS: [StreakKind, string, string][] = [
   ['wins', 'Wins', 'Grands Prix won in a row'],
@@ -25,7 +26,7 @@ export function RecordsPage() {
   const [kind, setKind] = useState<StreakKind>('wins')
   const data = q.data
 
-  if (q.loading) return <div className="page"><div className="skeleton" style={{ height: 320 }} /></div>
+  if (q.loading) return <div className="page"><LightsOut height={320} /></div>
   if (q.error) return <div className="page"><ErrorBox error={q.error} /></div>
   if (!data || !data.races) return <div className="page"><div className="panel empty">No Grands Prix in the database yet.</div></div>
 

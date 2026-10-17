@@ -17,6 +17,7 @@ import { StrategyLane } from '../race/StrategyLane'
 import { Undercuts } from '../race/Undercuts'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { ActualDriverStrategy, Forecast, RaceResult, WinnerPrediction } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 export function RacePage() {
   const raceId = Number(useParams().id)
@@ -34,7 +35,7 @@ export function RacePage() {
   const quali = useAsync(() => api.qualifying(raceId), [raceId])
   const longRuns = useAsync(() => api.longRuns(raceId), [raceId])
 
-  if (race.loading) return <div className="page"><div className="skeleton" style={{ height: 160 }} /></div>
+  if (race.loading) return <div className="page"><LightsOut height={160} /></div>
   if (race.error || !r) return <div className="page"><ErrorBox error={race.error ?? new Error('Race not found')} /></div>
 
   const f = forecast.data

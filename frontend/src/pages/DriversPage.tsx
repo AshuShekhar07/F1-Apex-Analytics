@@ -12,6 +12,7 @@ import { driverCode, splitName } from '../names'
 import { useAccent, usePageAccent } from '../theme/accent'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { DriverStats, RosterDriver, WetRanking as WetRankingData } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 const SEASON = 2026
 
@@ -40,7 +41,7 @@ export function DriversPage() {
         </div>
       </div>
 
-      {roster.loading && <div className="skeleton" style={{ height: 300 }} />}
+      {roster.loading && <LightsOut height={300} />}
       {roster.error && <ErrorBox error={roster.error} />}
       {!roster.loading && !roster.error && !roster.data && <div className="panel empty">No {SEASON} drivers in the database yet.</div>}
 

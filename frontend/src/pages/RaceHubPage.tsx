@@ -19,6 +19,7 @@ import { WinShare } from '../race/WinShare'
 import { usePageAccent } from '../theme/accent'
 import { matchTrack } from '../trackMatch'
 import type { LiveRecord, PredictionStage, WinnerPrediction } from '../types'
+import { LightsOut } from '../components/LightsOut'
 
 const STAGE_LABEL: Record<PredictionStage, string> = { pre_qualifying: 'Before qualifying', post_qualifying: 'After qualifying' }
 const STAGES: PredictionStage[] = ['pre_qualifying', 'post_qualifying']
@@ -80,7 +81,7 @@ export function RaceHubPage() {
       })
   }, [p, stage, current, forecast.data])
 
-  if (prediction.loading) return <div className="page"><div className="skeleton" style={{ height: 180 }} /></div>
+  if (prediction.loading) return <div className="page"><LightsOut height={180} /></div>
   if (prediction.error) return <div className="page"><ErrorBox error={prediction.error} /></div>
   if (!p || !stage || !current) {
     return (

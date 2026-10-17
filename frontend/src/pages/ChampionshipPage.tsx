@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api'
@@ -12,6 +12,8 @@ import { driverCode } from '../names'
 import { SEASONS } from '../seasons'
 import { glowColour, normaliseHex } from '../theme/color'
 import type { Championship, ChampionshipHistory, SeasonResults } from '../types'
+import { LightsOut } from '../components/LightsOut'
+import { useFlip } from '../motion/useFlip'
 
 type Kind = 'drivers' | 'constructors'
 
@@ -96,6 +98,8 @@ export function ChampionshipPage() {
   const c = champ.data
   const m = matrix.data
   const rows = useMemo(() => standings(kind, m, c), [kind, m, c])
+  const tbody = useRef<HTMLTableSectionElement>(null)
+  useFlip(tbody, [kind, rows.map((r) => r.id).join(',')])
   const leader = rows[0]?.points ?? 0
   const maxTitle = Math.max(...rows.map((r) => r.title ?? 0), 0.0001)
   const conf = c?.confidence[kind]
@@ -124,7 +128,7 @@ export function ChampionshipPage() {
       </div>
 
       {(champ.error || matrix.error) && <ErrorBox error={(champ.error ?? matrix.error)!} />}
-      {(champ.loading || matrix.loading) && <div className="skeleton" style={{ height: 300 }} />}
+      {(champ.loading || matrix.loading) && <LightsOut height={300} />}
 
       {!champ.loading && !matrix.loading && rows.length === 0 && <div className="panel empty">No results or title projection for {year} yet.</div>}
 
@@ -148,11 +152,11 @@ export function ChampionshipPage() {
                     <th>Title</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody ref={tbody}>
                   {rows.map((r, i) => {
                     const colour = glowColour(normaliseHex(r.colour, '#888888'))
                     return (
-                      <tr key={r.id}>
+                      <tr key={r.id} data-flip={`${kind}-${r.id}`}>
                         <td className="pos-cell"><span className={`pos-box ${i < 3 ? `p${i + 1}` : ''}`}>{i + 1}</span></td>
                         <td>
                           <div className="driver-cell">

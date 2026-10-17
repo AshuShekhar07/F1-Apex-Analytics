@@ -16,8 +16,12 @@ import { RacePage } from './pages/RacePage'
 import { RecordsPage } from './pages/RecordsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { TeamPage, TeamsPage } from './pages/TeamsPage'
+import { LightsOut } from './components/LightsOut'
+import { useScrollReveal } from './motion/useScrollReveal'
 import { Backdrop } from './shell/Backdrop'
 import { SiteHeader } from './shell/Header'
+import { PageWipe } from './shell/PageWipe'
+import { RevBar } from './shell/RevBar'
 import { StatusBar } from './shell/StatusBar'
 import { startUpdateWatch, updateReady } from './updates'
 import { AccentProvider } from './theme/accent'
@@ -48,6 +52,7 @@ export function App() {
   const [intro, introDone] = useIntroOnce()
   const location = useLocation()
   useEffect(() => startUpdateWatch(), [])
+  useScrollReveal()
   // a new version was deployed while this page was open: switch to it on the next page change
   useEffect(() => {
     if (updateReady()) window.location.reload()
@@ -65,6 +70,8 @@ export function App() {
       <LiveWeekendProvider>
         <SmoothScroll>
           <Backdrop />
+          <RevBar />
+          <PageWipe />
           {intro && <Intro onDone={introDone} />}
           <SiteHeader />
           <StatusBar />
@@ -80,7 +87,7 @@ export function App() {
               <Route path="/records" element={<Page><RecordsPage /></Page>} />
               <Route
                 path="/tracks"
-                element={<Page><Suspense fallback={<div className="page muted">Loading circuits…</div>}><TracksPage /></Suspense></Page>}
+                element={<Page><Suspense fallback={<div className="page"><LightsOut height={420} label="Loading the circuits" /></div>}><TracksPage /></Suspense></Page>}
               />
               {/* old addresses */}
               <Route path="/season/:year" element={<SeasonRedirect />} />

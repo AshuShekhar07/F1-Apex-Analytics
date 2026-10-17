@@ -908,3 +908,117 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 .status-bar .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--yellow); border-right-color: transparent; animation: spin 0.9s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .status-bar .spin { animation: none; } }
+
+/* --- motion ------------------------------------------------------------------------------------ */
+/* the start lights while data loads */
+.lights-loader { display: grid; place-items: center; align-content: center; gap: 14px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 80%, transparent); }
+.lights { display: flex; gap: 10px; padding: 10px 14px; background: #050506; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.lights span { display: grid; gap: 6px; padding: 6px; background: #0e0e11; border-radius: 4px; }
+.lights i { width: 16px; height: 16px; border-radius: 50%; background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+.lights span i:last-child { animation: 3s infinite; }
+.lights span:nth-child(1) i:last-child { animation-name: light-1; }
+.lights span:nth-child(2) i:last-child { animation-name: light-2; }
+.lights span:nth-child(3) i:last-child { animation-name: light-3; }
+.lights span:nth-child(4) i:last-child { animation-name: light-4; }
+.lights span:nth-child(5) i:last-child { animation-name: light-5; }
+.lights-label { font: 600 0.68rem/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
+/* the lights come on one by one and all go out together, as at a race start */
+@keyframes light-1 {
+  0%, 11% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+  12%, 76% { background: #ff1e12; box-shadow: 0 0 14px 2px rgba(255, 30, 18, 0.55), inset 0 0 0 1px #ff6a5e; }
+  77%, 100% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+}
+@keyframes light-2 {
+  0%, 23% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+  24%, 76% { background: #ff1e12; box-shadow: 0 0 14px 2px rgba(255, 30, 18, 0.55), inset 0 0 0 1px #ff6a5e; }
+  77%, 100% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+}
+@keyframes light-3 {
+  0%, 35% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+  36%, 76% { background: #ff1e12; box-shadow: 0 0 14px 2px rgba(255, 30, 18, 0.55), inset 0 0 0 1px #ff6a5e; }
+  77%, 100% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+}
+@keyframes light-4 {
+  0%, 47% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+  48%, 76% { background: #ff1e12; box-shadow: 0 0 14px 2px rgba(255, 30, 18, 0.55), inset 0 0 0 1px #ff6a5e; }
+  77%, 100% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+}
+@keyframes light-5 {
+  0%, 59% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+  60%, 76% { background: #ff1e12; box-shadow: 0 0 14px 2px rgba(255, 30, 18, 0.55), inset 0 0 0 1px #ff6a5e; }
+  77%, 100% { background: #26070a; box-shadow: inset 0 0 0 1px #3a0c10; }
+}
+
+/* scroll reveals (useScrollReveal): rise and fade into place, table rows cascade */
+.reveal-on .rv { transition: opacity 0.55s ease, transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s, border-color 0.35s;
+  transition-delay: var(--rv-delay, 0ms); }
+.reveal-on .rv:not(.in) { opacity: 0; transform: translateY(18px); }
+@keyframes row-in { from { opacity: 0; transform: translateX(-10px); } }
+.reveal-on .rv.in .timing tbody tr { animation: row-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.reveal-on .rv.in .timing tbody tr:nth-child(2) { animation-delay: 28ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(3) { animation-delay: 56ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(4) { animation-delay: 84ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(5) { animation-delay: 112ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(6) { animation-delay: 140ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(7) { animation-delay: 168ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(8) { animation-delay: 196ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(9) { animation-delay: 224ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(10) { animation-delay: 252ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(11) { animation-delay: 280ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(12) { animation-delay: 308ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(13) { animation-delay: 336ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(14) { animation-delay: 364ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(15) { animation-delay: 392ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(16) { animation-delay: 420ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(17) { animation-delay: 448ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(18) { animation-delay: 476ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(19) { animation-delay: 504ms; }
+.reveal-on .rv.in .timing tbody tr:nth-child(20) { animation-delay: 532ms; }
+.reveal-on [data-own-motion] .timing tbody tr, .reveal-on .rv.in [data-own-motion] tbody tr { animation: none; }
+
+/* between pages: a band in the accent colour flashes past, a kerb on its trailing edge */
+.page-wipe { position: fixed; top: 0; bottom: 0; left: 0; width: 34vw; z-index: 60; pointer-events: none; opacity: 0;
+  transform: translateX(-130%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent) 40%,
+    color-mix(in srgb, var(--accent) 80%, #fff 0%) 70%, transparent); filter: blur(1px); mix-blend-mode: screen; }
+.page-wipe i { position: absolute; top: 0; bottom: 0; left: 8%; width: 7px;
+  background: repeating-linear-gradient(180deg, var(--red) 0 22px, #ececf0 22px 44px); opacity: 0.8; }
+
+/* rev lights: how far down the page */
+.rev-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 50; pointer-events: none; }
+.rev-bar i { display: block; height: 100%; width: calc(var(--rev, 0) * 100%); transition: width 0.12s linear;
+  background: linear-gradient(90deg, #22c55e 0, #22c55e 38%, #facc15 58%, #e10600 82%, #b14cff 100%) 0 0 / 100vw 100%;
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 14px, transparent 14px 17px);
+  mask-image: repeating-linear-gradient(90deg, #000 0 14px, transparent 14px 17px);
+  box-shadow: 0 0 10px rgba(225, 6, 0, 0.35); }
+
+/* hovers */
+.btn { background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
+  background-repeat: no-repeat; background-size: 0% 100%; transition: background-size 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.2s, color 0.2s; }
+.btn:hover { background-size: 100% 100%; border-color: color-mix(in srgb, var(--accent) 60%, var(--line-2)); }
+.btn.primary { background-image: none; }
+.timing tbody tr:hover > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.main-nav a::before { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; background: var(--accent);
+  transform: scaleX(0); transform-origin: left; transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.main-nav a:hover::before { transform: scaleX(1); }
+.main-nav a.active::before { display: none; }
+.car-card { transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s, border-color 0.35s; }
+.car-card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--car, var(--accent)) 55%, var(--line));
+  box-shadow: 0 24px 50px -26px color-mix(in srgb, var(--car, var(--accent)) 70%, transparent); }
+.car-media { transition: transform 0.25s ease-out; transform-style: preserve-3d; will-change: transform; }
+.car-media img { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.car-card:hover .car-media img, .compare-head:hover .car-media img { transform: scale(1.045); }
+
+/* the verdict: a chequered flag sweeps across the top as it lands */
+.verdict-card { position: relative; overflow: hidden; }
+.verdict-card::after { content: ''; position: absolute; top: 0; left: -40%; width: 40%; height: 5px; opacity: 0.9;
+  background: conic-gradient(#f3f3f5 25%, #0a0a0c 0 50%, #f3f3f5 0 75%, #0a0a0c 0) 0 0 / 5px 5px;
+  animation: flag-sweep 1.3s 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes flag-sweep { from { left: -40%; } to { left: 110%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lights span i:last-child { animation: none; background: #ff1e12; }
+  .page-wipe, .verdict-card::after { display: none; }
+  .car-card:hover, .car-card:hover .car-media img { transform: none; }
+}

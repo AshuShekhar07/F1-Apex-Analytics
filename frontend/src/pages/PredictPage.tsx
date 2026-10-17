@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api'
@@ -18,6 +18,8 @@ import {
   aliveRivals, applyRound, maxPerRound, outOfReach, available, RACE_POINTS, type Contender, type Kind,
 } from '../titleScenarios'
 import type { RaceDetail, SeasonResults, WinnerDriver, WinnerPrediction } from '../types'
+import { LightsOut } from '../components/LightsOut'
+import { useFlip } from '../motion/useFlip'
 
 const colourOf = (hex: string | null | undefined) => glowColour(normaliseHex(hex, '#888888'))
 
@@ -54,7 +56,7 @@ export function PredictPage() {
       </p>
 
       {(next.error || matrix.error) && <ErrorBox error={(next.error ?? matrix.error)!} />}
-      {(next.loading || matrix.loading) && <div className="skeleton" style={{ height: 320 }} />}
+      {(next.loading || matrix.loading) && <LightsOut height={320} />}
 
       {!next.loading && !p && <div className="panel empty">No upcoming race to predict yet: the calendar opens with the next season.</div>}
       {p && matrix.data !== undefined && <RacePicks p={p} matrix={matrix.data} now={now} />}
@@ -94,6 +96,8 @@ function RacePicks({ p, matrix, now }: { p: WinnerPrediction; matrix: SeasonResu
   const pick = useMemo(() => (stored.order && !locked
     ? { ...stored, order: fitOrder(stored.order, lineup.map((d) => d.driver_id)) } : stored), [stored, locked, lineup])
   const [selected, setSelected] = useState<number | null>(null)
+  const orderRef = useRef<HTMLDivElement>(null)
+  useFlip(orderRef, [pick.order?.join(',')])
   const gridKnown = lineup.length > 0 && lineup.every((d) => d.grid != null)
   const standingsOrder = useMemo(() => [...(matrix?.drivers ?? [])].sort((a, b) => b.points - a.points).map((d) => d.id), [matrix])
 
@@ -133,12 +137,12 @@ function RacePicks({ p, matrix, now }: { p: WinnerPrediction; matrix: SeasonResu
           <span className="aside">{pick.order ? (locked ? 'locked' : 'tap a driver, then the place to move them to') : 'optional'}</span>
         </div>
         {pick.order ? (
-          <div className="order-list" role="list">
+          <div className="order-list" role="list" ref={orderRef}>
             {pick.order.map((id, i) => {
               const d = byId.get(id)
               if (!d) return null
               return (
-                <div key={id} role="listitem" className={`order-row ${selected === id ? 'sel' : ''} ${selected != null && selected !== id ? 'target' : ''}`}
+                <div key={id} data-flip={id} role="listitem" className={`order-row ${selected === id ? 'sel' : ''} ${selected != null && selected !== id ? 'target' : ''}`}
                      onClick={() => clickRow(id)}>
                   <span className={`pos-box ${i < 3 ? `p${i + 1}` : ''}`}>{i + 1}</span>
                   <span className="team-bar" style={{ background: colourOf(d.color_hex) }} />
