@@ -7,6 +7,7 @@ import { ErrorBox } from '../components/Status'
 import { pct } from '../format'
 import { useAsync } from '../hooks'
 import { TitleMaths } from '../race/TitleMaths'
+import { SeasonReplay } from '../race/SeasonReplay'
 import { TitleScenarios } from '../race/TitleScenarios'
 import { driverCode } from '../names'
 import { SEASONS } from '../seasons'
@@ -205,6 +206,7 @@ export function ChampionshipPage() {
                 </div>
               </div>
             )}
+            {m && m.latest_round && <SeasonReplay matrix={m} kind={kind} />}
             {m && <TitleScenarios kind={kind} matrix={m} standings={rows.map((r) => ({ id: r.id, name: r.name, points: r.points, wins: r.wins }))} />}
             {m && <TitleMaths kind={kind} matrix={m} standings={rows.map((r) => ({ id: r.id, name: r.name, points: r.points }))} />}
             <div className="panel panel-pad">

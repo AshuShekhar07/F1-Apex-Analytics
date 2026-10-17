@@ -1022,3 +1022,55 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
   .page-wipe, .verdict-card::after { display: none; }
   .car-card:hover, .car-card:hover .car-media img { transform: none; }
 }
+
+/* race replay */
+.replay { display: grid; grid-template-columns: minmax(0, 1fr) 210px; grid-template-areas: 'stage side' 'controls controls' 'note note'; }
+.replay-stage { grid-area: stage; position: relative; padding: 10px; min-width: 0; }
+.replay-map { display: block; width: 100%; max-height: 560px; }
+.replay-track-base { fill: none; stroke: rgba(255, 255, 255, 0.07); stroke-width: 34; stroke-linejoin: round; }
+.replay-track { fill: none; stroke-width: 9; stroke-linejoin: round; stroke-linecap: round; opacity: 0.55; transition: stroke 0.4s, opacity 0.4s; }
+.replay-map.flag-sc .replay-track, .replay-map.flag-vsc .replay-track { stroke: var(--yellow) !important; opacity: 0.85; }
+.replay-map.flag-red_flag .replay-track { stroke: var(--down) !important; opacity: 0.9; }
+.replay-car { transition: opacity 0.3s; cursor: default; }
+.replay-car circle { stroke: #050506; stroke-width: 4; }
+.replay-car text { fill: var(--text); font: 700 26px var(--display); letter-spacing: 0.04em; opacity: 0; paint-order: stroke; stroke: #050506; stroke-width: 6px; }
+.replay-car.labelled text { opacity: 1; }
+.replay-car.focus circle { stroke: #fff; stroke-width: 6; }
+.replay-hud { position: absolute; top: 14px; left: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.replay-lap b { font: italic 800 1.6rem/1 var(--display); text-transform: uppercase; }
+.replay-lap span { margin-left: 6px; font: 600 0.8rem/1 var(--mono); color: var(--text-3); }
+.replay-flag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: var(--radius);
+  font: 700 0.66rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.replay-flag.sc, .replay-flag.vsc { background: var(--yellow); color: #111; }
+.replay-flag.red_flag { background: var(--down); color: #fff; }
+.replay-flag.done { background: var(--surface-3); color: var(--text); }
+.replay-side { grid-area: side; border-left: 1px solid var(--line); max-height: 600px; overflow-y: auto; }
+.replay-tower { margin: 0; padding: 6px 0; list-style: none; }
+.replay-tower li { display: grid; grid-template-columns: 22px 4px 40px minmax(0, 1fr); gap: 8px; align-items: center; padding: 4px 12px;
+  font-size: 0.82rem; cursor: pointer; }
+.replay-tower li:hover, .replay-tower li.focus { background: var(--surface-2); }
+.replay-tower .pos { font: italic 800 0.95rem/1 var(--display); color: var(--text-2); text-align: right; }
+.replay-tower .team-bar { height: 16px; }
+.replay-tower .code { font: 700 0.85rem/1 var(--display); letter-spacing: 0.06em; }
+.replay-tower .gap { text-align: right; color: var(--text-2); font-size: 0.74rem; }
+.replay-tower .pit { color: var(--yellow); font: 700 0.66rem/1 var(--mono); letter-spacing: 0.1em; }
+.replay-controls { grid-area: controls; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-top: 1px solid var(--line); }
+.replay-scrub { flex: 1; min-width: 160px; accent-color: var(--accent); }
+.replay-note { grid-area: note; margin: 0; padding: 0 14px 12px; }
+@media (max-width: 760px) {
+  .replay { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'stage' 'controls' 'side' 'note'; }
+  .replay-side { border-left: 0; border-top: 1px solid var(--line); max-height: 260px; }
+}
+
+/* season replay */
+.sr-now { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px 4px; }
+.sr-now b { font: italic 800 1.3rem/1 var(--display); text-transform: uppercase; }
+.sr-now span { font: 600 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.sr-bars { margin: 0; padding: 6px 16px 10px; list-style: none; display: grid; gap: 4px; position: relative; }
+.sr-bars li { display: grid; grid-template-columns: 22px minmax(90px, 150px) minmax(0, 1fr) 44px; gap: 10px; align-items: center; height: 26px; }
+.sr-bars .pos { font: italic 800 0.95rem/1 var(--display); color: var(--text-2); text-align: right; }
+.sr-bars .name { font-size: 0.84rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-bars .bar { height: 14px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.sr-bars .bar i { display: block; height: 100%; border-radius: 2px; transition: width 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.sr-bars .pts { text-align: right; font-size: 0.82rem; }
+@media (prefers-reduced-motion: reduce) { .sr-bars .bar i { transition: none; } }

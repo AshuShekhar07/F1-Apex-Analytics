@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { LapChart } from '../charts/LapChart'
 import { RaceTrace } from '../charts/RaceTrace'
+import { RaceReplay } from '../race/RaceReplay'
 import { DataNotes, ErrorBox } from '../components/Status'
 import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
@@ -85,6 +86,8 @@ export function RacePage() {
             <>
               <div className="section-head" style={{ marginTop: 26 }}><h2>Race trace</h2><span className="aside">gap to the leader, lap by lap</span></div>
               <RaceTrace data={trace.data} />
+              <div className="section-head" style={{ marginTop: 26 }}><h2>Race replay</h2><span className="aside">every car on the circuit, lap by lap</span></div>
+              <RaceReplay trace={trace.data} track={r.track_name} />
             </>
           )}
 
