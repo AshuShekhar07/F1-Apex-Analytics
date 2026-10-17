@@ -59,7 +59,7 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
 
 function SearchButton() {
   return (
-    <button type="button" className="icon-btn search-btn" onClick={openSearch} aria-label="Search" title="Search"
+    <button type="button" className="icon-btn search-btn" onClick={() => openSearch()} aria-label="Search" title="Search"
             aria-keyshortcuts="Control+K Meta+K /">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 21 21" /></svg>
       <kbd>{MAC ? '⌘' : 'Ctrl'} K</kbd>

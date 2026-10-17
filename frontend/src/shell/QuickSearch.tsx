@@ -75,9 +75,10 @@ function loadIndex(): Promise<SearchItem[]> {
   return indexOnce
 }
 
-/** Opens the quick search from anywhere (a button, the phone tab bar). */
-export function openSearch(): void {
-  window.dispatchEvent(new Event('apex:search'))
+/** Opens the quick search from anywhere (a button, the phone tab bar). As a menu (the tab bar's
+    "More") it lists every section without focusing the box, so no phone keyboard pops up. */
+export function openSearch(menu = false): void {
+  window.dispatchEvent(new CustomEvent('apex:search', { detail: { menu } }))
 }
 
 const typing = (t: EventTarget | null) =>
@@ -85,18 +86,18 @@ const typing = (t: EventTarget | null) =>
 
 /** Quick search over pages, races, drivers, teams, cars and circuits: Ctrl+K (⌘K) or "/". */
 export function QuickSearch() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<false | { menu: boolean }>(false)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
-        setOpen((o) => !o)
+        setOpen((o) => (o ? false : { menu: false }))
       } else if (e.key === '/' && !typing(e.target)) {
         e.preventDefault()
-        setOpen(true)
+        setOpen({ menu: false })
       }
     }
-    const onOpen = () => setOpen(true)
+    const onOpen = (e: Event) => setOpen({ menu: !!(e as CustomEvent<{ menu?: boolean }>).detail?.menu })
     window.addEventListener('keydown', onKey)
     window.addEventListener('apex:search', onOpen)
     return () => {
@@ -104,10 +105,10 @@ export function QuickSearch() {
       window.removeEventListener('apex:search', onOpen)
     }
   }, [])
-  return open ? <Palette onClose={() => setOpen(false)} /> : null
+  return open ? <Palette menu={open.menu} onClose={() => setOpen(false)} /> : null
 }
 
-function Palette({ onClose }: { onClose: () => void }) {
+function Palette({ menu, onClose }: { menu: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [items, setItems] = useState<SearchItem[] | null>(null)
@@ -124,13 +125,13 @@ function Palette({ onClose }: { onClose: () => void }) {
   }, [])
   useEffect(() => {
     const before = document.activeElement
-    input.current?.focus()
+    if (!menu) input.current?.focus()
     lockScroll(true)
     return () => {
       lockScroll(false)
       if (before instanceof HTMLElement) before.focus()
     }
-  }, [])
+  }, [menu])
 
   const results = useMemo(() => (q.trim() ? search(items ?? PAGES, q) : PAGES), [q, items])
   useEffect(() => setActive(0), [q])
@@ -167,7 +168,8 @@ function Palette({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="qs-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()} data-lenis-prevent>
+    <div className="qs-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()} data-lenis-prevent
+         onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <div className="qs-box" role="dialog" aria-modal="true" aria-label="Search">
         <div className="qs-input">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 21 21" /></svg>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api'
@@ -23,6 +23,8 @@ import { usePageAccent } from '../theme/accent'
 import { bestMatch } from '../trackMatch'
 import type { LiveRecord, PredictionStage, WinnerPrediction } from '../types'
 import { LightsOut } from '../components/LightsOut'
+import { swipeTarget } from '../motion/swipe'
+import { useSwipe } from '../motion/useSwipe'
 
 const STAGE_LABEL: Record<PredictionStage, string> = { pre_qualifying: 'Before qualifying', post_qualifying: 'After qualifying' }
 const STAGES: PredictionStage[] = ['pre_qualifying', 'post_qualifying']
@@ -64,6 +66,12 @@ export function RaceHubPage() {
 
   const current = p && stage ? p.stages[stage] : undefined
   usePageAccent(current?.favourite.color_hex ?? null)
+  // phones: swipe the prediction between before and after qualifying
+  const board = useRef<HTMLDivElement>(null)
+  useSwipe(board, (dir) => {
+    const next = p && stage ? swipeTarget(STAGES, stage, dir, (s) => !!p.stages[s]) : null
+    if (next) setPicked(next)
+  }, !!current)
 
   const rows: TowerRow[] = useMemo(() => {
     if (!p || !stage || !current) return []
@@ -161,7 +169,7 @@ export function RaceHubPage() {
         )}
       </div>
 
-      <div className="grid-main">
+      <div className="grid-main" ref={board}>
         <div className="panel">
           <div className="panel-head">
             <h3>Race win probability</h3>

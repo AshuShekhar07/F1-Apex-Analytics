@@ -24,6 +24,7 @@ import { PageWipe } from './shell/PageWipe'
 import { QuickSearch } from './shell/QuickSearch'
 import { RevBar } from './shell/RevBar'
 import { StatusBar } from './shell/StatusBar'
+import { TabBar } from './shell/TabBar'
 import { startUpdateWatch, updateReady } from './updates'
 import { AccentProvider } from './theme/accent'
 
@@ -76,6 +77,7 @@ export function App() {
           {intro && <Intro onDone={introDone} />}
           <SiteHeader />
           <QuickSearch />
+          <TabBar />
           <StatusBar />
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>

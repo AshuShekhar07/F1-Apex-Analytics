@@ -1208,3 +1208,31 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 .strip-row .freshness { flex: none; padding-left: 14px; border-left: 1px solid var(--line); }
 .strip-row .spacer { flex: 1; }
 .search-btn { padding: 0 8px; }
+
+/* phones: the sections in a bar along the bottom (the header keeps the logo, search and music) */
+.tab-bar { display: none; }
+@media (max-width: 760px) {
+  .tab-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding-bottom: env(safe-area-inset-bottom); background: rgba(8, 8, 10, 0.92);
+    backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    border-top: 1px solid var(--line); box-shadow: 0 -1px 0 color-mix(in srgb, var(--accent) 22%, transparent); }
+  .tab-bar a, .tab-bar button { position: relative; display: grid; justify-items: center; align-content: center; gap: 5px; height: 58px;
+    padding: 0; border: 0; background: none; color: var(--text-3); text-decoration: none; cursor: pointer;
+    font: 600 0.6rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s, transform 0.12s; }
+  .tab-bar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tab-bar a.active { color: var(--text); }
+  .tab-bar a.active::before { content: ''; position: absolute; top: -1px; left: 24%; right: 24%; height: 3px; background: var(--accent); transform: skewX(-24deg); }
+  .tab-bar a:active, .tab-bar button:active { transform: scale(0.92); }
+  body { padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
+  /* the tab bar and "More" reach every section: the header drops its row of links */
+  .main-nav { display: none; }
+  .head-row { height: 52px; padding-top: 0; flex-wrap: nowrap; }
+  /* bigger touch targets */
+  .tabs button { min-height: 42px; padding: 0 14px; }
+  .small-tabs button { height: 38px; }
+  .btn { height: 42px; }
+  .select { height: 42px; }
+  .chip { min-height: 38px; }
+  .icon-btn { height: 36px; }
+}

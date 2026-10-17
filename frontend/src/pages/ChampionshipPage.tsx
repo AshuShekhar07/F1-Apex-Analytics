@@ -16,6 +16,8 @@ import type { Championship, ChampionshipHistory, SeasonResults } from '../types'
 import { LightsOut } from '../components/LightsOut'
 import { Empty } from '../components/Empty'
 import { useFlip } from '../motion/useFlip'
+import { swipeTarget } from '../motion/swipe'
+import { useSwipe } from '../motion/useSwipe'
 
 type Kind = 'drivers' | 'constructors'
 
@@ -102,12 +104,19 @@ export function ChampionshipPage() {
   const rows = useMemo(() => standings(kind, m, c), [kind, m, c])
   const tbody = useRef<HTMLTableSectionElement>(null)
   useFlip(tbody, [kind, rows.map((r) => r.id).join(',')])
+  // phones: swipe between the drivers' and constructors' standings
+  const page = useRef<HTMLDivElement>(null)
+  const show = (k: Kind) => setParams(k === 'constructors' ? { view: k } : {})
+  useSwipe(page, (dir) => {
+    const next = swipeTarget<Kind>(['drivers', 'constructors'], kind, dir)
+    if (next) show(next)
+  })
   const leader = rows[0]?.points ?? 0
   const maxTitle = Math.max(...rows.map((r) => r.title ?? 0), 0.0001)
   const conf = c?.confidence[kind]
 
   return (
-    <div className="page">
+    <div className="page" ref={page}>
       <div className="page-title">
         <div>
           <span className="kicker"><b>{year}</b>{c ? ` · after round ${c.after_round} · ${c.weekends_left} race weekend${c.weekends_left === 1 ? '' : 's'} left` : ''}</span>
@@ -117,7 +126,7 @@ export function ChampionshipPage() {
           <div className="tabs" role="tablist">
             {(['drivers', 'constructors'] as Kind[]).map((k) => (
               <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'on' : ''}
-                      onClick={() => setParams(k === 'constructors' ? { view: k } : {})}>
+                      onClick={() => show(k)}>
                 {k === 'drivers' ? 'Drivers' : 'Constructors'}
               </button>
             ))}
