@@ -11,6 +11,42 @@ Everything runs as four containers:
 
 The website and its data share one address, so no CORS setup is needed.
 
+## AWS Lightsail: the whole site on one server
+
+One Lightsail server runs all four containers; `ops/server_setup.sh` does the setup. AWS asks
+for a card when you sign up.
+
+1. **Server.** Lightsail → Create instance: the region nearest your visitors (e.g. Mumbai or
+   Singapore), Linux/Unix → OS only → **Ubuntu 24.04 LTS**, a plan with **2 GB RAM or more**
+   (4 GB is smoother; the script adds 2 GB of swap), name `apex21`.
+2. **Address.** On the instance's Networking tab: create a static IP and attach it. The firewall
+   already allows HTTP (80) and SSH (22); add HTTPS (443) for later.
+3. **Your data.** On your computer (WSL), in the project folder: `ops/db_dump.sh`
+   (writes `apex21_YYYYMMDD_HHMM.dump`).
+4. **Copy it to the server.** Lightsail → Account → SSH keys → download the default key for that
+   region, then in WSL:
+
+   ```bash
+   cp /mnt/c/Users/*/Downloads/LightsailDefaultKey-*.pem ~/.ssh/lightsail.pem && chmod 600 ~/.ssh/lightsail.pem
+   scp -i ~/.ssh/lightsail.pem apex21_*.dump ubuntu@STATIC_IP:~/
+   ```
+
+5. **Set up and start.** Connect (the instance's "Connect using SSH" button, or
+   `ssh -i ~/.ssh/lightsail.pem ubuntu@STATIC_IP`) and run:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/AshuShekhar07/F1-Apex-Analytics/main/ops/server_setup.sh | bash
+   ```
+
+   It installs Docker, adds swap, fetches the code, writes `.env` with a random database
+   password, loads the dump into the empty database, builds and starts everything, and checks
+   that the site answers (the first build takes several minutes).
+6. **Open** `http://STATIC_IP/`. The scheduler container keeps the data up to date by itself.
+
+Update to the latest code: run the same `curl ... | bash` line again. HTTPS needs a domain
+name pointed at the static IP (section 6). An EC2 instance works the same way (Ubuntu, user
+`ubuntu`, a security group with 22, 80 and 443 open).
+
 ## 1. Pick a server
 
 Any Linux machine with Docker works. The pipeline loads F1 timing data with pandas, so give it
