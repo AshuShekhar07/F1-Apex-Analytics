@@ -796,3 +796,16 @@ export interface LiveryPhoto {
   width: number | null
   height: number | null
 }
+
+/** A circuit photo from frontend/public/circuit-photos/photos.json (fetch_circuit_photos_v1.py). */
+export interface CircuitPhoto {
+  src: string
+  file: string
+  page: string | null
+  author: string
+  license: string
+  license_url: string | null
+  /** the circuit file's name and location, for matching a database track */
+  name: string
+  location: string
+}

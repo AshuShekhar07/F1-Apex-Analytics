@@ -1110,3 +1110,28 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 .countdown.live { box-shadow: inset 0 0 0 1px var(--red); }
 .countdown.live .cd-label { color: var(--red); }
 @media (prefers-reduced-motion: reduce) { .hero-fx .trace-line, .event-hero.rain .rainfall { animation: none; } }
+
+/* circuit photos (Wikimedia Commons, credited) behind the hub hero, race titles and the tracks panel */
+.photo-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 0.8s ease; }
+.photo-bg.in { opacity: 1; }
+.photo-bg img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 60%;
+  filter: saturate(0.85) contrast(1.05); transform: scale(1.05); transition: transform 7s cubic-bezier(0.2, 0.6, 0.2, 1); }
+.photo-bg.in img { transform: scale(1); }
+.photo-bg::after { content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(8, 8, 11, 0.94) 0%, rgba(8, 8, 11, 0.8) 40%, rgba(8, 8, 11, 0.4) 100%),
+              linear-gradient(0deg, rgba(8, 8, 11, 0.7), transparent 45%); }
+.photo-credit { position: absolute; right: 10px; bottom: 6px; z-index: 2; margin: 0; max-width: 70%;
+  font-size: 0.62rem; color: rgba(236, 236, 240, 0.55); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.photo-credit a { color: rgba(236, 236, 240, 0.78); }
+.event-hero::before { z-index: 2; }
+.page-title.with-photo { min-height: 190px; padding: 22px 22px 22px; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--surface); isolation: isolate; }
+.page-title.with-photo > :not(.photo-bg):not(.photo-credit) { position: relative; z-index: 1; }
+.track-photo { position: relative; height: 150px; border-bottom: 1px solid var(--line); overflow: hidden; }
+.track-photo .photo-bg::after { background: linear-gradient(0deg, rgba(8, 8, 11, 0.7), transparent 60%); }
+@media (max-width: 640px) {
+  .photo-bg::after { background: linear-gradient(0deg, rgba(8, 8, 11, 0.94), rgba(8, 8, 11, 0.62)); }
+  .page-title.with-photo { padding: 18px 16px 26px; }
+  .photo-credit { left: 10px; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .photo-bg, .photo-bg img { transition: none; transform: none; } }

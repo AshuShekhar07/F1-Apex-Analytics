@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
 import { CIRCUITS } from '../circuits'
+import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
 import { CircuitOutline } from '../fx/CircuitOutline'
 import { CountNum } from '../fx/CountNum'
 import { useAsync } from '../hooks'
@@ -9,7 +10,7 @@ import { useLiveWeekend } from '../live'
 import { gsap, reducedMotion, useGSAP } from '../motion/gsap'
 import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
-import { matchTrack } from '../trackMatch'
+import { bestMatch, matchTrack } from '../trackMatch'
 
 const TrackScene = lazy(() => import('../three/TrackScene'))
 
@@ -27,7 +28,7 @@ export function TracksPage() {
   const { prediction } = useLiveWeekend()
   const nextTrack = prediction.data?.track
   const nextId = useMemo(
-    () => (nextTrack ? CIRCUITS.find((c) => matchTrack(c.name, c.location, [{ id: 1, name: nextTrack }]))?.id : undefined),
+    () => bestMatch(CIRCUITS, nextTrack)?.id,
     [nextTrack],
   )
   const [picked, setPicked] = useState<string | null>(null)
@@ -41,6 +42,7 @@ export function TracksPage() {
   )
   const stats = useAsync(() => (match ? api.trackStats(match.id) : Promise.resolve(null)), [match?.id])
   const overtaking = useAsync(() => (match ? api.overtaking(match.id) : Promise.resolve(null)), [match?.id])
+  const photo = useCircuitPhoto({ id: circuit.id })
   const list = useRef<HTMLElement>(null)
   const panel = useRef<HTMLElement>(null)
 
@@ -53,7 +55,16 @@ export function TracksPage() {
     { scope: panel, dependencies: [id, stats.data] },
   )
   useEffect(() => {
-    list.current?.querySelector('button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    // bring the picked circuit into view inside the list only (scrollIntoView would scroll the page too)
+    const nav = list.current
+    const on = nav?.querySelector('button.on')
+    if (!nav || !on) return
+    const a = nav.getBoundingClientRect()
+    const b = on.getBoundingClientRect()
+    if (b.top < a.top) nav.scrollTop -= a.top - b.top
+    else if (b.bottom > a.bottom) nav.scrollTop += b.bottom - a.bottom
+    if (b.left < a.left) nav.scrollLeft -= a.left - b.left
+    else if (b.right > a.right) nav.scrollLeft += b.right - a.right
   }, [id])
 
   const total = circuit.sectors.reduce((a, s) => a + s.lengthM, 0)
@@ -107,6 +118,7 @@ export function TracksPage() {
         </div>
 
         <aside className="track-panel panel" ref={panel} data-lenis-prevent>
+          {photo && <div className="track-photo"><CircuitPhotoBg photo={photo} /></div>}
           <div className="kv">
             <div><div className="v"><CountNum value={circuit.lengthM ? (circuit.lengthM / 1000).toFixed(3) : null} /></div><div className="k">Lap length km</div></div>
             <div><div className="v">{circuit.firstGp ?? '–'}</div><div className="k">First Grand Prix</div></div>

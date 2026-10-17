@@ -4,6 +4,7 @@ import { api } from '../api'
 import { LapChart } from '../charts/LapChart'
 import { RaceTrace } from '../charts/RaceTrace'
 import { RaceReplay } from '../race/RaceReplay'
+import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
 import { DataNotes, ErrorBox } from '../components/Status'
 import { WhatIfPanel } from '../components/WhatIfPanel'
 import { compoundColor, compoundLetter, pct } from '../format'
@@ -35,6 +36,7 @@ export function RacePage() {
   const strategy = useAsync(() => api.winningStrategy(raceId), [raceId])
   const quali = useAsync(() => api.qualifying(raceId), [raceId])
   const longRuns = useAsync(() => api.longRuns(raceId), [raceId])
+  const photo = useCircuitPhoto({ track: r?.track_name })
 
   if (race.loading) return <div className="page"><LightsOut height={160} /></div>
   if (race.error || !r) return <div className="page"><ErrorBox error={race.error ?? new Error('Race not found')} /></div>
@@ -46,7 +48,8 @@ export function RacePage() {
 
   return (
     <div className="page">
-      <div className="page-title">
+      <div className={`page-title ${photo ? 'with-photo' : ''}`}>
+        <CircuitPhotoBg photo={photo} />
         <div>
           <span className="kicker"><b>Round {r.round_number}</b> · {r.season_year}{r.weekend_format && r.weekend_format !== 'conventional' ? ' · Sprint weekend' : ''}</span>
           <h1>{r.track_name}</h1>

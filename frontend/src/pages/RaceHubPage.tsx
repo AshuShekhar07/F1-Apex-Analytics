@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { api } from '../api'
 import type { Circuit } from '../circuitTypes'
+import { CircuitPhotoBg, useCircuitPhoto } from '../components/CircuitPhoto'
 import { Countdown } from '../components/Countdown'
 import { ErrorBox } from '../components/Status'
 import { CircuitOutline } from '../fx/CircuitOutline'
@@ -18,7 +19,7 @@ import { SlopeChart } from '../race/SlopeChart'
 import { StrategyLane } from '../race/StrategyLane'
 import { WinShare } from '../race/WinShare'
 import { usePageAccent } from '../theme/accent'
-import { matchTrack } from '../trackMatch'
+import { bestMatch } from '../trackMatch'
 import type { LiveRecord, PredictionStage, WinnerPrediction } from '../types'
 import { LightsOut } from '../components/LightsOut'
 
@@ -47,12 +48,13 @@ export function RaceHubPage() {
   const trackId = raceInfo.data?.track_id
   const weather = useLive(() => (trackId && p ? api.strategyPrediction(trackId, p.race_date).catch(() => null) : Promise.resolve(null)),
     [trackId, p?.race_date], 1_800_000)
+  const photo = useCircuitPhoto({ track: p?.track })
 
   useEffect(() => {
     if (!p) return
     let live = true
     import('../circuits').then(({ CIRCUITS }) => {
-      if (live) setCircuit(CIRCUITS.find((c) => matchTrack(c.name, c.location, [{ id: 1, name: p.track }])) ?? null)
+      if (live) setCircuit(bestMatch(CIRCUITS, p.track))
     })
     return () => {
       live = false
@@ -109,6 +111,7 @@ export function RaceHubPage() {
   return (
     <div className="page">
       <section className={`event-hero ${nightRace(p.track) ? 'night' : ''} ${weather.data?.weather?.rain_expected ? 'rain' : ''}`}>
+        <CircuitPhotoBg photo={photo} />
         <div className="hero-fx" aria-hidden="true"><i className="flood l" /><i className="flood r" /><i className="rainfall" /><i className="trace-line" /></div>
         <div className="hero-copy">
           <div className="hero-chips">

@@ -1,0 +1,41 @@
+name: circuit photos
+
+# Finds a freely licensed landscape photo of every circuit on Wikimedia Commons (with its
+# author and licence for the credit) for the page headers, saves resized copies under frontend/public/circuit-photos and
+# commits them to the branch. Runs when the script changes; its own commit only
+# touches the photos, so it does not start itself again.
+on:
+  push:
+    branches: [feature/frontend]
+    paths:
+      - fetch_circuit_photos_v1.py
+      - .github/workflows/circuit-photos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: circuit-photos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: fetch the photos and their credits
+        run: python fetch_circuit_photos_v1.py --download
+      - name: commit them
+        run: |
+          git add frontend/public/circuit-photos
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Circuit photos from Wikimedia Commons (free licences, credited)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

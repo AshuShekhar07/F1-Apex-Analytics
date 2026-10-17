@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { lapPoints, type Circuit, type Pt } from '../circuitTypes'
 import { driverCode } from '../names'
 import { glowColour, normaliseHex } from '../theme/color'
-import { matchTrack } from '../trackMatch'
+import { bestMatch } from '../trackMatch'
 import type { RaceTrace } from '../types'
 import { crossingTimes, lapPath, neutralisedOn, pointAt, projector, replayEnd, runningOrder, type Running } from './replay'
 
@@ -20,7 +20,7 @@ export function RaceReplay({ trace, track }: { trace: RaceTrace; track: string }
   useEffect(() => {
     let live = true
     import('../circuits').then(({ CIRCUITS }) => {
-      if (live) setCircuit(CIRCUITS.find((c) => matchTrack(c.name, c.location, [{ id: 1, name: track }])) ?? null)
+      if (live) setCircuit(bestMatch(CIRCUITS, track))
     })
     return () => {
       live = false

@@ -38,3 +38,19 @@ export function matchTrack(name: string, location: string, tracks: DbTrack[]): D
   }
   return best
 }
+
+/** Of several circuits (name + location), the one sharing the most words with a database track
+    name (ties: the first); null if none shares any. */
+export function bestMatch<T extends { name: string; location: string }>(items: T[], track: string | null | undefined): T | null {
+  const wanted = tokens(track)
+  let best: T | null = null
+  let bestShared = 0
+  for (const it of items) {
+    const shared = [...tokens(`${it.name} ${it.location}`)].filter((w) => wanted.has(w)).length
+    if (shared > bestShared) {
+      best = it
+      bestShared = shared
+    }
+  }
+  return best
+}
