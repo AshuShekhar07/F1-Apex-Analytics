@@ -1,6 +1,8 @@
 # Render Blueprint for the Apex21 API on Render's free plan (no card needed). See DEPLOY.md,
-# "Free hosting without a card": the database is on Neon, the website on Cloudflare Pages and
-# the data pipeline runs in GitHub Actions (.github/workflows/pipeline.yml).
+# "Free hosting without a card": the database is on Supabase or Neon, the website on Cloudflare
+# Pages and the data pipeline runs in GitHub Actions (.github/workflows/pipeline.yml).
+# The free plan has a tenth of a CPU: the API serves saved answers (app/response_cache.py) that
+# the pipeline workflow computes, so it does no heavy work itself (no warm-up at start).
 services:
   - type: web
     name: apex21-api
@@ -9,9 +11,9 @@ services:
     region: singapore            # keep it in the same region as the Neon database
     branch: feature/frontend
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /health
+    healthCheckPath: /                  # needs no database and no CPU to speak of
     envVars:
-      - key: DATABASE_URL          # Neon connection string (…?sslmode=require)
+      - key: DATABASE_URL          # Supabase "Session pooler" or Neon (pooling off) connection string
         sync: false
       - key: CORS_ORIGINS          # the website's address, e.g. https://apex21.pages.dev
         sync: false
@@ -19,6 +21,8 @@ services:
         value: production
       - key: WEB_CONCURRENCY       # one worker fits the free plan's 512 MB
         value: "1"
+      - key: WARM_CACHES           # no warm-up at start: saved answers instead
+        value: "false"
       - key: SERVE_BRAND_ASSETS
         value: "false"
       - key: RATE_LIMIT_PER_MINUTE

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.response_cache import ResponseCache
 from app.routers import (cars, championship, compare, drivers, forecast, ops, practice, predict_and_compete, predictions, race_analysis, races,
                          records, seasons, strategy, teams, tracks, wet_weather)
 from app.settings import scrub_brand_assets, settings
@@ -49,6 +50,14 @@ app = FastAPI(
     default_response_class=AppJSONResponse,
 )
 
+
+def _engine():
+    from app.database import engine
+    return engine
+
+
+# added first, so it runs inside CORS: saved answers still get each visitor's CORS headers
+app.add_middleware(ResponseCache, engine_getter=_engine, enabled=lambda: settings.response_cache)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),
