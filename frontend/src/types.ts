@@ -721,6 +721,59 @@ export interface CarRow {
   ratings: CarRatings
   character: { kind: 'low-drag' | 'high-downforce' | 'balanced'; label: string; text: string } | null
   season_best: { quali?: number; race?: number }
+  /** measures against the car's own season (car_compare_v1); null for an old API */
+  fair?: CarFair | null
+}
+
+export interface CarDominance {
+  /** mean over its races of how far it stood out from the field, in units of the field's spread */
+  z: number
+  /** standard error of that mean */
+  se: number
+  races: number
+  /** race-to-race spread of the per-race values (lower = more consistent) */
+  spread: number
+}
+
+export interface CarFair {
+  era: { code: string; label: string; rules: string } | null
+  /** [rank, of] by dominance (car only) within the season */
+  pace_rank: [number, number] | null
+  dominance: { car_only: CarDominance | null; with_drivers: CarDominance | null }
+  /** median % of a lap ahead of the best other car (+) or behind the quickest (-) */
+  margin: { quali_pct: number | null; race_pct: number | null; quali_pct_with_drivers: number | null; race_pct_with_drivers: number | null }
+  /** race model, driver skill separated: share of races an average driver in every car would win */
+  model: { win_share: number; rank: number; teams: number } | null
+  fingerprint: {
+    slow: number | null; medium: number | null; fast: number | null; straights: number | null
+    tyre_wear_s_per_lap: number | null; race_vs_quali: number | null; consistency_spread: number | null
+    mechanical_per_start: number | null
+  }
+  achievements: {
+    points_share_of_max: number | null; points_share_of_field: number | null; win_rate: number | null; pole_rate: number | null
+    podiums_per_race: number | null; one_two_rate: number | null; front_row_lockouts: number; points_ceiling: number; sprints: number
+  }
+  drivers: { id: number; name: string | null; races: number; points: number; quali_h2h: [number, number] | null
+    race_h2h: [number, number] | null; skill_rank: [number, number] | null }[]
+}
+
+/** One Grand Prix of a car against its own field (GET /cars/{key}). */
+export interface CarRace {
+  race_id: number
+  round: number
+  track_id: number | null
+  track: string | null
+  country: string | null
+  kind: 'slow' | 'medium' | 'fast' | null
+  z: number
+  quali_gap_pct: number | null
+  race_gap_pct: number | null
+  quali_margin_pct: number | null
+  race_margin_pct: number | null
+}
+
+export interface CarDetail extends CarRow {
+  races: CarRace[]
 }
 
 export interface CarsResponse {
@@ -728,6 +781,7 @@ export interface CarsResponse {
   cars: CarRow[]
   count: number
   method: Record<string, string>
+  eras?: Record<string, { label: string; rules: string }>
 }
 
 export interface LiveryPhoto {

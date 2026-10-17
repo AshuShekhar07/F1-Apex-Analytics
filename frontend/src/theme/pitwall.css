@@ -756,6 +756,79 @@ button.link { background: none; border: 0; color: var(--text-2); text-decoration
 .compare-table .tick { color: var(--green); }
 .compare-table tr.compare-sep td { padding: 10px; font: 600 0.62rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); background: var(--surface-2); }
 .report-list { margin: 0; padding: 14px 16px 14px 32px; display: grid; gap: 8px; font-size: 0.88rem; line-height: 1.45; }
+.compare-badges { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.compare-badges .compare-badge { position: static; }
+.compare-badge.alt { background: var(--text); }
+.compare-head { border-top: 2px solid var(--car, var(--line-2)); }
+
+/* era banner: same season / same rules / different eras */
+.era-banner { display: flex; gap: 12px 16px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 14px;
+  border: 1px solid var(--line-2); border-left: 4px solid var(--text-3); border-radius: var(--radius); background: var(--surface);
+  font-size: 0.88rem; color: var(--text-2); }
+.era-banner.cross { border-left-color: var(--yellow); }
+.era-banner.same-era { border-left-color: var(--green); }
+.era-banner.same { border-left-color: var(--purple); }
+.era-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.era-chip { padding: 4px 8px; border: 1px solid var(--line-2); border-radius: var(--radius); font: 600 0.66rem/1 var(--mono);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); white-space: nowrap; }
+.era-chip b { color: var(--text); }
+
+/* the two verdicts */
+.verdict-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; }
+.verdict-card { padding: 16px 18px; border-top: 3px solid var(--line-2); }
+.verdict-card h2 { margin: 8px 0 8px; font: 700 1.35rem/1.15 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.verdict-card p { margin: 10px 0 0; color: var(--text-2); font-size: 0.88rem; line-height: 1.45; }
+.badge.conf { text-transform: uppercase; }
+.badge.conf-clear { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.badge.conf-narrow { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.badge.conf-too-close { color: var(--text-2); }
+.small-tabs button { height: 28px; padding: 0 10px; font-size: 0.68rem; }
+
+/* mirrored bars: car A on the left, car B on the right */
+.mirror { padding: 6px 14px 12px; }
+.mirror-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; padding: 6px 0 8px;
+  font: 700 0.72rem/1.2 var(--display); letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.mirror-head span:last-child { text-align: right; }
+.mirror-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid var(--line); cursor: help; }
+.mirror-row:last-child { border-bottom: 0; }
+.mirror-row.sep { border-top: 1px dashed var(--line-2); }
+.mirror-row.info { opacity: 0.8; }
+.mirror-val { font-size: 0.8rem; color: var(--text-2); line-height: 1.35; overflow-wrap: anywhere; }
+.mirror-val.right { text-align: right; }
+.mirror-val.win { color: var(--text); font-weight: 600; }
+.mirror-mid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.mirror-label { font: 600 0.62rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); text-align: center; max-width: 140px; }
+.mirror-bar { height: 8px; background: var(--surface-2); border-radius: 2px; overflow: hidden; display: flex; }
+.mirror-bar.left { justify-content: flex-end; }
+.mirror-bar i { display: block; height: 100%; border-radius: 2px; transform-origin: right center; }
+.mirror-bar.right i { transform-origin: left center; }
+
+/* drivers */
+.driver-factor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 14px; }
+.df-col h4 { margin: 0 0 4px; font: 700 0.95rem/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.03em; }
+.df-col p { margin: 0 0 8px; }
+.df-col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 0.84rem; }
+.df-col li .num { color: var(--text-2); margin-left: 4px; }
+
+/* development curves */
+.dev-chart { padding: 10px 14px 12px; }
+.dev-chart svg { display: block; }
+.dev-chart .grid { stroke: var(--line); stroke-width: 1; }
+.dev-chart .zero { stroke: var(--text-3); stroke-dasharray: 4 4; }
+.dev-chart .tick { fill: var(--text-3); font: 500 10px var(--mono); }
+.dev-legend { display: flex; gap: 16px; flex-wrap: wrap; padding-top: 6px; color: var(--text-2); }
+.dev-legend i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.why-fair summary { cursor: pointer; }
+.why-fair ul { margin: 10px 0 12px; padding-left: 18px; display: grid; gap: 6px; font-size: 0.84rem; color: var(--text-2); }
+.era-line b { color: var(--text); }
+@media (max-width: 760px) {
+  .verdict-pair, .driver-factor { grid-template-columns: minmax(0, 1fr); }
+  .mirror-head, .mirror-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mirror-head span:nth-child(2) { display: none; }
+  .mirror-mid { grid-column: 1 / -1; grid-row: 1; }
+  .mirror-val { grid-row: 2; }
+}
 .h2h-bar { display: flex; height: 14px; gap: 2px; border-radius: 3px; overflow: hidden; }
 .h2h-bar i { display: block; }
 @media (max-width: 640px) {
