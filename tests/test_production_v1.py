@@ -17,7 +17,7 @@ def test_settings_default_to_development_and_lock_down_in_production(monkeypatch
     monkeypatch.setenv("CORS_ORIGINS", "https://apex21.example, https://www.apex21.example")
     prod = load_settings()
     assert prod.production and prod.cors_origins == ("https://apex21.example", "https://www.apex21.example")
-    assert not prod.serve_brand_assets and prod.rate_limit_per_minute == 120 and prod.warm_caches
+    assert not prod.serve_brand_assets and prod.rate_limit_per_minute == 600 and prod.warm_caches
     monkeypatch.setenv("SERVE_BRAND_ASSETS", "true")
     assert load_settings().serve_brand_assets
 

@@ -105,7 +105,7 @@ def compare_drivers(
         SELECT r.id AS race_id, r.season_year, r.round_number, t.name AS track_name,
                d.id AS driver_id,
                qr.final_position AS quali_position,
-               rr.finishing_position, rr.points, rr.status
+               rr.finishing_position, NULLIF(rr.points, 'NaN') AS points, rr.status
         FROM races r
         JOIN tracks t ON t.id = r.track_id
         JOIN race_entries re ON re.race_id = r.id AND re.role = 'race_driver'
@@ -164,7 +164,7 @@ def compare_drivers(
         })
 
     sprint_rows = db.execute(text("""
-        SELECT re.driver_id, SUM(rr.points) AS sprint_points
+        SELECT re.driver_id, SUM(NULLIF(rr.points, 'NaN')) AS sprint_points
         FROM race_entries re
         JOIN race_results rr ON rr.race_entry_id = re.id
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'S'

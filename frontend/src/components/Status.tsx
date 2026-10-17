@@ -6,7 +6,7 @@ export function ErrorBox({ error }: { error: Error }) {
   return (
     <div className="error-box">
       <strong>Could not load data.</strong> {error.message}
-      <div className="muted small">Is the API running? (uvicorn app.main:app on port 8000)</div>
+      <div className="muted small">Is the API running? Start everything with ./run_site.sh, or find out why with python api_check_v1.py</div>
     </div>
   )
 }

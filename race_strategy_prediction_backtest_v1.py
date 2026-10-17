@@ -29,6 +29,41 @@ Methods (history strictly before the race date):
                         which it replaced). PROMOTED 2026-09-30: sequence and stop count equal
                         to I by construction; first stop 2026 9.53 vs 10.00 laps, within 3 laps
                         25.8% vs 18.6% (BETTER vs B where I was not); 2022-25 equal (8.20/8.21)
+  N  wear neighbours' sequence : the sequence most CARS ran in the 7 races with the closest
+                        practice wear, timed from them (M takes only the stop count from them)
+  O  expected match    : argmax over sequences of P(stop count | closest-wear races' cars) x
+                        P(sequence | stop count, era) -- does not commit to the majority stop
+                        count first. N and O are compared with M, the production method.
+     N/O REJECTED 2026-10-05 (vs M, 2022-25, 1248 cars): N sequence 0.213 vs 0.234 (n.s.), first
+     stop 8.79 vs 8.20 laps and within 3 laps 0.243 vs 0.296 (both WORSE); O sequence 0.251 vs
+     0.234 (+0.017 [-0.008, +0.045], not clear), stop count 0.480 vs 0.470 (n.s.), first stop
+     8.67 vs 8.20 laps (WORSE: timed from the cars running the exact sequence, a thinner pool
+     than M's same-stop-count cars). 2026 (229 cars): no clear difference either way. The
+     single-plan ceiling stays 0.460: the gap is cars in one race running different plans,
+     which no one-plan-for-every-car method can close.
+  P0 race chances   : O's pick with M's stop-lap rule (isolates O's timing problem)
+  P1/P2/P3 per car    : a different plan PER CAR after qualifying -- O's race-level sequence
+                        chances x how cars from the same grid band (P1) / the same team (P2) /
+                        both (P3) ran each sequence earlier in the era (shrunk to the era average),
+                        stop laps by M's rule. Compared with M.
+     P0-P3 REJECTED 2026-10-05 (vs M, 2022-25, 1248 cars): sequence P0 0.251, P1 0.248, P2 0.247,
+     P3 0.239 vs 0.234 (all n.s.); stop count 0.445-0.481 vs 0.470 (n.s.); first stop P0 8.56,
+     P1 8.59, P2 8.62, P3 8.64 vs 8.20 laps (ALL WORSE, CIs exclude 0). 2026 (229 cars): no clear
+     difference on any metric (first stop 9.1-9.4 vs 9.53, within 3 laps 0.28-0.31 vs 0.26, n.s.).
+     Grid band and team habit add nothing measurable over the race-level chances, and any plan
+     other than M's moves the first stop away from the wear-timed lap.
+  Q1/Q2/Q3 stop count : M with a different stop count (race_stop_count_v1): Q1 adds votes from
+                        earlier races at this track to M's wear votes; Q2 a logistic model on wear,
+                        track history and era average; Q3 adds pit loss and practice track
+                        temperature. Sequence and stop laps by M's rules. Compared with M, plus a
+                        race-level stop count table and the signals by real stop count.
+     Q1-Q3 NOT PROMOTED 2026-10-05: stop count Q1 0.466 / Q2 0.446 / Q3 0.426 vs M 0.470 in 2022-25
+     (all n.s.); only practice wear separates the races' stop counts (see race_stop_count_v1).
+  Wet-rule fix (2026-10-06, same cars, 2022-25, 80 races; wet_fix_same_cars.txt): 26 races
+     flagged as rained-on but run on slicks only were added to M's history (M0 = old history):
+     tyre order 0.201 vs M0 0.223 (WORSE), others n.s. -> REJECTED, history keeps the rain flag.
+     Practice wear judged by tyres instead of the rain flag (+~16 FP2 sessions): tyre order
+     +0.012, stop count +0.021, within 3 laps +0.014, all n.s. -> NOT PROMOTED (no clear gain).
   I  practice wear    : stop count voted by the 7 earlier races with the closest practice
                         long-run tyre wear; the era's most common sequence with that many stops
   G  CEILING (hindsight, not a method): the most common strategy actually run in the race
@@ -59,11 +94,15 @@ from sqlalchemy import create_engine
 from race_strategy_backtest_v2 import race_clustered_ci
 from race_strategy_precedent_v1 import historical_strategy_options, load_precedents
 from race_strategy_simulator_v1 import Strategy
+from race_stop_count_v1 import clip_stops, load_signals, model_stops, race_labels, signal_report, stops_wear_and_track
 from race_strategy_timing_v1 import (
     CarStrategy,
     load_car_strategies,
     predict_era_mode,
     predict_era_mode_track_timing,
+    predict_expected_match,
+    predict_from_wear_sequence,
+    PerCarPredictor,
     load_allocations,
     predict_from_allocation,
     predict_from_practice,
@@ -103,6 +142,9 @@ def era_mode_real(history: Sequence[CarStrategy], era: str, total_laps: int) -> 
 WEAR: dict[int, float | None] = {}     # last run's practice wear per race (for the report)
 LAST_CARS: list[CarStrategy] = []
 ALLOCATION_COVERAGE: list[int] = [0, 0]
+RACE_STOPS: list[tuple[int, int, dict[str, int | None]]] = []   # (race_id, real race stop count, predicted)
+STOP_SIGNALS: list = [{}, {}]                                    # last run's signals and labels
+STOP_METHODS = ("M wear + wear timing", "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals")
 
 
 def wear_report(cars: Sequence[CarStrategy], start_year: int, end_year: int) -> None:
@@ -155,6 +197,11 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
     shares_by_race = {race_id: load_weekend_compounds(db, race_id) for _, race_id in targets}
     WEAR.clear()
     WEAR.update(wear_by_race)
+    labels = race_labels(cars)
+    signals = load_signals(db, cars, wear_by_race, end_year=end_year)
+    STOP_SIGNALS[:] = [signals, labels]
+    RACE_STOPS.clear()
+    features_by_race: dict = {}
     scores: list[Score] = []
     for (race_date, race_id), race_cars in sorted(targets.items()):
         history = [c for c in cars if c.race_date < race_date]
@@ -183,8 +230,38 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
                                              regulation_era=era, total_laps=total_laps).strategy
         from_wear = predict_from_wear(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
                                       regulation_era=era, total_laps=total_laps).strategy
+        wear_sequence = predict_from_wear_sequence(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                                   regulation_era=era, total_laps=total_laps).strategy
+        expected = predict_expected_match(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                          regulation_era=era, total_laps=total_laps).strategy
+        wear = wear_by_race.get(race_id)
+        stop_counts = {
+            "Q1 wear + track votes": stops_wear_and_track(labels, wear_by_race, wear=wear, track_id=track,
+                                                          regulation_era=era, before=race_date),
+            "Q2 model: wear + track": model_stops(signals, labels, race_id=race_id, feature_set="wear_track",
+                                                  features_by_race=features_by_race),
+            "Q3 model: all signals": model_stops(signals, labels, race_id=race_id, feature_set="all",
+                                                 features_by_race=features_by_race),
+        }
+        stop_methods = {name: predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                                      regulation_era=era, total_laps=total_laps,
+                                                      stops=stops).strategy
+                        for name, stops in stop_counts.items()}
+        if race_id in labels:
+            RACE_STOPS.append((race_id, labels[race_id].stops, {
+                name: (len(strategy.sequence) - 1 if strategy else None)
+                for name, strategy in (("M wear + wear timing", wear_timed), *stop_methods.items())}))
         timed = {}
+        per_car = {name: PerCarPredictor(history, wear=wear_by_race.get(race_id), wear_by_race=wear_by_race,
+                                         regulation_era=era, total_laps=total_laps, use_grid=g, use_team=t)
+                   for name, g, t in (("P0 race chances, M timing", False, False),
+                                      ("P1 per car: grid", True, False), ("P2 per car: team", False, True),
+                                      ("P3 per car: grid + team", True, True))}
         for car in race_cars:
+            for name, strategy in stop_methods.items():
+                scores.append(score(race_id, name, strategy, car))
+            for name, predictor in per_car.items():
+                scores.append(score(race_id, name, predictor.predict(grid=car.grid, team_id=car.team_id).strategy, car))
             key = (car.grid or 99) <= 10
             if key not in dry_hierarchy:
                 dry_hierarchy[key] = predict_strategy(history, track_id=track, regulation_era=era,
@@ -200,6 +277,8 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
             scores.append(score(race_id, "G CEILING (hindsight)", ceiling, car))
             scores.append(score(race_id, "I practice wear", from_wear, car))
             scores.append(score(race_id, "M wear + wear timing", wear_timed, car))
+            scores.append(score(race_id, "N wear neighbours' sequence", wear_sequence, car))
+            scores.append(score(race_id, "O expected match", expected, car))
             scores.append(score(race_id, "J practice wear + compounds", with_compounds, car))
             scores.append(score(race_id, "L Pirelli compounds", from_allocation, car))
             scores.append(score(race_id, "K era stops + compounds", era_compounds, car))
@@ -216,6 +295,7 @@ def run(db: Any, *, start_year: int, end_year: int, wet: bool) -> list[Score]:
 
 
 PRODUCTION = "B era mode (real stints)"
+SERVED = "M wear + wear timing"       # what strategy_service_v7 serves when practice wear is known
 
 
 def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple]:
@@ -247,6 +327,22 @@ def summarise(scores: Sequence[Score], baseline: str = PRODUCTION) -> list[tuple
     return rows
 
 
+def stop_count_report() -> None:
+    """Race-level stop count: how often each method names the race's most common stop count."""
+    if not RACE_STOPS:
+        return
+    print(f"\n=== race stop count ({len(RACE_STOPS)} races; truth = the race's most common stop count, 1-3) ===")
+    print("method                           races right   share   when real = 1 / 2 / 3")
+    for name in STOP_METHODS:
+        right = [clip_stops(p[name]) == real for _, real, p in RACE_STOPS if p.get(name) is not None]
+        by_real = []
+        for k in (1, 2, 3):
+            rows = [clip_stops(p[name]) == real for _, real, p in RACE_STOPS if real == k and p.get(name) is not None]
+            by_real.append(f"{sum(rows)}/{len(rows)}")
+        print(f"{name:32} {sum(right):4}/{len(right):<4}   {sum(right) / len(right):5.3f}   {' / '.join(by_real)}")
+    signal_report(*STOP_SIGNALS, [r for r, _, _ in RACE_STOPS])
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -268,6 +364,16 @@ def main() -> int:
     for metric, method, value, cmp in summarise(scores):
         tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
         print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
+    print(f"\n=== vs M, the method production serves (same cars) ===")
+    for metric, method, value, cmp in summarise([s for s in scores if s.method in
+                                                 (SERVED, "N wear neighbours' sequence", "O expected match",
+                                                  "Q1 wear + track votes", "Q2 model: wear + track",
+                                                  "Q3 model: all signals",
+                                                  "B era mode (real stints)", "G CEILING (hindsight)")],
+                                                baseline=SERVED):
+        tail = "" if cmp is None else f"{cmp[0]:+.3f} [{cmp[1]:+.3f}, {cmp[2]:+.3f}]  {cmp[3]}"
+        print(f"{metric:20} {method:32} {value:6.3f}   {tail}")
+    stop_count_report()
     wear_report(LAST_CARS, args.start_year, args.end_year)
     print(f"Pirelli compound set known for {ALLOCATION_COVERAGE[0]} of {ALLOCATION_COVERAGE[1]} scored races")
     return 0

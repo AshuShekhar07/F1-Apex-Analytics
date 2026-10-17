@@ -1,0 +1,17 @@
+race 190: froze pre_practice
+=== LIVE RECORD: predicted winning strategies frozen before the race ===
+  no frozen winning strategy has been scored yet (the first one is scored after its race)
+Marina Bay 2026 (race 190, 2026-10-11)
+Predicted winning strategy (front of the grid): MEDIUM -> HARD (1 stop)
+  First pit window: laps 19-28 (typical lap 22)
+  Confidence: medium
+  Front-grid share: 65% of comparable front-grid cars ran 1 stop
+  Alternative: MEDIUM -> HARD -> HARD (2 stops), share 26%
+    First pit window: laps 13-22 (typical lap 17)
+    Second pit window: laps 35-44 (typical lap 41)
+  Track record (last races here):
+    2025: winner from P1: MEDIUM -> HARD (1 stop), laps 25; front grid 1 stop x5
+    2024: winner from P1: MEDIUM -> HARD (1 stop), laps 30; front grid 1 stop x5
+    2023: winner from P1: MEDIUM -> HARD (1 stop), laps 20 (a stop under SC/VSC); front grid 1 stop x3, 2 stops x2
+  Based on: stop count: the era's usual (no practice tyre wear measured); tyre order and windows from 5 front-grid cars in 2 earlier race(s) here; windows from the track
+  Green-flag plan: a Safety Car or VSC can open an earlier, cheaper stop.

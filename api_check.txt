@@ -1,0 +1,190 @@
+Apex21 API check, 2026-10-10 18:01 UTC
+
+=== 1. setup ==================================================================
+  python    3.10.12  (/home/ashushekhar07/projects/F1-Apex-Analytics/venv/bin/python)
+  system    Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35
+  folder    /home/ashushekhar07/projects/apex21-frontend
+  branch    feature/frontend
+  commit    430a47e 2026-10-10 17:45 API check: per-season count of the extra data (speed traps, tyre age, telemetry, race control, weather)
+  packages  fastapi 0.141.1, starlette 1.6.0, uvicorn 0.52.1, sqlalchemy 2.0.51, psycopg2-binary 2.9.12, httpx 0.28.1, fastf1 3.8.3, pandas 2.3.3, numpy 2.2.6, requests-cache 1.3.3
+  .env      found
+  database  postgresql://f1_admin:***@localhost:5432/f1_apex_analytics
+
+=== 2. database ===============================================================
+  server    PostgreSQL 14.24 (Ubuntu 14.24-0ubuntu0.22.04.1) on x86_64-pc-linux-gnu
+  db time   2026-10-10 23:31:05.396101+05:30  (Asia/Calcutta)   this computer (UTC): 2026-10-10 18:01
+  next race 2026 R17 Marina Bay on 2026-10-11 (race id 190, sprint_shootout)
+  its sessions in the database:
+    FP1  start 2026-10-09 08:30:00  laps   568  race results   0  quali results   0
+    SQ   start 2026-10-09 12:30:00  laps   286  race results   0  quali results   0
+    S    start 2026-10-10 09:00:00  laps   314  race results  22  quali results   0
+    Q    start 2026-10-10 13:00:00  laps   363  race results   0  quali results  22
+    R    start 2026-10-11 12:00:00  laps     0  race results   0  quali results   0
+  last pipeline runs:
+    #3 update         ok       started 2026-10-08 22:34  finished 2026-10-08 22:50:53.455980  exit 0, 1013s, log pipeline_20261008_223400.log | req            INFO 	Using cached data for driver_info | core           INFO 	Finished loading data for 22 drivers: ['12', '63', '3', '1', '81', '44', '10', '41', '43', '22', '5', '27', '55', '30', '87', '31', '23', '11', '77', '18', '14', '16'] | core    
+    #2 update         ok       started 2026-10-08 18:40  finished 2026-10-08 18:58:02.103917  exit 0, 1078s, log pipeline_20261008_184059.log | req            INFO 	Using cached data for driver_info | core           INFO 	Finished loading data for 22 drivers: ['12', '63', '3', '1', '81', '44', '10', '41', '43', '22', '5', '27', '55', '30', '87', '31', '23', '11', '77', '18', '14', '16'] | core    
+    #1 update         running  started 2026-10-08 18:33  finished -  
+  connections active: 1, idle: 1  (server limit 100)
+
+=== 3. the running API (:8000) and website (:5173) ============================
+  GET :8000/health -> 200 in 0.0s {"status":"ok","problems":[],"environment":"development","database":"ok","model_version":"forecast_v1","latest_race_with_results":{"id":189,"season_year":2026,"round_number":16,"race_date":"2026-10-04
+  it has every route the website needs (41 routes)
+  GET :5173/api/health -> 200 in 0.0s
+
+=== 3b. extra data in the database, per season ================================
+  season       laps speed_trap   tyre_age   position     pit_in    deleted  telemetry  race_ctrl  weather_s  pit_stops
+    2018      57075      51829      51216      21359       6610          0          0       1667          0          0
+    2019      58946      23647      23676      23648        678          0          0       1810          0          0
+    2020      46472      18288      18281      18308        618          0          0       1317          0          0
+    2021      60294      23720      23756      23731        846          0          0       2035          0          0
+    2022      59565      23533      23057      23536        836          0          0       1998          0          0
+    2023      58965      24351      24385      24382        943          0          0       1847          0        692
+    2024      64041      42843      43063      26578       4469          0      26980       2129       7210        651
+    2025      65652      26653      26255      26659        841          0          0       2178          0        644
+    2026      47173      29383      29323      18445       3152          0          0       2558          0        509
+  corner maps: 24 tracks, 403 corners
+
+=== 4. every API call the website makes, run here against the real database ===
+/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+  using season 2026, next race 190, last finished race 189, track 33, team 10, driver 29
+    200    2.4s  /races/next/winner-prediction  
+    200    0.0s  /health  
+    200    0.0s  /races/190/sessions  
+    404    0.0s  /races/190/forecast  {"detail":"No forecast computed for this race yet (run race_forecast_v1.py after qualifying)"}
+    200    1.6s  /strategy/winning?race_id=190  
+    200    0.0s  /races/190/qualifying  
+    200    0.0s  /races/190/long-runs  
+    404    0.0s  /strategy/winning/pre-start?race_id=190  {"detail":"no starting tyres stored for the front grid yet"}
+    200    0.0s  /records/live-predictions  
+    200    0.0s  /championship/2026  
+    200    0.0s  /championship/2026/history  
+  CRASH    0.0s  /seasons/2026/results  [Results / Teams / Championship]
+          await included_router._handle_selected(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1800, in _handle_selected
+          await original_route.handle(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1279, in handle
+          await app(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 158, in app
+          await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+          raise exc
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+          await app(scope, receive, sender)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 144, in app
+          response = await f(request)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 747, in app
+          response = actual_response_class(content, **response_args)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 192, in __init__
+          super().__init__(content, status_code, headers, media_type, background)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 45, in __init__
+          self.body = self.render(content)
+        File "/home/ashushekhar07/projects/apex21-frontend/app/main.py", line 23, in render
+          return super().render(content if settings.serve_brand_assets else scrub_brand_assets(content))
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 195, in render
+          return json.dumps(
+        File "/usr/lib/python3.10/json/__init__.py", line 238, in dumps
+          **kw).encode(obj)
+        File "/usr/lib/python3.10/json/encoder.py", line 199, in encode
+          chunks = self.iterencode(o, _one_shot=True)
+        File "/usr/lib/python3.10/json/encoder.py", line 257, in iterencode
+          return _iterencode(o, 0)
+      ValueError: Out of range float values are not JSON compliant
+  PROBLEM: /seasons/2026/results crashes (ValueError: Out of range float values are not JSON compliant); breaks: Results / Teams / Championship
+    200    0.0s  /records/calibration  
+  CRASH    0.1s  /drivers/roster/2026  [Drivers]
+          await included_router._handle_selected(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1800, in _handle_selected
+          await original_route.handle(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1279, in handle
+          await app(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 158, in app
+          await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+          raise exc
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+          await app(scope, receive, sender)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 144, in app
+          response = await f(request)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 747, in app
+          response = actual_response_class(content, **response_args)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 192, in __init__
+          super().__init__(content, status_code, headers, media_type, background)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 45, in __init__
+          self.body = self.render(content)
+        File "/home/ashushekhar07/projects/apex21-frontend/app/main.py", line 23, in render
+          return super().render(content if settings.serve_brand_assets else scrub_brand_assets(content))
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 195, in render
+          return json.dumps(
+        File "/usr/lib/python3.10/json/__init__.py", line 238, in dumps
+          **kw).encode(obj)
+        File "/usr/lib/python3.10/json/encoder.py", line 199, in encode
+          chunks = self.iterencode(o, _one_shot=True)
+        File "/usr/lib/python3.10/json/encoder.py", line 257, in iterencode
+          return _iterencode(o, 0)
+      ValueError: Out of range float values are not JSON compliant
+  PROBLEM: /drivers/roster/2026 crashes (ValueError: Out of range float values are not JSON compliant); breaks: Drivers
+    200    0.0s  /seasons/2026/teammates  
+    200    0.1s  /drivers/wet-weather-ranking  
+    200    0.1s  /drivers/29/profile  
+  CRASH    0.0s  /teams/10/season/2026  [Teams]
+          await included_router._handle_selected(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1800, in _handle_selected
+          await original_route.handle(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 1279, in handle
+          await app(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 158, in app
+          await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+          raise exc
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+          await app(scope, receive, sender)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 144, in app
+          response = await f(request)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/fastapi/routing.py", line 747, in app
+          response = actual_response_class(content, **response_args)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 192, in __init__
+          super().__init__(content, status_code, headers, media_type, background)
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 45, in __init__
+          self.body = self.render(content)
+        File "/home/ashushekhar07/projects/apex21-frontend/app/main.py", line 23, in render
+          return super().render(content if settings.serve_brand_assets else scrub_brand_assets(content))
+        File "/home/ashushekhar07/projects/F1-Apex-Analytics/venv/lib/python3.10/site-packages/starlette/responses.py", line 195, in render
+          return json.dumps(
+        File "/usr/lib/python3.10/json/__init__.py", line 238, in dumps
+          **kw).encode(obj)
+        File "/usr/lib/python3.10/json/encoder.py", line 199, in encode
+          chunks = self.iterencode(o, _one_shot=True)
+        File "/usr/lib/python3.10/json/encoder.py", line 257, in iterencode
+          return _iterencode(o, 0)
+      ValueError: Out of range float values are not JSON compliant
+  PROBLEM: /teams/10/season/2026 crashes (ValueError: Out of range float values are not JSON compliant); breaks: Teams
+    200    0.0s  /tracks  
+    200    0.0s  /tracks/33/stats  
+    200    0.0s  /tracks/33/overtaking-index  
+    200    0.0s  /races/189  
+    200    4.2s  /races/189/winner-prediction  
+    200    0.0s  /races/189/position-battle  
+    200    0.0s  /races/189/strategy  
+    200    0.0s  /races/189/qualifying  
+    200    0.0s  /races/189/long-runs  
+    200    1.6s  /strategy/winning?race_id=189  
+  (404 with a reason is normal: it means 'no data for this yet', and the website shows that)
+
+=== 5. FastF1: is the next race's data published, and is it in the database? ==
+  FastF1 3.8.3, saved copies in /home/ashushekhar07/projects/F1-Apex-Analytics/cache
+  F1 live timing     -> 200 in 0.5s
+  Jolpica (results)  -> 200 in 0.7s
+  per session: what the database has | what F1 publishes now | FastF1's saved copy
+  FP1  Fri 08:30 UTC  db  0 results   568 laps | F1 22 drivers   568 laps | saved 22 drivers   568 laps
+  SQ   Fri 12:30 UTC  db  0 results   286 laps | F1 22 drivers   286 laps | saved 22 drivers   286 laps
+  PROBLEM: SQ: F1 has it (286 laps) but the database has 286 laps / 0 results: the pipeline has not loaded it yet, or its last run failed
+  S    Sat 09:00 UTC  db 22 results   314 laps | F1 22 drivers   314 laps | saved 22 drivers   314 laps
+  Q    Sat 13:30 UTC  db 22 results   363 laps | F1 22 drivers   363 laps | saved 22 drivers   363 laps
+  R    Sun 12:00 UTC  not run yet
+
+=== PROBLEMS ==================================================================
+  - /seasons/2026/results crashes (ValueError: Out of range float values are not JSON compliant); breaks: Results / Teams / Championship
+  - /drivers/roster/2026 crashes (ValueError: Out of range float values are not JSON compliant); breaks: Drivers
+  - /teams/10/season/2026 crashes (ValueError: Out of range float values are not JSON compliant); breaks: Teams
+  - SQ: F1 has it (286 laps) but the database has 286 laps / 0 results: the pipeline has not loaded it yet, or its last run failed

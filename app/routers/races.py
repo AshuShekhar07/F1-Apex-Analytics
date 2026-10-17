@@ -136,7 +136,7 @@ def build_display_value(row, winner_time_seconds, leader_laps_completed):
 
 @router.get("", response_model=list[RaceListItem])
 def list_races(
-    season: int | None = Query(None, ge=2018, le=2026),
+    season: int | None = Query(None, ge=2018, le=2100),
     db: Session = Depends(get_db)
 ):
     from race_forecast_v1 import MODEL_VERSION
@@ -217,7 +217,7 @@ def get_race(
             SELECT d.id AS driver_id, d.name AS driver_name, re.car_number,
                    tm.name AS team_name, tm.color_hex,
                    rr.finishing_position, rr.starting_grid_position,
-                   rr.points, rr.status, rr.gap_to_winner_seconds, rr.gap_to_winner_display,
+                   NULLIF(rr.points, 'NaN') AS points, rr.status, rr.gap_to_winner_seconds, rr.gap_to_winner_display,
                    (SELECT MAX(l.lap_number) FROM laps l WHERE l.race_entry_id = re.id AND l.session_id = rr.session_id) AS laps_completed
             FROM race_results rr
             JOIN race_entries re ON re.id = rr.race_entry_id
@@ -576,3 +576,50 @@ def get_qualifying(race_id: int, db: Session = Depends(get_db)):
         "wet_qualifying": quali_session["rainfall"],
         "results": results,
     }
+
+
+# Running order of a weekend's sessions by format (2023 ran qualifying before the shootout).
+_SESSION_ORDER = {
+    "conventional": ["FP1", "FP2", "FP3", "Q", "R"],
+    "sprint_legacy": ["FP1", "Q", "FP2", "S", "R"],
+    "sprint_shootout": ["FP1", "SQ", "S", "Q", "R"],
+}
+_SESSION_NAMES = {"FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3", "SQ": "Sprint Qualifying",
+                  "S": "Sprint", "Q": "Qualifying", "R": "Race"}
+
+
+@router.get("/{race_id}/sessions")
+def get_race_sessions(race_id: int = Path(..., ge=1), db: Session = Depends(get_db)):
+    """The weekend's sessions in running order and how far the data has got: whether each is
+    in the database, its start time (UTC, from FastF1) and whether it has laps / results.
+    Sessions not loaded yet come from the weekend format, with no time."""
+    race = db.execute(text("""
+        SELECT r.id, r.season_year, r.round_number, r.race_date, r.weekend_format, t.name AS track_name
+        FROM races r JOIN tracks t ON t.id = r.track_id WHERE r.id = :id
+    """), {"id": race_id}).mappings().first()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    rows = db.execute(text("""
+        SELECT s.session_type, s.start_time,
+               EXISTS (SELECT 1 FROM laps l WHERE l.session_id = s.id) AS has_laps,
+               EXISTS (SELECT 1 FROM race_results rr WHERE rr.session_id = s.id)
+                   OR EXISTS (SELECT 1 FROM qualifying_results q WHERE q.session_id = s.id) AS has_results
+        FROM sessions s WHERE s.race_id = :id
+    """), {"id": race_id}).mappings().all()
+    fmt = race["weekend_format"] or "conventional"
+    order = list(_SESSION_ORDER.get(fmt, _SESSION_ORDER["conventional"]))
+    if fmt == "sprint_shootout" and race["season_year"] == 2023:
+        order = ["FP1", "Q", "SQ", "S", "R"]
+    loaded = {r["session_type"]: r for r in rows}
+    sessions = []
+    for code in order + sorted(c for c in loaded if c not in order):
+        r = loaded.get(code)
+        name = "Sprint Shootout" if code == "SQ" and race["season_year"] == 2023 else _SESSION_NAMES.get(code, code)
+        sessions.append({
+            "type": code, "name": name, "loaded": r is not None,
+            "start_time_utc": r["start_time"].isoformat() if r is not None and r["start_time"] is not None else None,
+            "has_laps": bool(r and r["has_laps"]), "has_results": bool(r and r["has_results"]),
+        })
+    return {"race_id": race_id, "season": race["season_year"], "round": race["round_number"],
+            "race_date": str(race["race_date"]), "track_name": race["track_name"], "weekend_format": fmt,
+            "sessions": sessions}

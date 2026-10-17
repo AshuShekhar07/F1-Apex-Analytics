@@ -66,6 +66,8 @@ class CarStrategy:
     wet: bool
     race_laps: int
     stints: tuple[Stint, ...]
+    team_id: int | None = None
+    finish: int | None = None
 
     @property
     def sequence(self) -> tuple[str, ...]:
@@ -324,13 +326,15 @@ def stops_from_wear(modes: dict[int, tuple[str, date, int]], wear_by_race: dict[
 
 
 def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
-                      regulation_era: str, total_laps: int) -> StrategyPrediction:
+                      regulation_era: str, total_laps: int, stops: int | None = None) -> StrategyPrediction:
     """Method I: stop count from practice wear, then the era's most common sequence with that
-    many stops and its median stop laps. Without wear or history: era mode (B)."""
+    many stops and its median stop laps. Without wear or history: era mode (B).
+    `stops` overrides the wear vote (a stop count decided elsewhere, race_stop_count_v1)."""
     base = predict_era_mode(history, regulation_era=regulation_era, total_laps=total_laps, top_k=1)
-    if wear is None:
+    if wear is None and stops is None:
         return base
-    stops = stops_from_wear(race_modes(history), wear_by_race, wear=wear, regulation_era=regulation_era)
+    if stops is None:
+        stops = stops_from_wear(race_modes(history), wear_by_race, wear=wear, regulation_era=regulation_era)
     pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)
             and _stop_count(h) == stops]
     if stops is None or not pool:
@@ -344,17 +348,20 @@ def predict_from_wear(history: Sequence[CarStrategy], *, wear: float | None, wea
     others = tuple((s, w) for s, w in predict_era_mode(history, regulation_era=regulation_era,
                                                        total_laps=total_laps).alternatives
                    if s.sequence != sequence)
-    return StrategyPrediction(strategy, f"practice wear {wear * 100:+.3f}%/lap -> {stops} stop(s), "
+    why = f"practice wear {wear * 100:+.3f}%/lap" if wear is not None else "stop count given"
+    return StrategyPrediction(strategy, f"{why} -> {stops} stop(s), "
                                         f"{base.source}", ((strategy, len(same) / len(pool)), *others))
 
 
 def predict_from_wear_timed(history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
-                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS) -> StrategyPrediction:
+                            regulation_era: str, total_laps: int, k: int = WEAR_NEIGHBOURS,
+                            stops: int | None = None) -> StrategyPrediction:
     """Method M: method I's stop count and sequence; stop laps = median stop fractions of cars
     with that many stops in the k earlier races (same era) whose practice wear was closest.
-    High wear -> earlier stops. Fewer than MIN_SEQUENCE_EXAMPLES such cars: I's timing."""
+    High wear -> earlier stops. Fewer than MIN_SEQUENCE_EXAMPLES such cars: I's timing.
+    `stops` overrides the stop count as in predict_from_wear."""
     base = predict_from_wear(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era,
-                             total_laps=total_laps)
+                             total_laps=total_laps, stops=stops)
     if wear is None or base.strategy is None:
         return base
     stops = len(base.strategy.sequence) - 1
@@ -376,6 +383,177 @@ def predict_from_wear_timed(history: Sequence[CarStrategy], *, wear: float | Non
     return StrategyPrediction(strategy, f"{base.source}; stop laps from {len(cars)} cars in the {len(races)} "
                                         f"races with the closest practice wear",
                               ((strategy, base.alternatives[0][1]), *base.alternatives[1:]))
+
+
+def _wear_neighbour_cars(history: Sequence[CarStrategy], *, wear: float, wear_by_race: dict[int, float | None],
+                         regulation_era: str, k: int = WEAR_NEIGHBOURS) -> list[CarStrategy]:
+    """Legal dry cars of the k earlier races with the closest practice wear (same era when it
+    has MIN_WEAR_RACES such races, else all eras); [] with fewer than k races."""
+    modes = race_modes(history)
+    known = [(abs(wear_by_race[r] - wear), r, era) for r, (era, _, _) in modes.items()
+             if wear_by_race.get(r) is not None]
+    same_era = [x for x in known if x[2] == regulation_era]
+    pool = same_era if len(same_era) >= MIN_WEAR_RACES else known
+    if len(pool) < k:
+        return []
+    races = {r for _, r, _ in sorted(pool)[:k]}
+    return [h for h in history if h.race_id in races and not h.wet and is_legal_dry(h.sequence)]
+
+
+def _timed(sequence: tuple[str, ...], cars: Sequence[CarStrategy], fallback: Sequence[CarStrategy],
+           total_laps: int) -> Strategy | None:
+    """Sequence with stop laps = median stop fractions of `cars` running it (else `fallback`)."""
+    same = [h for h in cars if h.sequence == sequence]
+    if len(same) < MIN_SEQUENCE_EXAMPLES:
+        same = [h for h in fallback if h.sequence == sequence]
+    if not same:
+        return None
+    return build_strategy(sequence, [round(median(h.stop_fractions[i] for h in same) * total_laps)
+                                     for i in range(len(sequence) - 1)], total_laps)
+
+
+def predict_from_wear_sequence(history: Sequence[CarStrategy], *, wear: float | None,
+                               wear_by_race: dict[int, float | None], regulation_era: str,
+                               total_laps: int) -> StrategyPrediction:
+    """Method N (research): the sequence most CARS ran in the races with the closest practice
+    wear, timed from those cars. Method M takes only the stop count from those races and the
+    compound order from the whole era. Without wear: M."""
+    base = predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                   regulation_era=regulation_era, total_laps=total_laps)
+    if wear is None:
+        return base
+    cars = _wear_neighbour_cars(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era)
+    if len(cars) < MIN_POOL_CARS:
+        return base
+    sequence = Counter(h.sequence for h in cars).most_common(1)[0][0]
+    era_pool = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)]
+    strategy = _timed(sequence, cars, era_pool, total_laps)
+    if strategy is None:
+        return base
+    return StrategyPrediction(strategy, f"most common sequence in the {WEAR_NEIGHBOURS} races with the closest "
+                                        f"practice wear ({len(cars)} cars)", ((strategy, 1.0),))
+
+
+def sequence_scores(stop_shares: dict[int, float], era_cars: Sequence[CarStrategy]) -> dict[tuple[str, ...], float]:
+    """P(sequence) = P(its stop count, from the similar races) x P(sequence | stop count, era)."""
+    by_stops: dict[int, Counter] = defaultdict(Counter)
+    for h in era_cars:
+        by_stops[_stop_count(h)][h.sequence] += 1
+    out = {}
+    for stops, counts in by_stops.items():
+        total = sum(counts.values())
+        for sequence, n in counts.items():
+            out[sequence] = stop_shares.get(stops, 0.0) * n / total
+    return out
+
+
+def predict_expected_match(history: Sequence[CarStrategy], *, wear: float | None,
+                           wear_by_race: dict[int, float | None], regulation_era: str,
+                           total_laps: int) -> StrategyPrediction:
+    """Method O (research): the single sequence most likely to match a car -- the stop-count
+    shares of the cars in the closest-wear races times each sequence's share among the era's
+    cars with that many stops. Unlike M it does not commit to the majority stop count first:
+    a weak 2-stop majority loses to a dominant 1-stop sequence. Without wear: M."""
+    base = predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                   regulation_era=regulation_era, total_laps=total_laps)
+    if wear is None:
+        return base
+    cars = _wear_neighbour_cars(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era)
+    era_cars = [h for h in history if h.regulation_era == regulation_era and not h.wet and is_legal_dry(h.sequence)]
+    if len(cars) < MIN_POOL_CARS or len(era_cars) < MIN_POOL_CARS:
+        return base
+    stop_counts = Counter(_stop_count(h) for h in cars)
+    shares = {n: c / len(cars) for n, c in stop_counts.items()}
+    scores = sequence_scores(shares, era_cars)
+    if not scores:
+        return base
+    sequence = max(scores, key=lambda s: (scores[s], -len(s)))
+    strategy = _timed(sequence, cars, era_cars, total_laps)
+    if strategy is None:
+        return base
+    return StrategyPrediction(strategy, f"most likely sequence: {scores[sequence]:.0%} (stop count from {len(cars)} "
+                                        f"cars in the closest-wear races, compounds from the era)",
+                              tuple((st, scores[seq]) for seq in sorted(scores, key=lambda q: -scores[q])[:4]
+                                    if (st := _timed(seq, cars, era_cars, total_laps)) is not None))
+
+
+# Per-car strategy (research): a different plan per car from what is known after qualifying.
+# race-level chances (method O's sequence scores) x how this car's grid band and/or team ran
+# each sequence earlier in the era, each as a likelihood ratio shrunk toward 1 with
+# CAR_SHRINK cars' worth of the era average. Stop laps: M's rule (same-stop-count cars in
+# the closest-wear races), never the thinner exact-sequence pool that hurt O.
+GRID_BANDS = ((1, 5), (6, 10), (11, 15), (16, 99))
+CAR_SHRINK = 20
+
+
+def car_grid_band(grid: int | None) -> int | None:
+    if not grid:
+        return None
+    return next(i for i, (lo, hi) in enumerate(GRID_BANDS) if lo <= grid <= hi)
+
+
+def likelihood_ratios(cars: Sequence[CarStrategy], era_share: dict[tuple[str, ...], float],
+                      k: float = CAR_SHRINK) -> dict[tuple[str, ...], float]:
+    """sequence -> (share among `cars`, shrunk to the era share with k cars) / era share."""
+    counts = Counter(h.sequence for h in cars)
+    n = len(cars)
+    return {seq: ((counts.get(seq, 0) + k * p) / (n + k)) / p for seq, p in era_share.items() if p > 0}
+
+
+def per_car_timing(sequence: tuple[str, ...], cars: Sequence[CarStrategy], era_cars: Sequence[CarStrategy],
+                   total_laps: int) -> Strategy | None:
+    """Stop laps from cars with the same NUMBER of stops (the M rule), era cars if too few."""
+    stops = len(sequence) - 1
+    pool = [h for h in cars if _stop_count(h) == stops]
+    if len(pool) < MIN_SEQUENCE_EXAMPLES:
+        pool = [h for h in era_cars if _stop_count(h) == stops]
+    if not pool:
+        return None
+    return build_strategy(sequence, [round(median(h.stop_fractions[i] for h in pool) * total_laps)
+                                     for i in range(stops)], total_laps)
+
+
+class PerCarPredictor:
+    """Fitted once per race (walk-forward history), then asked per car."""
+
+    def __init__(self, history: Sequence[CarStrategy], *, wear: float | None, wear_by_race: dict[int, float | None],
+                 regulation_era: str, total_laps: int, use_grid: bool, use_team: bool):
+        self.total_laps, self.use_grid, self.use_team = total_laps, use_grid, use_team
+        self.fallback = predict_from_wear_timed(history, wear=wear, wear_by_race=wear_by_race,
+                                                regulation_era=regulation_era, total_laps=total_laps)
+        self.era_cars = [h for h in history if h.regulation_era == regulation_era and not h.wet
+                         and is_legal_dry(h.sequence)]
+        self.near = (_wear_neighbour_cars(history, wear=wear, wear_by_race=wear_by_race, regulation_era=regulation_era)
+                     if wear is not None else [])
+        self.scores: dict[tuple[str, ...], float] = {}
+        if len(self.near) >= MIN_POOL_CARS and len(self.era_cars) >= MIN_POOL_CARS:
+            counts = Counter(_stop_count(h) for h in self.near)
+            self.scores = sequence_scores({n: c / len(self.near) for n, c in counts.items()}, self.era_cars)
+        n = len(self.era_cars)
+        self.era_share = {seq: c / n for seq, c in Counter(h.sequence for h in self.era_cars).items()} if n else {}
+
+    def predict(self, *, grid: int | None, team_id: int | None) -> StrategyPrediction:
+        if not self.scores:
+            return self.fallback
+        score = dict(self.scores)
+        reasons = []
+        band = car_grid_band(grid)
+        if self.use_grid and band is not None:
+            same = [h for h in self.era_cars if car_grid_band(h.grid) == band]
+            ratios = likelihood_ratios(same, self.era_share)
+            score = {s: v * ratios.get(s, 1.0) for s, v in score.items()}
+            reasons.append(f"grid P{GRID_BANDS[band][0]}-{GRID_BANDS[band][1]} ({len(same)} cars)")
+        if self.use_team and team_id is not None:
+            same = [h for h in self.era_cars if h.team_id == team_id]
+            ratios = likelihood_ratios(same, self.era_share)
+            score = {s: v * ratios.get(s, 1.0) for s, v in score.items()}
+            reasons.append(f"team habit ({len(same)} cars)")
+        sequence = max(score, key=lambda s: (score[s], -len(s)))
+        strategy = per_car_timing(sequence, self.near, self.era_cars, self.total_laps)
+        if strategy is None:
+            return self.fallback
+        return StrategyPrediction(strategy, "per car: race chances x " + (", ".join(reasons) or "nothing"),
+                                  ((strategy, score[sequence] / sum(score.values())),))
 
 
 # Stop count from Pirelli's compound choice (research, method L). The same C-number set at
@@ -490,14 +668,42 @@ def predict_from_practice(history: Sequence[CarStrategy], *, wear: float | None,
 
 # --- database ------------------------------------------------------------------
 
-def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
-                        end_year: int = 2026, min_distance: float = 0.9) -> list[CarStrategy]:
-    """Real stints for every car that covered >= min_distance of a race (R sessions)."""
+# Two wet rules. "rain_flag" (default, the shared SESSION_WET_SQL): the session_weather rainfall
+# flag, else >= 10% of laps on wet tyres. "tyres": the wet-tyre share alone. The flag is set by
+# any rain sample: 27 races from 2018-2026 flagged as rained-on had no lap on a wet tyre (e.g.
+# Marina Bay 2025, race 167; wet_flag_check.txt). Keeping them in the dry history was tested on
+# the same cars (2022-25, wet_fix_same_cars.txt, 2026-10-06) and REJECTED for prediction: M's
+# tyre order 0.201 vs 0.223 with the old history (WORSE, [+0.001, +0.046]); front-grid plan
+# (race_winning_strategy_v1) no clear difference anywhere. Those races are rain-touched and their
+# plans unusual. The "tyres" rule is used only for facts shown to people (the track record).
+RACE_WET_TYRE_SHARE = 0.1
+RACE_WET_SQL = f"""COALESCE((
+    SELECT AVG((upper(COALESCE(lw.tire_compound, '')) IN ('INTERMEDIATE', 'WET'))::int) >= {RACE_WET_TYRE_SHARE}
+    FROM laps lw WHERE lw.session_id = s.id AND lw.lap_time IS NOT NULL), FALSE)"""
+
+
+def race_wet_flags(db: Any, wet_rule: str = "rain_flag") -> dict[int, bool]:
+    """race_id -> wet under the given rule (see RACE_WET_SQL), for re-labelling loaded cars."""
     from race_pace_from_quali_v1 import SESSION_WET_SQL
 
+    wet_sql = {"rain_flag": SESSION_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
+    return {int(r): bool(w) for r, w in db.execute(text(f"""
+        SELECT s.race_id, {wet_sql} FROM sessions s
+        LEFT JOIN session_weather sw ON sw.session_id = s.id WHERE s.session_type = 'R'
+    """))}
+
+
+def load_car_strategies(db: Any, *, before_date: date | None = None, start_year: int = 2018,
+                        end_year: int = 2026, min_distance: float = 0.9,
+                        wet_rule: str = "rain_flag") -> list[CarStrategy]:
+    """Real stints for every car that covered >= min_distance of a race (R sessions).
+    wet_rule: "rain_flag" (prediction history) or "tyres" (facts shown, e.g. the track record)."""
+    from race_pace_from_quali_v1 import SESSION_WET_SQL
+
+    wet_sql = {"rain_flag": SESSION_WET_SQL, "tyres": RACE_WET_SQL}[wet_rule]
     races = db.execute(text(f"""
         SELECT r.id, r.race_date, r.season_year, r.track_id, r.regulation_era, s.id AS session_id,
-               {SESSION_WET_SQL} AS wet
+               {wet_sql} AS wet
         FROM races r
         JOIN sessions s ON s.race_id = r.id AND s.session_type = 'R'
         LEFT JOIN session_weather sw ON sw.session_id = s.id
@@ -517,9 +723,12 @@ def load_car_strategies(db: Any, *, before_date: date | None = None, start_year:
         if not laps:
             continue
         race_laps = max(l.lap_number for rows in laps.values() for l in rows)
-        grids = dict(db.execute(text("""
-            SELECT rr.race_entry_id, rr.starting_grid_position FROM race_results rr WHERE rr.session_id = :s
-        """), {"s": race["session_id"]}).all())
+        grids, teams, finishes = {}, {}, {}
+        for entry, grid, team, finish in db.execute(text("""
+            SELECT rr.race_entry_id, rr.starting_grid_position, re.team_id, rr.finishing_position FROM race_results rr
+            JOIN race_entries re ON re.id = rr.race_entry_id WHERE rr.session_id = :s
+        """), {"s": race["session_id"]}).all():
+            grids[entry], teams[entry], finishes[entry] = grid, team, finish
         for entry, rows in laps.items():
             if max(l.lap_number for l in rows) < min_distance * race_laps:
                 continue
@@ -527,5 +736,5 @@ def load_car_strategies(db: Any, *, before_date: date | None = None, start_year:
             if stints:
                 out.append(CarStrategy(race["id"], race["race_date"], race["season_year"], race["track_id"],
                                        race["regulation_era"], grids.get(entry), bool(race["wet"]),
-                                       race_laps, tuple(stints)))
+                                       race_laps, tuple(stints), teams.get(entry), finishes.get(entry)))
     return out

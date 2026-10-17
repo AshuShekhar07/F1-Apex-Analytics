@@ -100,7 +100,9 @@ def test_prediction_backtest_end_to_end(synthetic_db):
                        "D pre-start (known start tyre)", "E track-adjusted", "F last race here",
                        "H era mode + track timing", "G CEILING (hindsight)", "I practice wear",
                        "J practice wear + compounds", "K era stops + compounds", "L Pirelli compounds",
-                       "M wear + wear timing"}
+                       "M wear + wear timing", "N wear neighbours' sequence", "O expected match",
+                       "P0 race chances, M timing", "P1 per car: grid", "P2 per car: team", "P3 per car: grid + team",
+                       "Q1 wear + track votes", "Q2 model: wear + track", "Q3 model: all signals"}
     assert len([s for s in scores if s.method == "B era mode (real stints)"]) == 24     # every classified car
     # every synthetic car runs MEDIUM -> HARD, so every method gets the sequence right
     assert all(s.sequence_hit == 1 for s in scores)
@@ -258,3 +260,124 @@ def test_stop_laps_follow_the_races_with_similar_practice_wear():
     assert timed.strategy.stop_laps == (12,) and era_timing.strategy.stop_laps != (12,)
     low = predict_from_wear_timed(history, wear=0.0009, wear_by_race=wear, regulation_era="e", total_laps=50, k=5)
     assert low.strategy.stop_laps == (30,)
+
+
+def _wear_history():
+    """8 earlier races, era 'e'. Low-wear races (wear 0.01): 1-stoppers, nearly all M-H.
+    High-wear races (wear 0.05): a split -- 12 two-stoppers spread over three sequences,
+    8 one-stoppers all M-H."""
+    mh = (("MEDIUM", "HARD"), [20])
+    two = [(("MEDIUM", "HARD", "HARD"), [15, 32]), (("SOFT", "HARD", "MEDIUM"), [12, 30]),
+           (("MEDIUM", "MEDIUM", "HARD"), [14, 30])]
+    hist, wear = [], {}
+    for i in range(4):
+        hist += _hist(10 + i, date(2024, 3 + i, 1), i, "e", [mh] * 20)
+        wear[10 + i] = 0.01
+    for i in range(4):
+        hist += _hist(20 + i, date(2024, 7 + i, 1), 10 + i, "e", [mh] * 8 + [two[j % 3] for j in range(12)])
+        wear[20 + i] = 0.05
+    return hist, wear
+
+
+def test_wear_sequence_and_expected_match_pick_the_most_common_car_strategy():
+    from race_strategy_timing_v1 import predict_expected_match, predict_from_wear_sequence, predict_from_wear_timed
+
+    hist, wear = _wear_history()
+    kw = dict(wear=0.05, wear_by_race=wear, regulation_era="e", total_laps=50)
+    # M: the high-wear races' majority is 2 stops -> the era's most common 2-stop sequence
+    assert len(predict_from_wear_timed(hist, **kw).strategy.sequence) == 3
+    # but no single 2-stop sequence is as common as M-H (8 of 20 cars in those races)
+    assert predict_from_wear_sequence(hist, **kw).strategy.sequence == ("MEDIUM", "HARD")
+    assert predict_expected_match(hist, **kw).strategy.sequence == ("MEDIUM", "HARD")
+    # without practice wear both fall back to M
+    none = dict(kw, wear=None)
+    assert predict_expected_match(hist, **none).strategy == predict_from_wear_timed(hist, **none).strategy
+
+
+def test_sequence_scores_multiply_stop_share_and_sequence_share():
+    from race_strategy_timing_v1 import sequence_scores
+
+    hist, _ = _wear_history()
+    scores = sequence_scores({1: 0.4, 2: 0.6}, hist)
+    # 112 one-stoppers, all M-H -> 0.4 x 1.0; 48 two-stoppers over 3 sequences -> 0.6 x 1/3 each
+    assert scores[("MEDIUM", "HARD")] == pytest.approx(0.4)
+    assert scores[("MEDIUM", "HARD", "HARD")] == pytest.approx(0.2)
+    assert sum(scores.values()) == pytest.approx(1.0)
+
+
+def _banded_history():
+    """8 races, wear 0.03: front-runners (P1-5) run SOFT-HARD, the rest MEDIUM-HARD; team 99 always
+    HARD-MEDIUM. Team ids: grid slot g -> team (g + 1) // 2, except slots 19-20 -> team 99."""
+    hist, wear = [], {}
+    for i in range(8):
+        race, when = 30 + i, date(2024, 3 + i, 1)
+        wear[race] = 0.03
+        for g in range(1, 21):
+            seq, stops = ((("HARD", "MEDIUM"), [30]) if g >= 19 else
+                          (("SOFT", "HARD"), [15]) if g <= 5 else (("MEDIUM", "HARD"), [22]))
+            bounds = [0, *stops, 50]
+            hist.append(CarStrategy(race, when, 2024, i, "e", g, False, 50,
+                                    tuple(Stint(c, bounds[j] + 1, bounds[j + 1]) for j, c in enumerate(seq)),
+                                    99 if g >= 19 else (g + 1) // 2))
+    return hist, wear
+
+
+def test_per_car_plans_follow_grid_band_and_team_habit():
+    from race_strategy_timing_v1 import PerCarPredictor, car_grid_band
+
+    assert [car_grid_band(g) for g in (1, 5, 6, 12, 20, None)] == [0, 0, 1, 2, 3, None]
+    hist, wear = _banded_history()
+    kw = dict(wear=0.03, wear_by_race=wear, regulation_era="e", total_laps=50)
+    same_for_all = PerCarPredictor(hist, use_grid=False, use_team=False, **kw)
+    assert same_for_all.predict(grid=1, team_id=1).strategy.sequence == ("MEDIUM", "HARD")
+    by_grid = PerCarPredictor(hist, use_grid=True, use_team=False, **kw)
+    assert by_grid.predict(grid=2, team_id=1).strategy.sequence == ("SOFT", "HARD")
+    assert by_grid.predict(grid=12, team_id=6).strategy.sequence == ("MEDIUM", "HARD")
+    by_team = PerCarPredictor(hist, use_grid=False, use_team=True, **kw)
+    assert by_team.predict(grid=12, team_id=99).strategy.sequence == ("HARD", "MEDIUM")
+    # stop laps by the M rule: every 1-stopper in the similar races
+    assert by_grid.predict(grid=2, team_id=1).strategy.stop_laps == (22,)
+
+
+def test_likelihood_ratio_is_shrunk_to_one_for_thin_evidence():
+    from race_strategy_timing_v1 import likelihood_ratios
+
+    hist, _ = _banded_history()
+    share = {("MEDIUM", "HARD"): 0.5, ("SOFT", "HARD"): 0.5}
+    assert likelihood_ratios([], share) == {("MEDIUM", "HARD"): 1.0, ("SOFT", "HARD"): 1.0}
+    one = likelihood_ratios(hist[:1], share)                       # one SOFT-HARD car only
+    assert 1.0 < one[("SOFT", "HARD")] < 1.1
+
+
+def test_tyre_rule_ignores_a_rain_flag_without_wet_tyres(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_strategy_timing_v1 import load_car_strategies
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            race_session = db.execute(sql("SELECT id FROM sessions WHERE race_id = 1 AND session_type = 'R'")).scalar()
+            db.execute(sql("UPDATE session_weather SET rainfall = TRUE WHERE session_id = :s"), {"s": race_session})
+            cars = [c for c in load_car_strategies(db, wet_rule="tyres") if c.race_id == 1]
+            assert cars and not any(c.wet for c in cars)            # rain sample, no wet tyres: dry
+            assert all(c.wet for c in load_car_strategies(db) if c.race_id == 1)   # default: rain flag
+            db.execute(sql("""UPDATE laps SET tire_compound = 'INTERMEDIATE'
+                              WHERE session_id = :s AND lap_number <= 5"""), {"s": race_session})
+            assert all(c.wet for c in load_car_strategies(db, wet_rule="tyres") if c.race_id == 1)
+        finally:
+            tx.rollback()
+
+
+def test_race_wet_flags_by_rule(synthetic_db):
+    from sqlalchemy import text as sql
+    from race_strategy_timing_v1 import race_wet_flags
+
+    with synthetic_db.connect() as db:
+        tx = db.begin()
+        try:
+            assert not any(race_wet_flags(db).values())
+            db.execute(sql("""UPDATE session_weather SET rainfall = TRUE WHERE session_id =
+                              (SELECT id FROM sessions WHERE race_id = 2 AND session_type = 'R')"""))
+            assert race_wet_flags(db)[2] and not race_wet_flags(db, "tyres")[2]
+        finally:
+            tx.rollback()

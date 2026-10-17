@@ -1,11 +1,11 @@
 // Pure helpers (no React) so they can be unit-tested with node --test.
 
 export const COMPOUND_COLORS: Record<string, string> = {
-  SOFT: '#e10600',
-  MEDIUM: '#f5c400',
-  HARD: '#e8e8e8',
-  INTERMEDIATE: '#2fa84f',
-  WET: '#1e6fd9',
+  SOFT: '#da291c',
+  MEDIUM: '#ffd12e',
+  HARD: '#f0f0ec',
+  INTERMEDIATE: '#43b02a',
+  WET: '#0067ad',
 }
 
 export function compoundColor(compound: string | null | undefined): string {
@@ -69,4 +69,138 @@ export function evidenceLabel(source: string): string {
     track_band: 'from similar grid slots at this track in this regulation era',
   }
   return `${n} earlier cars ${scope[level] ?? level}${start ? ` that started on ${start.toLowerCase()}` : ''}`
+}
+
+export const CONFIDENCE_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' }
+
+/** "pre_qualifying" -> "Before qualifying" */
+export function stageLabel(stage: string): string {
+  return stage === 'post_qualifying' ? 'After qualifying' : stage === 'pre_qualifying' ? 'Before qualifying' : stage
+}
+
+export interface ChartSeries {
+  id: number
+  name: string
+  points: { x: number; y: number }[]
+}
+
+/**
+ * The `top` entries with the highest chance in the latest round, as chart series
+ * (x = after round, y = title chance 0..1), ordered by that latest chance.
+ */
+export function topTitleSeries(
+  series: { id: number; name: string; rounds: { after_round: number; p_title: number }[] }[],
+  top = 4,
+): ChartSeries[] {
+  const latest = (s: (typeof series)[number]) =>
+    s.rounds.reduce((best, r) => (r.after_round >= best.after_round ? r : best), { after_round: -1, p_title: 0 }).p_title
+  return [...series]
+    .sort((a, b) => latest(b) - latest(a))
+    .slice(0, top)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      points: [...s.rounds].sort((a, b) => a.after_round - b.after_round).map((r) => ({ x: r.after_round, y: r.p_title })),
+    }))
+}
+
+/** "Before the season" for round 0, else "After round N". */
+export function roundLabel(afterRound: number): string {
+  return afterRound === 0 ? 'Before the season' : `After round ${afterRound}`
+}
+
+/** Chance for a label: never rounds up to a certain 100% or down to 0% that isn't exact. */
+export function pctLabel(value: number): string {
+  if (value > 0 && value < 0.005) return '<1%'
+  if (value < 1 && value >= 0.995) return '>99%'
+  return pct(value)
+}
+
+/** Short end-of-line name: a driver's surname, a team without its suffix ("Red Bull Racing" -> "Red Bull"). */
+export function shortName(name: string, kind: 'drivers' | 'constructors'): string {
+  if (kind === 'drivers') return name.split(' ').slice(-1)[0]
+  const short = name.replace(/\s+(Racing|F1 Team|Team)$/i, '').trim()
+  return short || name
+}
+
+/** "12 min ago", "3 h ago", "2 d ago". */
+export function ago(minutes: number): string {
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${Math.round(minutes)} min ago`
+  if (minutes < 48 * 60) return `${Math.round(minutes / 60)} h ago`
+  return `${Math.round(minutes / 1440)} d ago`
+}
+
+// Day of each session relative to race day, by weekend format (sprint weekends since 2024
+// run sprint qualifying on Friday, sprint and qualifying on Saturday; 2023 ran qualifying on
+// Friday; 2021-22 ran qualifying Friday and the sprint Saturday).
+const SESSION_DAYS: Record<string, Record<string, number>> = {
+  conventional: { FP1: -2, FP2: -2, FP3: -1, Q: -1, R: 0 },
+  sprint_legacy: { FP1: -2, Q: -2, FP2: -1, S: -1, R: 0 },
+  sprint_shootout: { FP1: -2, SQ: -2, S: -1, Q: -1, R: 0 },
+  sprint_shootout_2023: { FP1: -2, Q: -2, SQ: -1, S: -1, R: 0 },
+}
+
+/** The calendar day (YYYY-MM-DD) a session runs on, from the race date and format. */
+export function sessionDay(raceDate: string, format: string, season: number, type: string): string | null {
+  const table = format === 'sprint_shootout' && season === 2023 ? SESSION_DAYS.sprint_shootout_2023
+    : SESSION_DAYS[format] ?? SESSION_DAYS.conventional
+  const offset = table[type]
+  if (offset === undefined) return null
+  const d = new Date(`${raceDate}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + offset)
+  return d.toISOString().slice(0, 10)
+}
+
+export type SessionState = 'done' | 'waiting' | 'today' | 'upcoming'
+
+/** Done when its data is in; "waiting" when its day has passed (or a later session is done)
+    but the data is not in yet; "today" on its day; else upcoming. today is YYYY-MM-DD. */
+export function sessionStates(
+  sessions: { type: string; has_laps: boolean; has_results: boolean }[],
+  raceDate: string, format: string, season: number, today: string,
+): SessionState[] {
+  const done = sessions.map((s) => s.has_laps || s.has_results)
+  return sessions.map((s, i) => {
+    if (done[i]) return 'done'
+    const day = sessionDay(raceDate, format, season, s.type)
+    if (done.slice(i + 1).some(Boolean) || (day !== null && day < today)) return 'waiting'
+    if (day === today) return 'today'
+    return 'upcoming'
+  })
+}
+
+/** A local date as YYYY-MM-DD. */
+export function localDay(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** +3 / -2 / 0 */
+export function signed(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`
+}
+
+/** Seconds from a lap time as the API sends it: 83.456, or text such as "1:23.456" (the
+    qualifying endpoint formats its times). null when there is no usable time. */
+export function toSeconds(value: number | string | null | undefined): number | null {
+  if (value == null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const text = value.trim()
+  if (!text) return null
+  const parts = text.split(':').map(Number)
+  if (parts.some((p) => !Number.isFinite(p))) return null
+  return Math.round(parts.reduce((total, p) => total * 60 + p, 0) * 1000) / 1000     // to the thousandth, as timed
+}
+
+/** 83.456 or "1:23.456" -> "1:23.456"; '' when there is no time. */
+export function lapTime(value: number | string | null | undefined): string {
+  const s = toSeconds(value)
+  if (s == null) return ''
+  const m = Math.floor(s / 60)
+  return m ? `${m}:${(s - m * 60).toFixed(3).padStart(6, '0')}` : s.toFixed(3)
+}
+
+/** Night races: run under floodlights (by circuit or country name). */
+export function nightRace(track: string | null | undefined): boolean {
+  return /singapore|marina bay|las vegas|bahrain|sakhir|qatar|lusail|abu dhabi|yas marina|jeddah|saudi/i.test(track ?? '')
 }

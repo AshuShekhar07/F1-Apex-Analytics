@@ -59,6 +59,8 @@ def health(db: Session = Depends(get_db)):
         "latest_race_with_results": dict(latest_result) if latest_result else None,
         "latest_forecast": dict(latest_forecast) if latest_forecast else None,
         "last_pipeline_run": ({k: v for k, v in last_run.items() if k != "hours_ago"} if last_run else None),
+        # computed by the database itself, so the age is right whatever its time zone
+        "last_pipeline_run_minutes_ago": round(float(last_run["hours_ago"]) * 60) if last_run else None,
     }
     return JSONResponse(status_code=200, content=_jsonable(body))
 

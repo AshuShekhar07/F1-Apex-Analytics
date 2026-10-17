@@ -1,0 +1,76 @@
+# The data pipeline for hosting without a server of your own (DEPLOY.md, "Free hosting without
+# a card"): GitHub runs run_pipeline.py on a schedule against the hosted database. It does the
+# job of the scheduler container. run_pipeline.py --if-due decides whether a load is due (catch-
+# up every 30 min after a session, every 2 h on race weekends, daily otherwise); a check that is
+# not due takes about a minute.
+#
+# Needs the repository secret DATABASE_URL (the database's direct connection string: the
+# pipeline holds a PostgreSQL advisory lock, which a transaction pooler would not keep).
+#
+# The schedule is off: there is no hosted database yet, and every scheduled run would fail. It
+# runs by hand only (Actions -> pipeline -> Run workflow). Once the DATABASE_URL secret is set,
+# switch the schedule on by removing the "#" in front of the three schedule lines below.
+# Scheduled runs only start from the default branch. Keep the schedule off when the scheduler
+# container is used instead, so two runners don't take turns.
+name: pipeline
+
+on:
+  # schedule:
+  #   - cron: "7,37 * * * 5,6,0,1"   # race weekends (Fri-Mon, UTC): every 30 minutes
+  #   - cron: "17 */6 * * 2,3,4"     # other days: every 6 hours (a load runs once a day)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Load now, even if not due"
+        type: boolean
+        default: false
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FASTF1_CACHE_DIR: ${{ github.workspace }}/cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: FastF1 downloads from earlier runs
+        uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: fastf1-${{ github.run_id }}
+          restore-keys: fastf1-
+      - name: run the pipeline
+        id: run
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "Set the DATABASE_URL repository secret first"; exit 1; fi
+          set +e
+          if [ "${{ inputs.force }}" = "true" ]; then python -u run_pipeline.py | tee out.txt
+          else python -u run_pipeline.py --if-due | tee out.txt; fi
+          code=${PIPESTATUS[0]}
+          grep -qE "^pipeline (ok|failed)" out.txt && echo "loaded=true" >> "$GITHUB_OUTPUT"
+          if [ "$code" = 2 ]; then echo "another pipeline run holds the lock: nothing to do"; exit 0; fi
+          exit $code
+      - name: save FastF1 downloads (only after a load)
+        if: always() && steps.run.outputs.loaded == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: cache
+          key: fastf1-${{ github.run_id }}
+      - name: keep the run's log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log-${{ github.run_id }}
+          path: logs/
+          if-no-files-found: ignore
+          retention-days: 14

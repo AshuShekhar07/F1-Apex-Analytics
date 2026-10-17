@@ -1,0 +1,88 @@
+race 82 (2022-03-20): 19 cars, windows ok, neutralised
+race 83 (2022-03-27): 14 cars, windows ok, neutralised
+race 84 (2022-04-10): 17 cars, windows ok, neutralised
+race 85 (2022-04-24): 18 cars, windows ok, neutralised
+race 87 (2022-05-22): 18 cars, windows ok, clean
+race 89 (2022-06-12): 16 cars, windows ok, neutralised
+race 90 (2022-06-19): 17 cars, windows ok, neutralised
+race 92 (2022-07-10): 17 cars, windows ok, neutralised
+race 93 (2022-07-24): 16 cars, windows ok, neutralised
+race 95 (2022-08-28): 18 cars, windows ok, neutralised
+race 96 (2022-09-04): 18 cars, windows ok, neutralised
+race 97 (2022-09-11): 16 cars, windows ok, neutralised
+race 100 (2022-10-23): 17 cars, windows ok, neutralised
+race 101 (2022-10-30): 19 cars, windows ok, neutralised
+race 102 (2022-11-13): 17 cars, windows ok, neutralised
+race 103 (2022-11-20): 19 cars, windows ok, clean
+race 104 (2023-03-05): 17 cars, windows ok, neutralised
+race 105 (2023-03-19): 18 cars, windows ok, neutralised
+race 106 (2023-04-02): 17 cars, windows ok, neutralised
+race 107 (2023-04-30): 18 cars, windows ok, neutralised
+race 108 (2023-05-07): 20 cars, windows ok, clean
+race 110 (2023-06-04): 20 cars, windows ok, clean
+race 111 (2023-06-18): 18 cars, windows ok, neutralised
+race 113 (2023-07-09): 17 cars, windows ok, neutralised
+race 114 (2023-07-23): 18 cars, windows ok, clean
+race 117 (2023-09-03): 18 cars, windows ok, clean
+race 118 (2023-09-17): 16 cars, windows ok, neutralised
+race 119 (2023-09-24): 15 cars, windows ok, neutralised
+race 120 (2023-10-08): 17 cars, windows ok, neutralised
+race 121 (2023-10-22): 17 cars, windows ok, clean
+race 122 (2023-10-29): 17 cars, windows ok, neutralised
+race 124 (2023-11-18): 19 cars, windows ok, neutralised
+race 125 (2023-11-26): 20 cars, windows ok, clean
+race 126 (2024-03-02): 20 cars, windows ok, clean
+race 127 (2024-03-09): 18 cars, windows ok, neutralised
+race 128 (2024-03-24): 17 cars, windows ok, neutralised
+race 129 (2024-04-07): 17 cars, windows ok, neutralised
+race 130 (2024-04-21): 17 cars, windows ok, neutralised
+race 131 (2024-05-05): 19 cars, windows ok, neutralised
+race 132 (2024-05-19): 19 cars, windows ok, clean
+race 133 (2024-05-26): 16 cars, windows ok, neutralised
+race 138 (2024-07-21): 19 cars, windows ok, clean
+race 139 (2024-07-28): 19 cars, windows ok, clean
+race 140 (2024-08-25): 20 cars, windows ok, clean
+race 141 (2024-09-01): 19 cars, windows ok, clean
+race 142 (2024-09-15): 18 cars, windows ok, neutralised
+race 143 (2024-09-22): 19 cars, windows ok, clean
+race 144 (2024-10-20): 19 cars, windows ok, neutralised
+race 145 (2024-10-27): 17 cars, windows ok, neutralised
+race 147 (2024-11-23): 18 cars, windows ok, clean
+race 148 (2024-12-01): 15 cars, windows ok, neutralised
+race 149 (2024-12-08): 17 cars, windows ok, neutralised
+race 151 (2025-03-23): 19 cars, windows ok, clean
+race 152 (2025-04-06): 20 cars, windows ok, clean
+race 153 (2025-04-13): 19 cars, windows ok, neutralised
+race 154 (2025-04-20): 18 cars, windows ok, neutralised
+race 156 (2025-05-18): 18 cars, windows ok, neutralised
+race 157 (2025-05-25): 18 cars, windows ok, neutralised
+race 158 (2025-06-01): 17 cars, windows ok, neutralised
+race 160 (2025-06-29): 16 cars, windows ok, neutralised
+race 163 (2025-08-03): 19 cars, windows ok, clean
+race 164 (2025-08-31): 18 cars, windows ok, neutralised
+race 165 (2025-09-07): 18 cars, windows ok, clean
+race 166 (2025-09-21): 19 cars, windows ok, neutralised
+race 168 (2025-10-19): 19 cars, windows ok, neutralised
+race 169 (2025-10-26): 17 cars, windows ok, neutralised
+race 170 (2025-11-09): 17 cars, windows ok, neutralised
+race 171 (2025-11-22): 17 cars, windows ok, neutralised
+race 172 (2025-11-30): 18 cars, windows ok, neutralised
+race 173 (2025-12-07): 20 cars, windows ok, clean
+
+=== SAFETY-CAR CHECK: stop count, dry races 2022-2025 (1248 cars, 70 races) ===
+neutralisation windows known for 70 races (1248 cars); unknown for 0 races (0 cars)
+M per car, every scored car (should match the strategy backtest): right 595/1229 (48.4%)
+
+M per car (windows known): right 595/1229 (48.4%)
+M wrong: 634 cars
+  explained     107/634 (16.9%)   green-flag stop count = M's prediction
+  helped        158/634 (24.9%)   stopped under SC/VSC/red flag, green count still differs
+  untouched     369/634 (58.2%)   no stop under SC/VSC/red flag
+  direction of the misses: {'real < predicted': 153, 'real > predicted': 481}
+M right if neutralised stops were not counted: 702/1229 (57.1%)
+
+by race type (windows known)    races   cars   M right            ceiling right
+  clean (no SC/VSC/red flag)      21    399   243/399 (60.9%)    314/399 (78.7%)
+  neutralised                     49    849   352/830 (42.4%)    629/831 (75.7%)
+
+cars that stopped under a neutralisation: 357/1248 (28.6%)

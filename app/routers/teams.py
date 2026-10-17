@@ -39,7 +39,7 @@ router = APIRouter(prefix="/teams", tags=["Teams"])
 @router.get("/{team_id}/season/{season}", response_model=TeamSeasonResponse)
 def team_season_summary(
     team_id: int = Path(..., ge=1),
-    season: int = Path(..., ge=2018, le=2026),
+    season: int = Path(..., ge=2018, le=2100),
     db: Session = Depends(get_db),
 ):
     team = db.execute(
@@ -68,7 +68,7 @@ def team_season_summary(
                 COUNT(*) FILTER (
                     WHERE rr.finishing_position BETWEEN 1 AND 3
                 ) AS podiums,
-                COALESCE(SUM(rr.points), 0) AS race_points,
+                COALESCE(SUM(NULLIF(rr.points, 'NaN')), 0) AS race_points,
                 AVG(rr.finishing_position) AS average_finish
             FROM race_results rr
             JOIN race_entries re
@@ -91,7 +91,7 @@ def team_season_summary(
     sprint_stats = db.execute(
         text("""
             SELECT
-                COALESCE(SUM(rr.points), 0) AS sprint_points
+                COALESCE(SUM(NULLIF(rr.points, 'NaN')), 0) AS sprint_points
             FROM race_results rr
             JOIN race_entries re
                 ON re.id = rr.race_entry_id

@@ -1,12 +1,42 @@
 import type {
   ActualDriverStrategy,
+  Championship,
+  ChampionshipHistory,
+  DriverProfile,
+  Roster,
+  TrackListItem,
+  TrackStats,
   Forecast,
+  Calibration,
+  CarsResponse,
+  CarDetail,
+  Health,
+  IdealLap,
+  LiveRecord,
+  LongRuns,
+  OvertakingIndex,
+  Overtakes,
+  PreStart,
+  TeammatePairs,
+  TeamSeason,
+  Undercuts,
+  WetRanking,
+  PositionBattle,
+  QualifyingRow,
   RaceDetail,
+  RaceSessions,
+  RaceTrace,
+  RecordsHistory,
+  SeasonResults,
+  WinningStrategy,
   RaceListItem,
   StrategyPrediction,
   WhatIfRequest,
   WhatIfResponse,
+  WinnerPrediction,
 } from './types'
+
+import { fetchWithRetry } from './net'
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
@@ -19,7 +49,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
+  // tried again for about a minute while the server restarts (a deployment): see net.ts
+  const response = await fetchWithRetry(`${BASE}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })
@@ -54,6 +85,37 @@ export const api = {
     optional(request<{ results: ActualDriverStrategy[] }>(`/races/${id}/strategy`)),
   strategyPrediction: (trackId: number, raceDate: string) =>
     optional(request<StrategyPrediction>(`/strategy/predict?track_id=${trackId}&race_date=${raceDate}`)),
+  winnerPrediction: (id: number) => optional(request<WinnerPrediction>(`/races/${id}/winner-prediction`)),
+  nextWinnerPrediction: () => optional(request<WinnerPrediction>('/races/next/winner-prediction')),
+  championship: (season: number) => optional(request<Championship>(`/championship/${season}`)),
+  championshipHistory: (season: number) =>
+    optional(request<ChampionshipHistory>(`/championship/${season}/history`)),
+  roster: (season: number) => optional(request<Roster>(`/drivers/roster/${season}`)),
+  driverProfile: (id: number) => optional(request<DriverProfile>(`/drivers/${id}/profile`)),
+  tracks: () => request<TrackListItem[]>('/tracks'),
+  trackStats: (id: number) => optional(request<TrackStats>(`/tracks/${id}/stats`)),
+  seasonResults: (season: number) => optional(request<SeasonResults>(`/seasons/${season}/results`)),
+  raceSessions: (id: number) => optional(request<RaceSessions>(`/races/${id}/sessions`)),
+  health: () => request<Health>('/health'),
+  liveRecord: () => request<LiveRecord>('/records/live-predictions'),
+  winningStrategy: (raceId: number) => optional(request<WinningStrategy>(`/strategy/winning?race_id=${raceId}`)),
+  idealLap: (id: number, session?: string) =>
+    optional(request<IdealLap>(`/races/${id}/ideal-lap${session ? `?session=${session}` : ''}`)),
+  overtakes: (id: number) => optional(request<Overtakes>(`/races/${id}/overtakes`)),
+  undercuts: (id: number) => optional(request<Undercuts>(`/races/${id}/undercuts`)),
+  raceTrace: (id: number) => optional(request<RaceTrace>(`/races/${id}/race-trace`)),
+  positionBattle: (id: number) => optional(request<PositionBattle>(`/races/${id}/position-battle`)),
+  qualifying: (id: number) => optional(request<{ results: QualifyingRow[] }>(`/races/${id}/qualifying`)),
+  longRuns: (id: number) => optional(request<LongRuns>(`/races/${id}/long-runs`)),
+  teammates: (season: number) => optional(request<TeammatePairs>(`/seasons/${season}/teammates`)),
+  recordsHistory: () => request<RecordsHistory>('/records/history'),
+  calibration: () => request<Calibration>('/records/calibration'),
+  cars: () => request<CarsResponse>('/cars'),
+  car: (key: string) => request<CarDetail>(`/cars/${encodeURIComponent(key)}`),
+  overtaking: (trackId: number) => optional(request<OvertakingIndex>(`/tracks/${trackId}/overtaking-index`)),
+  wetRanking: () => request<WetRanking>('/drivers/wet-weather-ranking'),
+  teamSeason: (teamId: number, season: number) => optional(request<TeamSeason>(`/teams/${teamId}/season/${season}`)),
+  preStart: (raceId: number) => optional(request<PreStart>(`/strategy/winning/pre-start?race_id=${raceId}`)),
   whatIf: (id: number, body: WhatIfRequest) =>
     request<WhatIfResponse>(`/races/${id}/what-if`, { method: 'POST', body: JSON.stringify(body) }),
 }

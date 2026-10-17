@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 
 from driver_names import find_driver_id
 
-from fastf1_cache import fastf1_cache_dir
+from fastf1_cache import fastf1_cache_dir, forget_session
 
 load_dotenv()
 engine = create_engine(os.getenv('DATABASE_URL'))
@@ -179,10 +179,16 @@ with engine.connect() as conn:
                 """), {"s": existing}).scalar():
                     continue  # already backfilled, skip without touching the API
                 # an existing but EMPTY session (created before FastF1 had the data) is loaded
-                # again into the same session row instead of being skipped forever
+                # again into the same session row instead of being skipped forever; if it is
+                # recent, FastF1's saved copy of it is dropped first, because FastF1 never refreshes
+                # a saved session and one saved while F1 was still publishing would stay empty
 
                 try:
                     session = api_call(fastf1.get_session, year, round_num, sess_identifier)
+                    if existing and session.date is not None and \
+                            pd.Timestamp.now() - pd.Timestamp(session.date) < pd.Timedelta(days=7):
+                        print(f"  Round {round_num} {sess_type}: reloading fresh "
+                              f"({forget_session(session)} saved item(s) dropped)")
                     api_call(session.load, telemetry=False, weather=False, messages=False)
                 except Exception as e:
                     print(f"  Round {round_num} {sess_type}: unavailable ({e})")
@@ -280,7 +286,8 @@ with engine.connect() as conn:
                         """), {
                             "s": session_id, "e": entry_id,
                             "p": int(row['Position']) if pd.notna(row['Position']) else None,
-                            "pts": float(row['Points']), "st": row['Status'],
+                            # no points yet (results service not published) -> NULL, filled by repair_missing_points_v1
+                            "pts": float(row['Points']) if pd.notna(row['Points']) else None, "st": row['Status'],
                             "gs": gap_seconds, "gd": gap_display
                         })
                     conn.commit()

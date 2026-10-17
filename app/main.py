@@ -1,4 +1,5 @@
 import logging
+import math
 import threading
 import time
 from collections import defaultdict, deque
@@ -8,19 +9,36 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers import (championship, compare, drivers, forecast, ops, practice, predict_and_compete, predictions, races,
-                         records, strategy, teams, tracks, wet_weather)
+from app.routers import (cars, championship, compare, drivers, forecast, ops, practice, predict_and_compete, predictions, race_analysis, races,
+                         records, seasons, strategy, teams, tracks, wet_weather)
 from app.settings import scrub_brand_assets, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("apex21")
 
 
+def _finite(value):
+    """NaN and infinity (not valid JSON) as null, anywhere in a JSON-like structure."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_finite(v) for v in value]
+    return value
+
+
 class AppJSONResponse(JSONResponse):
-    """Default response: drops logo/photo URLs unless SERVE_BRAND_ASSETS is on."""
+    """Default response: drops logo/photo URLs unless SERVE_BRAND_ASSETS is on. A NaN or
+    infinity in the data is sent as null (and logged) instead of failing the whole response."""
 
     def render(self, content) -> bytes:
-        return super().render(content if settings.serve_brand_assets else scrub_brand_assets(content))
+        content = content if settings.serve_brand_assets else scrub_brand_assets(content)
+        try:
+            return super().render(content)
+        except ValueError:
+            log.warning("response contained NaN or infinity; sent as null")
+            return super().render(_finite(content))
 
 
 app = FastAPI(
@@ -74,8 +92,8 @@ async def rate_limit(request: Request, call_next):
 
 @app.on_event("startup")
 def warm_caches():
-    """Load the strategy history (every race's real stints) in the background so the first
-    /strategy/predict request is not the slow one."""
+    """Load the strategy history (every race's real stints) and the car tables in the background so
+    the first /strategy/predict and /cars requests are not the slow ones."""
     if not settings.warm_caches:
         return
 
@@ -86,6 +104,10 @@ def warm_caches():
             with SessionLocal() as db:
                 strategy_service_v7._history(db)
             log.info("strategy history warmed")
+            import car_compare_v1
+            with SessionLocal() as db:
+                car_compare_v1.fair_table(db)
+            log.info("car tables warmed")
         except Exception:
             log.exception("warming the strategy history failed (it loads on first request instead)")
     threading.Thread(target=load, daemon=True).start()
@@ -104,7 +126,10 @@ app.include_router(strategy.router)
 app.include_router(teams.router)
 app.include_router(forecast.router)
 app.include_router(championship.router)
+app.include_router(seasons.router)
+app.include_router(race_analysis.router)
 app.include_router(ops.router)
+app.include_router(cars.router)
 
 
 @app.get("/")

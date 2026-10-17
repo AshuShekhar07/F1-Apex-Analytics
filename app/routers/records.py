@@ -57,7 +57,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     """, "Most podiums", "podiums")
 
     top_driver("""
-        SELECT d.name AS driver_name, SUM(rr.points) AS value
+        SELECT d.name AS driver_name, SUM(NULLIF(rr.points, 'NaN')) AS value
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type = 'R'
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -66,7 +66,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     """, "Most career points (Race sessions only)", "points")
 
     top_driver("""
-        SELECT d.name AS driver_name, SUM(rr.points) AS value
+        SELECT d.name AS driver_name, SUM(NULLIF(rr.points, 'NaN')) AS value
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
         JOIN race_entries re ON re.id = rr.race_entry_id
@@ -261,7 +261,7 @@ def get_all_time_records(db: Session = Depends(get_db)):
     top_driver("""
         SELECT
             tm.name AS driver_name,
-            SUM(rr.points) AS value,
+            SUM(NULLIF(rr.points, 'NaN')) AS value,
             r.season_year
         FROM race_results rr
         JOIN sessions s
@@ -342,3 +342,48 @@ def get_all_time_records(db: Session = Depends(get_db)):
     })
 
     return {"records": records}
+
+
+@router.get("/live-predictions")
+def get_live_predictions(db: Session = Depends(get_db)):
+    """Race-winner predictions frozen before each race (both stages) and how they scored.
+    Only raced weekends with a frozen prediction appear; replays are never included."""
+    from live_record_v1 import score
+
+    return score(db)
+
+
+@router.get("/live-strategy")
+def get_live_strategy(db: Session = Depends(get_db)):
+    """Predicted winning strategies frozen before each race (pre/post practice) and how they
+    scored against the front grid's real stints. Replays are never included."""
+    from strategy_live_record_v1 import score
+
+    return score(db)
+
+
+@router.get("/calibration")
+def get_calibration():
+    """How honest the race-win chances are: the walk-forward backtest (2019 onwards, each race
+    predicted only from earlier races) grouped by the favourite's chance, against how often
+    the favourite then won. Read from winner_confidence_v1.json (winner_prediction_v1 --backtest)."""
+    import json
+    from pathlib import Path
+
+    data = json.loads((Path(__file__).resolve().parents[2] / "winner_confidence_v1.json").read_text())
+    stages = {}
+    for stage, s in data["stages"].items():
+        stages[stage] = {"races": s["races"], "favourite_won": s["favourite_won"],
+                         "mean_favourite_p": s["mean_favourite_p"],
+                         "bins": [{k: b[k] for k in ("lo", "hi", "races", "mean_p", "favourite_won")} for b in s["bins"]]}
+    return {"source": data["source"], "stages": stages}
+
+
+@router.get("/history")
+def get_records_history(db: Session = Depends(get_db)):
+    """Records and streaks over the Grands Prix in the database (2018 onwards): hat-tricks and
+    Grand Chelems, the longest and the active streaks (wins, podiums, points, finishes, poles),
+    the leaders, how often pole wins at each circuit and the furthest back a race was won from."""
+    from records_v1 import load_records
+
+    return load_records(db)

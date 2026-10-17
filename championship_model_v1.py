@@ -96,7 +96,7 @@ def load_weekends(db: Any, *, start_year: int = 2018, end_year: int = 2100) -> l
         weekends[int(rid)] = Weekend(int(rid), int(season), int(rnd), when, era, fmt != "conventional")
     for rid, kind, driver, team, grid, finish, status, points in db.execute(text("""
         SELECT s.race_id, s.session_type, re.driver_id, re.team_id, rr.starting_grid_position,
-               rr.finishing_position, rr.status, COALESCE(rr.points, 0)
+               rr.finishing_position, rr.status, COALESCE(NULLIF(rr.points, 'NaN'), 0)
         FROM race_results rr
         JOIN sessions s ON s.id = rr.session_id AND s.session_type IN ('R', 'S')
         JOIN race_entries re ON re.id = rr.race_entry_id
