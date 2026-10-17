@@ -119,19 +119,6 @@
    "location": "Shanghai",
    "src": "/circuit-photos/img/cn-2004.jpg"
   },
-  "de-1927": {
-   "file": "File:Porsche 911 Carrera RSR, Bj. 1974 (2011-08-13 Sp).JPG",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Porsche_911_Carrera_RSR%2C_Bj._1974_%282011-08-13_Sp%29.JPG/1920px-Porsche_911_Carrera_RSR%2C_Bj._1974_%282011-08-13_Sp%29.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 3432,
-   "orig_height": 2096,
-   "page": "https://commons.wikimedia.org/wiki/File:Porsche_911_Carrera_RSR,_Bj._1974_(2011-08-13_Sp).JPG",
-   "author": "Lothar Spurzem",
-   "license": "CC BY-SA 2.0 de",
-   "license_url": "https://creativecommons.org/licenses/by-sa/2.0/de/deed.en",
-   "name": "Nürburgring",
-   "location": "Nürburg",
-   "src": "/circuit-photos/img/de-1927.jpg"
-  },
   "de-1932": {
    "file": "File:Aerial image of Hockenheimring (view from the southwest).jpg",
    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e4/Aerial_image_of_Hockenheimring_%28view_from_the_southwest%29.jpg/1920px-Aerial_image_of_Hockenheimring_%28view_from_the_southwest%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
@@ -300,19 +287,6 @@
    "name": "Autódromo Internacional do Algarve",
    "location": "Portimão",
    "src": "/circuit-photos/img/pt-2008.jpg"
-  },
-  "qa-2004": {
-   "file": "File:Yamaha's Maverick Vinales in action during the day 1 of Qatar test at the Losail International Circuit, Doha Qatar. (32994567530).jpg",
-   "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Yamaha%27s_Maverick_Vinales_in_action_during_the_day_1_of_Qatar_test_at_the_Losail_International_Circuit%2C_Doha_Qatar._%2832994567530%29.jpg/1920px-Yamaha%27s_Maverick_Vinales_in_action_during_the_day_1_of_Qatar_test_at_the_Losail_International_Circuit%2C_Doha_Qatar._%2832994567530%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
-   "orig_width": 5184,
-   "orig_height": 3456,
-   "page": "https://commons.wikimedia.org/wiki/File:Yamaha%27s_Maverick_Vinales_in_action_during_the_day_1_of_Qatar_test_at_the_Losail_International_Circuit,_Doha_Qatar._(32994567530).jpg",
-   "author": "Doha Stadium Plus Qatar from Doha, Qatar",
-   "license": "CC BY 2.0",
-   "license_url": "https://creativecommons.org/licenses/by/2.0",
-   "name": "Losail International Circuit",
-   "location": "Lusail",
-   "src": "/circuit-photos/img/qa-2004.jpg"
   },
   "ru-2014": {
    "file": "File:Sochi adler aerial view 2018 15.jpg",

@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,7 +43,7 @@ QUALITY = 72                # JPEG quality of the saved copies
 SKIP_WORDS = ("map", "layout", "logo", "diagram", "plan", "svg", "sign", "ticket", "trophy", "badge", "poster",
               "helmet", "portrait", "interview", "press", "museum", "statue", "plaque", "crash", "accident",
               "motogp", "rider", "racer", "mural", "graffiti", "painting", "drawing", "illustration", "banner",
-              "vogelschau")
+              "vogelschau", "in action", "motorcycle", "bj.")
 GOOD_WORDS = ("aerial", "panorama", "grandstand", "start", "straight", "circuit", "track", "race", "view", "pit")
 
 # Searches per circuit, best first (the circuit's own name is always tried last).
@@ -89,6 +91,9 @@ REJECT: set[str] = {
     "File:Nürburgring, Vogelschauansicht, Eugen Felle, 1927.jpg",
     "File:Imola banner.jpg",
     "File:Jeddah Corniche 37.jpg",
+    "File:Yamaha's Maverick Vinales in action during the day 1 of Qatar test at the Losail International Circuit,"
+    " Doha Qatar. (32994567530).jpg",
+    "File:Porsche 911 Carrera RSR, Bj. 1974 (2011-08-13 Sp).JPG",
 }
 
 
@@ -141,11 +146,23 @@ def score(title: str) -> int:
     return sum(word in t for word in GOOD_WORDS)
 
 
+def _words(text: str) -> set[str]:
+    plain_text = unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode().lower()
+    return {w for w in re.split(r"[^a-z0-9]+", plain_text) if len(w) >= 4}
+
+
+def relevant(title: str, circuit: dict) -> bool:
+    """The file name names the circuit or its town, or says it shows a circuit (aerial, grandstand,
+    track...): a search hit only described as being there (a car, a rider) is not enough."""
+    return bool(_words(title) & (_words(circuit["name"]) | _words(circuit["location"]))) or score(title) > 0
+
+
 def find(circuit: dict, width: int) -> dict | None:
     for query in QUERIES.get(circuit["id"], []) + [circuit["name"]]:
         data = api(COMMONS, action="query", list="search", srnamespace=6, srsearch=query, srlimit=30)
         hits = [h["title"] for h in data.get("query", {}).get("search", [])]
-        hits = [t for t in hits if t.lower().endswith((".jpg", ".jpeg")) and not any(w in t.lower() for w in SKIP_WORDS)]
+        hits = [t for t in hits if t.lower().endswith((".jpg", ".jpeg")) and not any(w in t.lower() for w in SKIP_WORDS)
+                and relevant(t, circuit)]
         for title in sorted(hits, key=lambda t: -score(t)):
             info = file_info(title, width)
             if acceptable(info):
